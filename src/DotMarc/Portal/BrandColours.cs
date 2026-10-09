@@ -50,10 +50,12 @@ public static partial class BrandColours
     public static double RatioOnBackgrounds(string colour, string background, string surface) =>
         Math.Min(ContrastRatio(colour, background), ContrastRatio(colour, surface));
 
-    /// <summary>The colour dark mode uses when no dark colour is set: lightened in steps until it reads (AA) on the dark
-    /// card colour. A colour that already reads is kept.</summary>
+    /// <summary>The colour dark mode uses when no dark colour is set: moved in steps away from the dark card colour until
+    /// it reads (AA) there. That's lighter on a dark card, and darker if dark mode's card has been made light, so it never
+    /// fades into the card. A colour that already reads is kept.</summary>
     public static string AutomaticDark(string colour, string darkSurface)
     {
+        var cardIsLight = ContrastRatio(darkSurface, "#000000") > ContrastRatio(darkSurface, "#FFFFFF");
         var candidate = new MudColor(colour);
         for (var step = 0; step < 20; step++)
         {
@@ -62,7 +64,7 @@ public static partial class BrandColours
                 break;
             }
 
-            candidate = candidate.ColorLighten(0.05);
+            candidate = cardIsLight ? candidate.ColorDarken(0.05) : candidate.ColorLighten(0.05);
         }
 
         return Hex(candidate);

@@ -62,6 +62,15 @@ public sealed class BrandColoursTests
         Assert.Equal("#FFB74D", BrandColours.AutomaticDark("#FFB74D", BrandColours.DefaultDarkSurface));
 
     [Fact]
+    public void AutomaticDark_OnALightDarkModeCard_DarkensInsteadOfTurningWhite()
+    {
+        var automatic = BrandColours.AutomaticDark("#FF6B00", "#FFFFFF");
+
+        Assert.NotEqual("#FFFFFF", automatic);
+        Assert.True(BrandColours.ContrastRatio(automatic, "#FFFFFF") >= BrandColours.MinimumTextContrast, automatic);
+    }
+
+    [Fact]
     public void AutomaticDark_FollowsACustomDarkSurface()
     {
         var automatic = BrandColours.AutomaticDark("#0B5FFF", "#000000");

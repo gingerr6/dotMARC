@@ -27,9 +27,13 @@
     </div>
     @if (BrandColours.Rate(ratio) < ContrastRating.AA)
     {
-        <MudText Typo="Typo.caption" Class="d-block mt-1" Style="color: var(--mud-palette-warning-text);">
-            Text @(TextColour is null ? "in this colour" : "on this colour") may be hard for some people to read. You can still use it.
-        </MudText>
+        @* Readable page text with an amber icon: amber text itself would fail the very contrast it's warning about. *@
+        <div class="d-flex align-start mt-1" style="gap: 0.25rem;">
+            <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Color="Color.Warning" Size="Size.Small" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                Text @(TextColour is null ? "in this colour" : "on this colour") may be hard for some people to read. You can still use it.
+            </MudText>
+        </div>
     }
 }
 
