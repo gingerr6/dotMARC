@@ -29,12 +29,28 @@
                     </FieldWithHelp>
                 </MudItem>
                 <MudItem xs="12" md="6">
-                    <BrandColourField Label="Primary colour" Help="Used for links, buttons and highlights in this client's portal."
-                                      @bind-Value="_primaryColour" DefaultColour="@_msp.PrimaryColour" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Light mode</MudText>
+                    <BrandColourField Label="Primary colour" Help="Links, buttons and highlights in this client's portal in light mode."
+                                      @bind-Value="_primaryColour" DefaultColour="@_msp.PrimaryColour"
+                                      Background="@PreviewBrand.LightBackgroundColour" Surface="@PreviewBrand.LightSurfaceColour" />
+                    <div class="mt-4">
+                        <BrandColourField Label="Secondary colour" Help="Light mode's app bar, and headings and accents in this client's portal and reports."
+                                          @bind-Value="_secondaryColour" DefaultColour="@_msp.SecondaryColour"
+                                          Background="@PreviewBrand.LightBackgroundColour" Surface="@PreviewBrand.LightSurfaceColour" />
+                    </div>
                 </MudItem>
                 <MudItem xs="12" md="6">
-                    <BrandColourField Label="Secondary colour" Help="Used for the app bar in light mode in this client's portal."
-                                      @bind-Value="_secondaryColour" DefaultColour="@_msp.SecondaryColour" />
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Dark mode</MudText>
+                    <BrandColourField Label="Dark primary colour" Help="Links, buttons and highlights in this client's portal in dark mode."
+                                      @bind-Value="_darkPrimaryColour" DefaultColour="@WithoutOwnDarkColours.DarkPrimaryColour"
+                                      DefaultHint="@DarkHint(_primaryColour, _msp.DarkPrimaryColour, "primary")" ResetLabel="Clear"
+                                      Background="@PreviewBrand.DarkBackgroundColour" Surface="@PreviewBrand.DarkSurfaceColour" />
+                    <div class="mt-4">
+                        <BrandColourField Label="Dark secondary colour" Help="The secondary colour's accents in this client's portal in dark mode."
+                                          @bind-Value="_darkSecondaryColour" DefaultColour="@WithoutOwnDarkColours.DarkSecondaryColour"
+                                          DefaultHint="@DarkHint(_secondaryColour, _msp.DarkSecondaryColour, "secondary")" ResetLabel="Clear"
+                                          Background="@PreviewBrand.DarkBackgroundColour" Surface="@PreviewBrand.DarkSurfaceColour" />
+                    </div>
                 </MudItem>
                 <MudItem xs="12" md="6">
                     <BrandLogoField Label="Logo" Help="@BrandingSettingsPage.LogoHelp" @bind-ImageId="_logoImageId" FallbackHint="Using your logo" />
@@ -65,6 +81,8 @@
     private string? _displayName;
     private string? _primaryColour;
     private string? _secondaryColour;
+    private string? _darkPrimaryColour;
+    private string? _darkSecondaryColour;
     private Guid? _logoImageId;
     private Guid? _darkLogoImageId;
     private bool _busy;
@@ -76,12 +94,14 @@
         _displayName = branding?.DisplayName;
         _primaryColour = branding?.PrimaryColour;
         _secondaryColour = branding?.SecondaryColour;
+        _darkPrimaryColour = branding?.DarkPrimaryColour;
+        _darkSecondaryColour = branding?.DarkSecondaryColour;
         _logoImageId = branding?.LogoImageId;
         _darkLogoImageId = branding?.DarkLogoImageId;
         _msp = await db.BrandingSettings.AsNoTracking().SingleAsync();
     }
 
-    private GroupBrandingInput Input => new(_displayName, _logoImageId, _darkLogoImageId, _primaryColour, _secondaryColour);
+    private GroupBrandingInput Input => new(_displayName, _logoImageId, _darkLogoImageId, _primaryColour, _secondaryColour, _darkPrimaryColour, _darkSecondaryColour);
 
     // Resolved exactly as a client of this one Group would see it, with the unsaved fields.
     private ResolvedBrand PreviewBrand
@@ -97,10 +117,26 @@
                 DarkLogoImageId = input.DarkLogoImageId,
                 PrimaryColour = BrandColours.IsValid(input.PrimaryColour) ? input.PrimaryColour : null,
                 SecondaryColour = BrandColours.IsValid(input.SecondaryColour) ? input.SecondaryColour : null,
+                DarkPrimaryColour = BrandColours.IsValid(input.DarkPrimaryColour) ? input.DarkPrimaryColour : null,
+                DarkSecondaryColour = BrandColours.IsValid(input.DarkSecondaryColour) ? input.DarkSecondaryColour : null,
             };
             return PortalBranding.Resolve(_msp!, [new ScopedGroupBrand(GroupName, unsaved)]);
         }
     }
+
+    // What this Group's portal uses while a dark field is blank, for the field's default.
+    private ResolvedBrand WithoutOwnDarkColours => PreviewBrand with
+    {
+        ExplicitDarkPrimaryColour = DarkFallback(_primaryColour, _msp!.DarkPrimaryColour),
+        ExplicitDarkSecondaryColour = DarkFallback(_secondaryColour, _msp!.DarkSecondaryColour),
+    };
+
+    // Mirrors PortalBranding.Resolve with this Group's dark colour blank: automatic from the Group's light colour, else
+    // the MSP's dark colour.
+    private static string? DarkFallback(string? groupLight, string? mspDark) => BrandColours.IsValid(groupLight) ? null : mspDark;
+
+    private static string DarkHint(string? groupLight, string? mspDark, string which) =>
+        BrandColours.IsValid(groupLight) ? $"Automatic, from this Group's {which}" : mspDark is null ? $"Automatic, from the MSP's {which}" : "Using the MSP's";
 
     private async Task SaveAsync()
     {

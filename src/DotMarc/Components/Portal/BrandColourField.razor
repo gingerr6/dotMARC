@@ -2,20 +2,35 @@
 @using DotMarc.Portal
 @using MudBlazor.Utilities
 
-@* A brand colour: a picker whose hex can be typed or pasted, and a warning when the colour is hard to read on white.
-   With a DefaultColour the field is optional: left blank, the default is used, and Clear returns to it. *@
+@* A brand colour: a swatch, a picker whose hex can be typed or pasted, and its WCAG rating. A brand colour is rated on the
+   page and card it sits on (Background and Surface); a background is rated with the mode's text on it (TextColour).
+   With a DefaultColour the field is optional: left blank, the default is used, and the reset button returns to it. *@
 <FieldWithHelp Topic="@Label" Help="@Help">
-    <MudColorPicker Label="@Label" Value="@(new MudColor(EffectiveColour))" ValueChanged="@((MudColor colour) => ValueChanged.InvokeAsync(colour.ToString(MudColorOutputFormats.Hex).ToUpperInvariant()))"
-                    ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" Editable="true" Variant="Variant.Outlined"
-                    HelperText="@(DefaultColour is not null && !HasOwnValue ? $"Using the MSP default ({DefaultColour})" : null)" />
+    <div class="d-flex align-start" style="gap: 0.5rem;">
+        <div aria-hidden="true" style="@($"background: {EffectiveColour}; width: 40px; height: 40px; margin-top: 8px; border-radius: 4px; border: 1px solid rgba(127,127,127,0.5); flex-shrink: 0;")"></div>
+        <MudColorPicker Label="@Label" Value="@(new MudColor(EffectiveColour))" ValueChanged="@((MudColor colour) => ValueChanged.InvokeAsync(colour.ToString(MudColorOutputFormats.Hex).ToUpperInvariant()))"
+                        ShowAlpha="false" ColorPickerMode="ColorPickerMode.HEX" Editable="true" Variant="Variant.Outlined" Class="flex-grow-1"
+                        HelperText="@(DefaultColour is not null && !HasOwnValue ? $"{DefaultHint} ({DefaultColour})" : null)" />
+    </div>
 </FieldWithHelp>
 @if (DefaultColour is not null && HasOwnValue)
 {
-    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => ValueChanged.InvokeAsync(null))">Use the MSP default</MudButton>
+    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => ValueChanged.InvokeAsync(null))">@ResetLabel</MudButton>
 }
-@if (BrandColours.ContrastRatio(EffectiveColour, "#FFFFFF") < BrandColours.MinimumTextContrast)
+@if (Ratio is { } ratio)
 {
-    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">This colour is hard to read on white. Text in it may be too faint for some people.</MudAlert>
+    <div class="d-flex align-center flex-wrap mt-1" style="gap: 0.5rem;">
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(BrandColours.Rate(ratio) >= ContrastRating.AA ? Color.Success : Color.Warning)">
+            @BrandColours.RatingText(ratio)
+        </MudChip>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">@(TextColour is null ? "on the page and cards" : "for text")</MudText>
+    </div>
+    @if (BrandColours.Rate(ratio) < ContrastRating.AA)
+    {
+        <MudText Typo="Typo.caption" Class="d-block mt-1" Style="color: var(--mud-palette-warning-text);">
+            Text @(TextColour is null ? "in this colour" : "on this colour") may be hard for some people to read. You can still use it.
+        </MudText>
+    }
 }
 
 @code {
@@ -27,10 +42,27 @@
     /// <summary>The colour used while the field is blank. Null for a required field.</summary>
     [Parameter] public string? DefaultColour { get; set; }
 
+    /// <summary>Says where a blank field's colour comes from, such as "Using the MSP's" or "Automatic, from the light primary".</summary>
+    [Parameter] public string DefaultHint { get; set; } = "Using the MSP's";
+
+    [Parameter] public string ResetLabel { get; set; } = "Use the MSP default";
+
     /// <summary>Used when nothing valid is set and there's no default, so the picker always has a colour to show.</summary>
     [Parameter] public string FallbackColour { get; set; } = BrandingSettings.DefaultPrimaryColour;
+
+    /// <summary>The page and card colours a brand colour is rated against.</summary>
+    [Parameter] public string? Background { get; set; }
+    [Parameter] public string? Surface { get; set; }
+
+    /// <summary>For a background: the mode's text colour, rated on this colour.</summary>
+    [Parameter] public string? TextColour { get; set; }
 
     private bool HasOwnValue => BrandColours.IsValid(Value);
 
     private string EffectiveColour => HasOwnValue ? Value! : DefaultColour ?? FallbackColour;
+
+    private double? Ratio =>
+        TextColour is not null ? BrandColours.ContrastRatio(TextColour, EffectiveColour)
+        : BrandColours.IsValid(Background) && BrandColours.IsValid(Surface) ? BrandColours.RatioOnBackgrounds(EffectiveColour, Background!, Surface!)
+        : null;
 }

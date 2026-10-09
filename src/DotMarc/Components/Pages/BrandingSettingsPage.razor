@@ -32,14 +32,30 @@
             <MudItem xs="12" md="6"></MudItem>
 
             <MudItem xs="12" md="6">
-                <BrandColourField Label="Primary colour" Help="Used for links, buttons and highlights in the portal."
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Light mode</MudText>
+                <BrandColourField Label="Primary colour" Help="Links, buttons and highlights in light mode."
                                   Value="@_settings.PrimaryColour" ValueChanged="@(colour => _settings.PrimaryColour = colour ?? "")"
-                                  FallbackColour="@BrandingSettings.DefaultPrimaryColour" />
+                                  FallbackColour="@BrandingSettings.DefaultPrimaryColour"
+                                  Background="@Preview.LightBackgroundColour" Surface="@Preview.LightSurfaceColour" />
+                <div class="mt-4">
+                    <BrandColourField Label="Secondary colour" Help="Light mode's app bar, and headings, the pass rate line, footer links and neutral statuses in the portal and reports."
+                                      Value="@_settings.SecondaryColour" ValueChanged="@(colour => _settings.SecondaryColour = colour ?? "")"
+                                      FallbackColour="@BrandingSettings.DefaultSecondaryColour"
+                                      Background="@Preview.LightBackgroundColour" Surface="@Preview.LightSurfaceColour" />
+                </div>
             </MudItem>
             <MudItem xs="12" md="6">
-                <BrandColourField Label="Secondary colour" Help="Used for the portal's app bar in light mode."
-                                  Value="@_settings.SecondaryColour" ValueChanged="@(colour => _settings.SecondaryColour = colour ?? "")"
-                                  FallbackColour="@BrandingSettings.DefaultSecondaryColour" />
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Dark mode</MudText>
+                <BrandColourField Label="Dark primary colour" Help="Links, buttons and highlights in dark mode. Left automatic, it's the light primary, lightened until it reads on the dark cards."
+                                  @bind-Value="_settings.DarkPrimaryColour" DefaultColour="@AutomaticDarkPrimary"
+                                  DefaultHint="Automatic, from the light primary" ResetLabel="Use automatic"
+                                  Background="@Preview.DarkBackgroundColour" Surface="@Preview.DarkSurfaceColour" />
+                <div class="mt-4">
+                    <BrandColourField Label="Dark secondary colour" Help="The secondary colour's accents in dark mode. Left automatic, it's the light secondary, lightened until it reads on the dark cards."
+                                      @bind-Value="_settings.DarkSecondaryColour" DefaultColour="@AutomaticDarkSecondary"
+                                      DefaultHint="Automatic, from the light secondary" ResetLabel="Use automatic"
+                                      Background="@Preview.DarkBackgroundColour" Surface="@Preview.DarkSurfaceColour" />
+                </div>
             </MudItem>
 
             <MudItem xs="12" md="6">
@@ -69,6 +85,31 @@
                     <MudTextField Label="Footer text" @bind-Value="_settings.FooterText" MaxLength="200" Variant="Variant.Outlined" />
                 </FieldWithHelp>
             </MudItem>
+            <MudItem xs="12">
+                <MudExpansionPanels Elevation="0" Outlined="true">
+                    <MudExpansionPanel Text="Advanced: backgrounds">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">The portal's page and card colours in each mode. They apply to every client.</MudText>
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <BrandColourField Label="Light page background" Help="Behind everything in light mode." @bind-Value="_settings.LightBackgroundColour"
+                                                  DefaultColour="@BrandColours.DefaultLightBackground" DefaultHint="Using the default" ResetLabel="Use the default" TextColour="@BrandColours.LightModeText" />
+                                <div class="mt-4">
+                                    <BrandColourField Label="Light card background" Help="Cards and panels in light mode." @bind-Value="_settings.LightSurfaceColour"
+                                                      DefaultColour="@BrandColours.DefaultLightSurface" DefaultHint="Using the default" ResetLabel="Use the default" TextColour="@BrandColours.LightModeText" />
+                                </div>
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <BrandColourField Label="Dark page background" Help="Behind everything in dark mode. The app bar is a step darker." @bind-Value="_settings.DarkBackgroundColour"
+                                                  DefaultColour="@BrandColours.DefaultDarkBackground" DefaultHint="Using the default" ResetLabel="Use the default" TextColour="@BrandColours.DarkModeText" />
+                                <div class="mt-4">
+                                    <BrandColourField Label="Dark card background" Help="Cards and panels in dark mode." @bind-Value="_settings.DarkSurfaceColour"
+                                                      DefaultColour="@BrandColours.DefaultDarkSurface" DefaultHint="Using the default" ResetLabel="Use the default" TextColour="@BrandColours.DarkModeText" />
+                                </div>
+                            </MudItem>
+                        </MudGrid>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudItem>
         </MudGrid>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Disabled="_busy" OnClick="SaveAsync">Save branding</MudButton>
     </MudPaper>
@@ -76,7 +117,7 @@
     <MudPaper Class="pa-4 mb-4">
         <MudText Typo="Typo.h5" Class="mb-1">Preview</MudText>
         <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">How a client with one Group sees the portal. Unsaved changes are shown.</MudText>
-        <PortalBrandPreview Brand="PreviewBrand" />
+        <PortalBrandPreview Brand="Preview" />
     </MudPaper>
 }
 
@@ -94,19 +135,38 @@
         _settings = await db.BrandingSettings.AsNoTracking().SingleAsync();
     }
 
-    private ResolvedBrand PreviewBrand
+    // Resolved exactly as a client with one unbranded Group would see it, with the unsaved fields; anything not yet
+    // valid falls back, so typing a colour never breaks the preview.
+    private ResolvedBrand Preview
     {
         get
         {
             var settings = _settings!;
-            return new ResolvedBrand(
-                string.IsNullOrWhiteSpace(settings.ProductName) ? "dotMARC" : settings.ProductName.Trim(), "Example client",
-                BrandColours.IsValid(settings.PrimaryColour) ? settings.PrimaryColour : BrandingSettings.DefaultPrimaryColour,
-                BrandColours.IsValid(settings.SecondaryColour) ? settings.SecondaryColour : BrandingSettings.DefaultSecondaryColour,
-                settings.LogoImageId, settings.DarkLogoImageId ?? settings.LogoImageId,
-                settings.SupportEmail, settings.SupportUrl, settings.SupportPhone, settings.FooterText);
+            static string? Valid(string? colour) => BrandColours.IsValid(colour) ? colour : null;
+            var unsaved = new BrandingSettings
+            {
+                ProductName = string.IsNullOrWhiteSpace(settings.ProductName) ? "dotMARC" : settings.ProductName.Trim(),
+                PrimaryColour = Valid(settings.PrimaryColour) ?? BrandingSettings.DefaultPrimaryColour,
+                SecondaryColour = Valid(settings.SecondaryColour) ?? BrandingSettings.DefaultSecondaryColour,
+                DarkPrimaryColour = Valid(settings.DarkPrimaryColour),
+                DarkSecondaryColour = Valid(settings.DarkSecondaryColour),
+                LightBackgroundColour = Valid(settings.LightBackgroundColour),
+                LightSurfaceColour = Valid(settings.LightSurfaceColour),
+                DarkBackgroundColour = Valid(settings.DarkBackgroundColour),
+                DarkSurfaceColour = Valid(settings.DarkSurfaceColour),
+                LogoImageId = settings.LogoImageId,
+                DarkLogoImageId = settings.DarkLogoImageId,
+                SupportEmail = settings.SupportEmail,
+                SupportUrl = settings.SupportUrl,
+                SupportPhone = settings.SupportPhone,
+                FooterText = settings.FooterText,
+            };
+            return PortalBranding.Resolve(unsaved, [new ScopedGroupBrand("Example client", null)]);
         }
     }
+
+    private string AutomaticDarkPrimary => BrandColours.AutomaticDark(Preview.PrimaryColour, Preview.DarkSurfaceColour);
+    private string AutomaticDarkSecondary => BrandColours.AutomaticDark(Preview.SecondaryColour, Preview.DarkSurfaceColour);
 
     private async Task SaveAsync()
     {
