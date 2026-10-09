@@ -98,7 +98,7 @@ The same two-column layout for the four colours, each falling back to the MSP's 
 
 Uses the light colours; paper is white, so backgrounds are ignored.
 
-- Primary: the cover band, product name and page title (Heading 1), as now.
+- Primary: the cover's product name (when there is no logo) and the page title (Heading 1), as now.
 - Secondary: section headings (Heading 2), and table header rows filled with the secondary colour and readable text (`PortalTheme.ReadableTextOn`).
 - The trend chart's series colours are unchanged.
 
