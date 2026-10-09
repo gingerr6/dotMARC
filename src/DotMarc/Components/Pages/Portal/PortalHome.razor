@@ -16,7 +16,7 @@
 }
 else
 {
-    <MudText Typo="Typo.h4" Class="mb-1">Your domains</MudText>
+    <MudText Typo="Typo.h4" Class="mb-1" Color="Color.Secondary">Your domains</MudText>
     <MudText Typo="Typo.subtitle1" Class="mb-4">@PortalStatus.Verdict(_domains.Select(domain => domain.Status).ToList())</MudText>
     @if (_domains.Count == 0)
     {

@@ -67,11 +67,11 @@
             <footer class="pa-4 mt-4 d-flex flex-wrap justify-center mud-text-secondary" style="gap: 1.5rem;">
                 @if (_brand.SupportEmail is { } email)
                 {
-                    <MudLink Href="@($"mailto:{email}")" Typo="Typo.body2">@email</MudLink>
+                    <MudLink Href="@($"mailto:{email}")" Typo="Typo.body2" Color="Color.Secondary">@email</MudLink>
                 }
                 @if (_brand.SupportUrl is { } url)
                 {
-                    <MudLink Href="@url" Target="_blank" rel="noopener noreferrer" Typo="Typo.body2">@url</MudLink>
+                    <MudLink Href="@url" Target="_blank" rel="noopener noreferrer" Typo="Typo.body2" Color="Color.Secondary">@url</MudLink>
                 }
                 @if (_brand.SupportPhone is { } phone)
                 {

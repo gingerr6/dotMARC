@@ -19,7 +19,7 @@ else
 {
     var domain = Detail.Domain;
     <div class="d-flex align-center flex-wrap mb-1" style="gap: 0.75rem;">
-        <MudText Typo="Typo.h4">@domain.Name</MudText>
+        <MudText Typo="Typo.h4" Color="Color.Secondary">@domain.Name</MudText>
         <PortalHealthChip Health="Detail.Summary.Status.Health" />
     </div>
     @foreach (var reason in Detail.Summary.Status.Reasons)
@@ -28,12 +28,12 @@ else
     }
 
     <MudPaper Class="pa-4 mt-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-1">Policy</MudText>
+        <MudText Typo="Typo.h6" Class="mb-1" Color="Color.Secondary">Policy</MudText>
         <MudText Typo="Typo.body1">@PortalWording.PolicySentence(domain)</MudText>
     </MudPaper>
 
     <MudPaper Class="pa-4 mt-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-2">Health</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2" Color="Color.Secondary">Health</MudText>
         <MudSimpleTable Dense="true" Elevation="0">
             <tbody>
                 @foreach (var check in PortalWording.HealthRows(domain))
@@ -48,7 +48,7 @@ else
     </MudPaper>
 
     <MudPaper Class="pa-4 mt-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-1">Who sends as this domain</MudText>
+        <MudText Typo="Typo.h6" Class="mb-1" Color="Color.Secondary">Who sends as this domain</MudText>
         <MudText Typo="Typo.body2" Class="mb-2 mud-text-secondary">The busiest senders reported in the last 30 days.</MudText>
         @if (Detail.TopSources.Count == 0)
         {
@@ -77,7 +77,7 @@ else
     </MudPaper>
 
     <MudPaper Class="pa-4 mt-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-2">Alerts</MudText>
+        <MudText Typo="Typo.h6" Class="mb-2" Color="Color.Secondary">Alerts</MudText>
         @if (Detail.RecentAlerts.Count == 0)
         {
             <MudText Typo="Typo.body2">No alerts in the last 30 days.</MudText>

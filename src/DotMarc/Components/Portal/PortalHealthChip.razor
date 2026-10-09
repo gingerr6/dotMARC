@@ -5,13 +5,7 @@
 @code {
     [Parameter, EditorRequired] public PortalHealth Health { get; set; }
 
-    private Color Colour => Health switch
-    {
-        PortalHealth.Protected => Color.Success,
-        PortalHealth.MonitoringOnly => Color.Info,
-        PortalHealth.NeedsAttention => Color.Warning,
-        _ => Color.Default,
-    };
+    private Color Colour => PortalHealthColours.For(Health);
 
     private string Label => Health switch
     {
