@@ -57,25 +57,36 @@ Open **Manage > Branding** to set how the portal looks:
 
 - **Product name**: your name for the portal. It's shown in the app bar when there's no logo, in page titles, and as
   the heading for a client with several Groups.
-- **Primary colour**: links, buttons and highlights.
-- **Secondary colour**: the app bar in light mode.
+- **Light mode** and **Dark mode** each have a **primary colour** (links, buttons and highlights) and a **secondary
+  colour** (headings, the pass rate line, footer links and neutral statuses such as "Monitoring only", and light mode's
+  app bar). Client reports use the light colours: the primary for the title, the secondary for section headings and
+  table headers.
+- Dark colours start **automatic**: the light colour, lightened until it's easy to read on dark mode's cards. Pick one to
+  use your own, or **Use automatic** to go back.
+- **Advanced: backgrounds** sets the page and card colours for each mode, for every client. Dark mode's app bar is a
+  step darker than its page colour.
 - **Logo** and **Dark logo**: PNG, JPEG or SVG, up to 512 KB. A wide logo about 40 pixels tall works best. The logo
-  is for light backgrounds and the dark logo for dark ones. The dark logo is shown in dark mode, and in light mode too
-  when your secondary colour is dark, because the app bar is then dark. Without a dark logo, the logo is used
+  is for light backgrounds and the dark logo for dark ones. The dark logo is shown whenever the app bar is dark: in dark
+  mode (unless you've made dark mode's page colour light), and in light mode when your secondary colour is dark. Without a dark logo, the logo is used
   everywhere.
 - **Support email**, **Support URL**, **Support phone** and **Footer text**: shown at the foot of every portal page so
   clients know how to reach you.
 
-A warning appears under a colour that is hard to read on white (below the WCAG AA contrast ratio of 4.5 to 1). You can
-still save it. The preview below the form shows the portal in light and dark mode with your unsaved changes.
+Each colour shows its contrast rating against the page and cards it sits on, using WCAG's levels: **AAA** (7 to 1 or
+more), **AA** (4.5 to 1, the usual target for text), and **AA large text only** (3 to 1, fine for headings but not body
+text). A background shows how readable normal text is on it. A colour below AA can still be saved, so you can use a
+brand's official colours, but text in it may be hard for some people to read. The preview below the form shows the
+portal in light and dark mode with your unsaved changes.
 
 SVG logos are checked when you upload them. An SVG that contains scripts, event handlers or links to anything outside
 the file is refused, since the portal is shown to people outside your business.
 
 ### Branding a Group
 
-On **Manage groups**, the **Branding** button on each Group sets that client's own display name, logo, dark logo and
-colours. Anything left empty uses your brand, and a Group with its own branding shows a **Branded** chip.
+On **Manage groups**, the **Branding** button on each Group sets that client's own display name, logo, dark logo, and
+light and dark colours. Anything left empty uses your brand, and a Group with its own branding shows a **Branded** chip.
+A Group's dark colours left empty are automatic from its own light colours; if it has no light colours of its own, it
+uses yours. Backgrounds are always yours.
 
 When a portal user's grant covers several Groups:
 

@@ -289,6 +289,12 @@ public static class DemoDataSeeder
         brand.ProductName = "Nova MSP";
         brand.PrimaryColour = "#0B5FFF";
         brand.SecondaryColour = "#FF6B00";
+        brand.DarkPrimaryColour = null;
+        brand.DarkSecondaryColour = null;
+        brand.LightBackgroundColour = null;
+        brand.LightSurfaceColour = null;
+        brand.DarkBackgroundColour = null;
+        brand.DarkSurfaceColour = null;
         brand.LogoImageId = null;
         brand.DarkLogoImageId = null;
         brand.SupportEmail = "help@nova-msp.example";
@@ -297,7 +303,7 @@ public static class DemoDataSeeder
         brand.FooterText = null;
         context.GroupBrandings.Add(new DotMarc.Portal.GroupBranding
         {
-            GroupId = groupsByName[ViewerScopedGroupName].Id, DisplayName = "Aurora Retail Ltd", PrimaryColour = "#7A1FA2",
+            GroupId = groupsByName[ViewerScopedGroupName].Id, DisplayName = "Aurora Retail Ltd", PrimaryColour = "#7A1FA2", DarkPrimaryColour = "#CE93D8",
         });
 
         // Report and email settings are singleton rows the truncate leaves alone too; put them back so one visitor's
