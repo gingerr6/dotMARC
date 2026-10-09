@@ -42,4 +42,51 @@ public sealed class PortalThemeTests
 
         Assert.Equal("#e3594fff", PortalTheme.Default.PaletteLight.Primary.ToString(MudColorOutputFormats.HexA).ToLowerInvariant());
     }
+
+    private static ResolvedBrand Brand() => new("Nova MSP", "Aurora Retail", "#0B5FFF", "#FF6B00", null, null, null, null, null, null);
+
+    private static string HexOf(MudBlazor.Utilities.MudColor colour) => colour.ToString(MudColorOutputFormats.Hex).ToUpperInvariant();
+
+    [Fact]
+    public void DarkMode_UsesTheDarkBrandColours()
+    {
+        var theme = PortalTheme.For(Brand() with { ExplicitDarkPrimaryColour = "#8AB4F8", ExplicitDarkSecondaryColour = "#FFB74D" });
+
+        Assert.Equal(("#8AB4F8", "#FFB74D"), (HexOf(theme.PaletteDark.Primary), HexOf(theme.PaletteDark.Secondary)));
+    }
+
+    [Fact]
+    public void EachMode_UsesItsBackgrounds()
+    {
+        var theme = PortalTheme.For(Brand() with
+        {
+            LightBackgroundColour = "#F4F6FA", LightSurfaceColour = "#FFFFFF", DarkBackgroundColour = "#000000", DarkSurfaceColour = "#121212",
+        });
+
+        Assert.Equal(("#F4F6FA", "#FFFFFF"), (HexOf(theme.PaletteLight.Background), HexOf(theme.PaletteLight.Surface)));
+        Assert.Equal(("#000000", "#121212"), (HexOf(theme.PaletteDark.Background), HexOf(theme.PaletteDark.Surface)));
+    }
+
+    [Fact]
+    public void TheDarkAppBar_IsDotMarcsOwn_OnTheDefaultDarkPage() =>
+        Assert.Equal("#0F1724", PortalTheme.DarkAppBar(Brand()));
+
+    [Fact]
+    public void TheDarkAppBar_IsJustDarkerThanACustomDarkPage()
+    {
+        var brand = Brand() with { DarkBackgroundColour = "#2A2A3A" };
+
+        var appBar = PortalTheme.DarkAppBar(brand);
+
+        Assert.True(BrandColours.ContrastRatio(appBar, "#FFFFFF") > BrandColours.ContrastRatio("#2A2A3A", "#FFFFFF"), appBar);
+        Assert.Equal(appBar, HexOf(PortalTheme.For(brand).PaletteDark.AppbarBackground));
+    }
+
+    [Fact]
+    public void ALightDarkModePage_GetsDarkAppBarText()
+    {
+        var theme = PortalTheme.For(Brand() with { DarkBackgroundColour = "#F0F0F0" });
+
+        Assert.Equal("#000000", HexOf(theme.PaletteDark.AppbarText));
+    }
 }

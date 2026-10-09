@@ -148,4 +148,17 @@ public sealed class PortalBrandingTests
 
         Assert.Equal(brand.LogoImageId, brand.DarkLogoImageId);
     }
+
+    [Fact]
+    public void InDarkMode_ALightAppBar_GetsTheLightLogo()
+    {
+        var lightLogo = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var darkLogo = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var brand = new ResolvedBrand("Nova MSP", "Aurora Retail", "#0B5FFF", "#0B1B3F", lightLogo, darkLogo, null, null, null, null)
+        {
+            DarkBackgroundColour = "#F0F0F0",
+        };
+
+        Assert.Equal(lightLogo, PortalBranding.AppBarLogo(brand, darkMode: true));
+    }
 }

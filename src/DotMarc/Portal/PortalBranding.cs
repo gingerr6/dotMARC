@@ -60,10 +60,10 @@ public static class PortalBranding
     private static string? DarkColour(string? groupDark, string? groupLight, string? mspDark) =>
         groupDark ?? (groupLight is not null ? null : mspDark);
 
-    /// <summary>The logo for the app bar. Light mode's app bar is the secondary colour, often dark, so the dark logo is
-    /// used whenever the bar is dark, not only in dark mode.</summary>
+    /// <summary>The logo for the app bar: the dark logo whenever the bar is dark. Light mode's bar is the secondary colour
+    /// and dark mode's follows the dark page colour, so either can be light or dark.</summary>
     public static Guid? AppBarLogo(ResolvedBrand brand, bool darkMode) =>
-        darkMode || PortalTheme.IsDark(brand.SecondaryColour) ? brand.DarkLogoImageId : brand.LogoImageId;
+        PortalTheme.IsDark(darkMode ? PortalTheme.DarkAppBar(brand) : brand.SecondaryColour) ? brand.DarkLogoImageId : brand.LogoImageId;
 }
 
 /// <summary>A portal page's title, suffixed with the brand's product name once it has loaded.</summary>

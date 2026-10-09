@@ -65,8 +65,8 @@ public static class PortalTheme
     private const string LightText = "#FCFCFC";
     private const string DarkText = "#000000";
 
-    /// <summary>The default look in the brand's colours: primary and secondary in both palettes, and the light app bar in
-    /// the secondary colour as dotMARC's own is. Dark mode keeps its own app bar, so the page stays dark.</summary>
+    /// <summary>The default look in the brand's colours: each mode's primary, secondary, page and card colours, and the
+    /// light app bar in the secondary colour as dotMARC's own is.</summary>
     public static MudTheme For(ResolvedBrand brand)
     {
         var theme = Default;
@@ -86,16 +86,36 @@ public static class PortalTheme
         theme.PaletteLight.AppbarBackground = secondary;
         theme.PaletteLight.AppbarText = ReadableTextOn(brand.SecondaryColour);
 
-        var darkPrimary = new MudBlazor.Utilities.MudColor(BrandColours.AutomaticDark(brand.PrimaryColour, DarkSurface));
-        var darkPrimaryHex = darkPrimary.ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
+        theme.PaletteLight.Background = brand.LightBackgroundColour;
+        theme.PaletteLight.Surface = brand.LightSurfaceColour;
+
+        var darkPrimary = new MudBlazor.Utilities.MudColor(brand.DarkPrimaryColour);
+        var darkSecondary = new MudBlazor.Utilities.MudColor(brand.DarkSecondaryColour);
         theme.PaletteDark.Primary = darkPrimary;
         theme.PaletteDark.PrimaryLighten = darkPrimary.ColorLighten(0.2).ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
         theme.PaletteDark.PrimaryDarken = darkPrimary.ColorDarken(0.1).ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
-        theme.PaletteDark.PrimaryContrastText = ReadableTextOn(darkPrimaryHex);
-        theme.PaletteDark.Secondary = secondary;
-        theme.PaletteDark.SecondaryContrastText = ReadableTextOn(brand.SecondaryColour);
+        theme.PaletteDark.PrimaryContrastText = ReadableTextOn(brand.DarkPrimaryColour);
+        theme.PaletteDark.Secondary = darkSecondary;
+        theme.PaletteDark.SecondaryLighten = darkSecondary.ColorLighten(0.1).ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
+        theme.PaletteDark.SecondaryDarken = darkSecondary.ColorDarken(0.1).ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
+        theme.PaletteDark.SecondaryContrastText = ReadableTextOn(brand.DarkSecondaryColour);
+        theme.PaletteDark.Background = brand.DarkBackgroundColour;
+        theme.PaletteDark.Surface = brand.DarkSurfaceColour;
+        var darkAppBar = DarkAppBar(brand);
+        theme.PaletteDark.AppbarBackground = darkAppBar;
+        theme.PaletteDark.DrawerBackground = darkAppBar;
+        theme.PaletteDark.AppbarText = ReadableTextOn(darkAppBar);
+        theme.PaletteDark.DrawerText = ReadableTextOn(darkAppBar);
+        theme.PaletteDark.DrawerIcon = ReadableTextOn(darkAppBar);
         return theme;
     }
+
+    /// <summary>Dark mode's app bar and side menu: dotMARC's own on the default dark page, otherwise a step darker than
+    /// the page, so a custom page colour never sits under dotMARC's navy.</summary>
+    public static string DarkAppBar(ResolvedBrand brand) =>
+        string.Equals(brand.DarkBackgroundColour, BrandColours.DefaultDarkBackground, StringComparison.OrdinalIgnoreCase)
+            ? "#0F1724"
+            : new MudBlazor.Utilities.MudColor(brand.DarkBackgroundColour).ColorDarken(0.03).ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex).ToUpperInvariant();
 
     /// <summary>Whether the colour is dark enough that light text reads better on it.</summary>
     public static bool IsDark(string colour) => ReadableTextOn(colour) == LightText;
