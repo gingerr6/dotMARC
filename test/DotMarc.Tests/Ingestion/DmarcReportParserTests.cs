@@ -235,11 +235,64 @@ public class DmarcReportParserTests
     }
 
     [Fact]
-    public void Parse_NamesWhatFailedValidation()
+    public void Parse_AcceptsAReportInTheWrongOrder_WhenItHasEverythingDotMarcUses()
     {
-        var exception = Assert.Throws<InvalidDataException>(() => DmarcReportParser.Parse(BuildReport(metadataExtra: "<surprise>yes</surprise>")));
+        // Laid out as Trellix Email Security Cloud sends them: report_metadata last, and each record's row after its
+        // identifiers and auth results, with source_ip after policy_evaluated. The schema wants a fixed order.
+        var result = DmarcReportParser.Parse(File.ReadAllBytes("Fixtures/out-of-order-report.xml"));
 
-        Assert.Contains("surprise", exception.Message);
+        Assert.Equal("contoso.example", result.Domain);
+        Assert.Equal("Trellix Email Security Cloud", result.ReportingOrg);
+        Assert.Equal("13138651c7fc4860bd7512acacb2b0c7", result.ReportId);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1790294400), result.DateRangeBeginUtc);
+        var record = result.Records.Single();
+        Assert.Equal("198.51.100.106", record.SourceIp);
+        Assert.Equal(1, record.MessageCount);
+        Assert.Equal("None", record.Disposition);
+        Assert.Equal("contoso.example", record.HeaderFrom);
+        Assert.Equal(DmarcMechanismResult.None, record.AuthDetails.Single().Result);
+        Assert.Contains(result.SchemaProblems, problem => problem.Contains("policy_published"));
+    }
+
+    [Fact]
+    public void Parse_AcceptsARecordWithoutAuthResults()
+    {
+        var xml = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes("Fixtures/out-of-order-report.xml"));
+        var withoutAuthResults = System.Text.RegularExpressions.Regex.Replace(xml, "<auth_results>.*</auth_results>", "",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        var result = DmarcReportParser.Parse(System.Text.Encoding.UTF8.GetBytes(withoutAuthResults));
+
+        Assert.Empty(result.Records.Single().AuthDetails);
+    }
+
+    [Fact]
+    public void Parse_ListsNoSchemaProblems_ForAValidReport()
+    {
+        var result = DmarcReportParser.Parse(BuildReport());
+
+        Assert.Empty(result.SchemaProblems);
+    }
+
+    [Fact]
+    public void Parse_StillRejectsAReport_MissingItsMetadata()
+    {
+        var xml = System.Text.Encoding.UTF8.GetString(File.ReadAllBytes("Fixtures/out-of-order-report.xml"));
+        var withoutMetadata = System.Text.RegularExpressions.Regex.Replace(xml, "<report_metadata>.*</report_metadata>", "",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        var exception = Assert.Throws<InvalidDataException>(() => DmarcReportParser.Parse(System.Text.Encoding.UTF8.GetBytes(withoutMetadata)));
+
+        Assert.Contains("report_metadata", exception.Message);
+    }
+
+    [Fact]
+    public void Parse_AcceptsAnElementTheSchemaDoesntKnow_AndNamesIt()
+    {
+        var result = DmarcReportParser.Parse(BuildReport(metadataExtra: "<surprise>yes</surprise>"));
+
+        Assert.Equal("contoso.io", result.Domain);
+        Assert.Contains(result.SchemaProblems, problem => problem.Contains("surprise"));
     }
 
     [Fact]

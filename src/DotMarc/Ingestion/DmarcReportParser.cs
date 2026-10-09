@@ -17,14 +17,18 @@ public static class DmarcReportParser
     {
         var report = LoadReport(xmlBytes);
 
-        if (!report.ValidReport || report.Feedback is null)
+        // DmarcRua's own messages name the element at fault, so the log and the parse failure say what to fix.
+        var schemaProblems = report.ValidReport ? [] : report.Errors.Select(error => error.Message).Distinct().ToList();
+
+        // Reporters stray from the schema in ways that lose nothing: Trellix, for one, puts report_metadata last and
+        // each row after its identifiers. DmarcRua still reads those, so a report is only refused when something
+        // dotMARC uses is actually missing; otherwise it would sit unread, retried on every poll.
+        if (report.Feedback is not { } feedback || !HasEverythingDotMarcUses(feedback))
         {
-            // DmarcRua's own messages name the element at fault, so the log and the parse failure say what to fix.
-            var reasons = string.Join(" ", report.Errors.Select(error => error.Message).Distinct().Take(3));
+            var reasons = string.Join(" ", schemaProblems.Take(3));
             throw new InvalidDataException($"DMARC aggregate report failed schema validation. {reasons}".TrimEnd());
         }
 
-        var feedback = report.Feedback;
         var records = feedback.Record.Select(r => new ParsedReportRecord(
             r.Row.SourceIp,
             r.Row.Count,
@@ -41,8 +45,22 @@ public static class DmarcReportParser
             feedback.ReportMetadata.ReportId,
             DateTimeOffset.FromUnixTimeSeconds(feedback.ReportMetadata.DateRange.Begin),
             DateTimeOffset.FromUnixTimeSeconds(feedback.ReportMetadata.DateRange.End),
-            records);
+            records)
+        {
+            SchemaProblems = schemaProblems,
+        };
     }
+
+    /// <summary>Whether the report has every value Parse reads, whatever order it came in.</summary>
+    private static bool HasEverythingDotMarcUses(Feedback feedback) =>
+        feedback.ReportMetadata is { DateRange: not null } metadata
+        && !string.IsNullOrWhiteSpace(metadata.OrgName)
+        && !string.IsNullOrWhiteSpace(metadata.ReportId)
+        && !string.IsNullOrWhiteSpace(feedback.PolicyPublished?.Domain)
+        && feedback.Record is { Length: > 0 } records
+        && records.All(record => record.Row is { PolicyEvaluated: not null } row
+            && !string.IsNullOrWhiteSpace(row.SourceIp)
+            && !string.IsNullOrWhiteSpace(record.Identifiers?.HeaderFrom));
 
     private static AggregateReport LoadReport(byte[] xmlBytes)
     {
@@ -171,11 +189,11 @@ public static class DmarcReportParser
         _ => nameof(DispositionResult.None),
     };
 
-    private static List<ParsedAuthDetail> MapAuthDetails(AuthResultType authResults)
+    private static List<ParsedAuthDetail> MapAuthDetails(AuthResultType? authResults)
     {
         var details = new List<ParsedAuthDetail>();
 
-        foreach (var dkim in authResults.Dkim ?? [])
+        foreach (var dkim in authResults?.Dkim ?? [])
         {
             details.Add(new ParsedAuthDetail(
                 DmarcAuthMechanism.Dkim,
@@ -186,7 +204,7 @@ public static class DmarcReportParser
                 dkim.HumanResult));
         }
 
-        foreach (var spf in authResults.Spf ?? [])
+        foreach (var spf in authResults?.Spf ?? [])
         {
             details.Add(new ParsedAuthDetail(
                 DmarcAuthMechanism.Spf,

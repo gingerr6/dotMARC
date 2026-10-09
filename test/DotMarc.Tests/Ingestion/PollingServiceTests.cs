@@ -3,6 +3,7 @@ using DotMarc.Graph;
 using DotMarc.Ingestion;
 using DotMarc.Tests.Internal;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -109,6 +110,40 @@ public class PollingServiceTests : IAsyncLifetime
 
         Assert.Contains("msg-1", graphClient.MarkedAsRead);
         Assert.Empty(await CreateContext().ParseFailures.ToListAsync());
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_StoresAReportThatStraysFromTheSchema_AndLogsWhere()
+    {
+        var graphClient = new FakeGraphMailboxClient();
+        graphClient.UnreadMessages.Add(new MailboxMessage("msg-1", "Report Domain: contoso.example", true));
+        graphClient.Attachments["msg-1"] = [new MailboxAttachment("report.xml.gz", "application/gzip",
+            GzipOf(await File.ReadAllTextAsync("Fixtures/out-of-order-report.xml")))];
+        var logger = new CapturingLogger<PollingService>();
+
+        using (var context = CreateContext())
+        {
+            var service = new PollingService(graphClient, context, logger);
+            await service.PollOnceAsync(CancellationToken.None);
+        }
+
+        using (var verify = CreateContext())
+        {
+            Assert.Single(verify.Reports.Where(report => report.Domain.Name == "contoso.example"));
+        }
+
+        Assert.Contains("msg-1", graphClient.MarkedAsRead);
+        Assert.Contains(logger.Messages, message => message.Contains("Trellix Email Security Cloud") && message.Contains("policy_published"));
+    }
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Add(formatter(state, exception));
     }
 
     [Fact]

@@ -1394,6 +1394,12 @@ public sealed class PollingService : BackgroundService
             {
                 var decompressed = ReportDecompressor.Decompress(attachment.ContentBytes);
                 var parsed = DmarcReportParser.Parse(decompressed);
+                if (parsed.SchemaProblems.Count > 0)
+                {
+                    _logger.LogWarning("Report {ReportId} from {ReportingOrg} for {Domain} doesn't match the DMARC schema, but has everything dotMARC uses, so it was stored: {SchemaProblems}",
+                        parsed.ReportId, parsed.ReportingOrg, parsed.Domain, string.Join(" ", parsed.SchemaProblems));
+                }
+
                 var (domain, reasonBreakdown) = await StoreReportAsync(context, parsed, System.Text.Encoding.UTF8.GetString(decompressed), cancellationToken).ConfigureAwait(false);
                 await RecordProcessedMessageAsync(context, message.Id, cancellationToken).ConfigureAwait(false);
 

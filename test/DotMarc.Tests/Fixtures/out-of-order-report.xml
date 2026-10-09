@@ -1,0 +1,43 @@
+<feedback xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <version>1.0</version>
+  <policy_published>
+    <domain>contoso.example</domain>
+    <adkim>s</adkim>
+    <aspf>s</aspf>
+    <p>reject</p>
+    <sp>reject</sp>
+    <pct>100</pct>
+  </policy_published>
+  <record>
+    <identifiers>
+      <envelope_to>fabrikam.example</envelope_to>
+      <envelope_from>contoso.example</envelope_from>
+      <header_from>contoso.example</header_from>
+    </identifiers>
+    <auth_results>
+      <spf>
+        <domain>contoso.example</domain>
+        <scope>mfrom</scope>
+        <result>none</result>
+      </spf>
+    </auth_results>
+    <row>
+      <policy_evaluated>
+        <disposition>none</disposition>
+        <dkim>pass</dkim>
+        <spf>pass</spf>
+      </policy_evaluated>
+      <source_ip>198.51.100.106</source_ip>
+      <count>1</count>
+    </row>
+  </record>
+  <report_metadata>
+    <org_name>Trellix Email Security Cloud</org_name>
+    <email>etp-notifications@fireeyecloud.com</email>
+    <report_id>13138651c7fc4860bd7512acacb2b0c7</report_id>
+    <date_range>
+      <begin>1790294400</begin>
+      <end>1790380800</end>
+    </date_range>
+  </report_metadata>
+</feedback>

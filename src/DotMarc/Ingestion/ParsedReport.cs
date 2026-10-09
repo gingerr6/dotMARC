@@ -8,7 +8,12 @@ public sealed record ParsedReport(
     string ReportId,
     DateTimeOffset DateRangeBeginUtc,
     DateTimeOffset DateRangeEndUtc,
-    IReadOnlyList<ParsedReportRecord> Records);
+    IReadOnlyList<ParsedReportRecord> Records)
+{
+    /// <summary>Where the report strayed from the DMARC schema without losing anything dotMARC uses, such as elements
+    /// in a different order. Empty for a report that matches it.</summary>
+    public IReadOnlyList<string> SchemaProblems { get; init; } = [];
+}
 
 public sealed record ParsedReportRecord(
     string SourceIp,
