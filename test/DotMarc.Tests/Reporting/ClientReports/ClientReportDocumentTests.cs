@@ -109,4 +109,16 @@ public sealed class ClientReportDocumentTests
 
         Assert.Equal("Aurora Retail Ltd email security report March 2026.pdf", ClientReportDocument.FileName(report));
     }
+
+    [Fact]
+    public void SectionHeadings_AndTableHeaders_UseTheSecondaryColour()
+    {
+        var document = ClientReportDocument.Build(SampleReport());
+        var secondary = new MigraDoc.DocumentObjectModel.Color(0xFF, 0x6B, 0x00);
+
+        Assert.Equal(secondary, document.Styles[MigraDoc.DocumentObjectModel.StyleNames.Heading2]!.Font.Color);
+        var headers = document.Sections[0].Elements.OfType<MigraDoc.DocumentObjectModel.Tables.Table>().Select(table => table.Rows[0]).ToList();
+        Assert.NotEmpty(headers);
+        Assert.All(headers, header => Assert.Equal(secondary, header.Shading.Color));
+    }
 }

@@ -56,4 +56,13 @@ public sealed class ClientReportEmailTests
         Assert.DoesNotContain("<script>", message.HtmlBody);
         Assert.Contains("&lt;script&gt;", message.HtmlBody);
     }
+
+    [Fact]
+    public void TheHeading_AndTheTableHeader_UseTheSecondaryColour()
+    {
+        var message = ClientReportEmail.Compose(ClientReportDocumentTests.SampleReport(), [0x25, 0x50], ["it@aurora-retail.example"]);
+
+        Assert.Contains("<h1 style=\"font-size:20px;margin:0 0 4px;color:#FF6B00\">", message.HtmlBody);
+        Assert.Contains("<tr style=\"text-align:left;background:#FF6B00;color:#000000\">", message.HtmlBody);
+    }
 }

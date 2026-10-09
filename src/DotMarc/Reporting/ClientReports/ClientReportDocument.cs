@@ -36,6 +36,7 @@ public static partial class ClientReportDocument
     public static Document Build(ClientReport report)
     {
         var primary = Hex(report.Brand.PrimaryColour);
+        var secondary = Hex(report.Brand.SecondaryColour);
         var document = new Document();
         document.Info.Title = $"{report.Brand.Heading} email security report: {report.Period.Label}";
         var normal = document.Styles[StyleNames.Normal]!;
@@ -46,6 +47,7 @@ public static partial class ClientReportDocument
         document.Styles[StyleNames.Heading1]!.Font.Color = primary;
         document.Styles[StyleNames.Heading2]!.Font.Size = 14;
         document.Styles[StyleNames.Heading2]!.Font.Bold = true;
+        document.Styles[StyleNames.Heading2]!.Font.Color = secondary;
         document.Styles[StyleNames.Heading2]!.ParagraphFormat.SpaceBefore = Unit.FromPoint(14);
         document.Styles[StyleNames.Heading2]!.ParagraphFormat.SpaceAfter = Unit.FromPoint(6);
 
@@ -63,7 +65,7 @@ public static partial class ClientReportDocument
             var zone = ReportSettingsService.ResolveZone(report.TimeZoneId);
             foreach (var domain in report.Domains)
             {
-                AddDomain(section, domain, zone, report.Culture);
+                AddDomain(section, report.Brand, domain, zone, report.Culture);
             }
         }
 
@@ -114,7 +116,7 @@ public static partial class ClientReportDocument
     {
         var culture = report.Culture;
         section.AddParagraph("Summary", StyleNames.Heading2);
-        var table = NewTable(section, ("Domain", 6.0), ("Status", 3.2), ("Messages", 2.4), ("Pass rate", 2.2), ("Change", 2.2));
+        var table = NewTable(section, report.Brand, ("Domain", 6.0), ("Status", 3.2), ("Messages", 2.4), ("Pass rate", 2.2), ("Change", 2.2));
         foreach (var domain in report.Domains)
         {
             AddRow(table, domain.Name, StatusText(domain.Status.Health), Count(culture, domain.Messages), Percent(culture, domain.PassRate), domain.FormatChange(culture));
@@ -183,7 +185,7 @@ public static partial class ClientReportDocument
         }
     }
 
-    private static void AddDomain(Section section, ClientReportDomain domain, TimeZoneInfo zone, CultureInfo culture)
+    private static void AddDomain(Section section, ResolvedBrand brand, ClientReportDomain domain, TimeZoneInfo zone, CultureInfo culture)
     {
         section.AddParagraph(domain.Name, StyleNames.Heading2);
         var status = section.AddParagraph(StatusText(domain.Status.Health));
@@ -198,7 +200,7 @@ public static partial class ClientReportDocument
 
         if (domain.Health.Count > 0)
         {
-            var health = NewTable(section, ("Check", 5.0), ("Result", 11.0));
+            var health = NewTable(section, brand, ("Check", 5.0), ("Result", 11.0));
             foreach (var row in domain.Health)
             {
                 AddRow(health, row.Name, row.Label);
@@ -213,7 +215,7 @@ public static partial class ClientReportDocument
         }
         else
         {
-            var senders = NewTable(section, ("Sender", 5.6), ("Messages", 2.4), ("Passed", 2.4), ("Failed", 2.4), ("Share", 3.2));
+            var senders = NewTable(section, brand, ("Sender", 5.6), ("Messages", 2.4), ("Passed", 2.4), ("Failed", 2.4), ("Share", 3.2));
             foreach (var sender in domain.TopSenders)
             {
                 AddRow(senders, sender.Owner is null ? sender.Ip : $"{sender.Owner} ({sender.Ip})", Count(culture, sender.Messages), Count(culture, sender.Passing), Count(culture, sender.Failing), Percent(culture, sender.Share));
@@ -243,7 +245,7 @@ public static partial class ClientReportDocument
         }
     }
 
-    private static Table NewTable(Section section, params (string Header, double WidthCm)[] columns)
+    private static Table NewTable(Section section, ResolvedBrand brand, params (string Header, double WidthCm)[] columns)
     {
         var table = section.AddTable();
         table.Borders.Bottom.Width = 0.5;
@@ -258,6 +260,10 @@ public static partial class ClientReportDocument
         var header = table.AddRow();
         header.HeadingFormat = true;
         header.Format.Font.Bold = true;
+
+        // The header row in the brand's secondary colour, with whichever of near-white or black reads on it.
+        header.Shading.Color = Hex(brand.SecondaryColour);
+        header.Format.Font.Color = Hex(PortalTheme.ReadableTextOn(brand.SecondaryColour));
         for (var index = 0; index < columns.Length; index++)
         {
             header.Cells[index].AddParagraph(columns[index].Header);

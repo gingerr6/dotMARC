@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using DotMarc.Email;
+using DotMarc.Portal;
 
 namespace DotMarc.Reporting.ClientReports;
 
@@ -18,12 +19,12 @@ public static class ClientReportEmail
         var html = new StringBuilder();
         html.Append("<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#222\">");
         html.Append($"<div style=\"border-top:6px solid {E(report.Brand.PrimaryColour)};padding-top:12px\">");
-        html.Append($"<h1 style=\"font-size:20px;margin:0 0 4px\">{E(report.Brand.Heading)}</h1>");
+        html.Append($"<h1 style=\"font-size:20px;margin:0 0 4px;color:{E(report.Brand.SecondaryColour)}\">{E(report.Brand.Heading)}</h1>");
         html.Append($"<p style=\"margin:0 0 12px;color:#555\">Email security report: {E(report.Period.Label)}</p>");
         html.Append($"<p style=\"font-weight:bold\">{E(report.Verdict)}</p>");
         if (report.Domains.Count > 0)
         {
-            html.Append("<table cellpadding=\"6\" style=\"border-collapse:collapse\"><tr style=\"text-align:left\"><th>Domain</th><th>Messages</th><th>Pass rate</th><th>Change</th></tr>");
+            html.Append($"<table cellpadding=\"6\" style=\"border-collapse:collapse\"><tr style=\"text-align:left;background:{E(report.Brand.SecondaryColour)};color:{E(PortalTheme.ReadableTextOn(report.Brand.SecondaryColour))}\"><th>Domain</th><th>Messages</th><th>Pass rate</th><th>Change</th></tr>");
             foreach (var domain in report.Domains)
             {
                 html.Append($"<tr><td>{E(domain.Name)}</td><td>{E(domain.Messages.ToString("N0", culture))}</td><td>{E(domain.PassRate?.ToString("P1", culture) ?? "No mail")}</td><td>{E(domain.FormatChange(culture))}</td></tr>");
