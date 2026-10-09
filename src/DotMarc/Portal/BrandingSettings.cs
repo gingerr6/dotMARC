@@ -13,6 +13,17 @@ public sealed class BrandingSettings
     public string PrimaryColour { get; set; } = DefaultPrimaryColour;
     public string SecondaryColour { get; set; } = DefaultSecondaryColour;
 
+    /// <summary>Dark mode's brand colours. Null means automatic: the light colour, lightened until it reads on the dark
+    /// card colour.</summary>
+    public string? DarkPrimaryColour { get; set; }
+    public string? DarkSecondaryColour { get; set; }
+
+    /// <summary>The page and card backgrounds for each mode. Null means the default (see <see cref="BrandColours"/>).</summary>
+    public string? LightBackgroundColour { get; set; }
+    public string? LightSurfaceColour { get; set; }
+    public string? DarkBackgroundColour { get; set; }
+    public string? DarkSurfaceColour { get; set; }
+
     /// <summary>The logo for light backgrounds. A plain id, not a foreign key, so removing an image never cascades here.</summary>
     public Guid? LogoImageId { get; set; }
 

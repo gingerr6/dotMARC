@@ -86,6 +86,62 @@ public sealed class PortalBrandingTests
     }
 
     [Fact]
+    public void WithNoDarkColours_DarkModeUsesTheAutomaticOnes()
+    {
+        var brand = PortalBranding.Resolve(Msp(), [new ScopedGroupBrand("Aurora Retail", null)]);
+
+        Assert.Equal(BrandColours.AutomaticDark("#0B5FFF", BrandColours.DefaultDarkSurface), brand.DarkPrimaryColour);
+        Assert.Equal(BrandColours.AutomaticDark("#FF6B00", BrandColours.DefaultDarkSurface), brand.DarkSecondaryColour);
+    }
+
+    [Fact]
+    public void TheMspsDarkColours_AreUsed_WhenSet()
+    {
+        var msp = Msp();
+        msp.DarkPrimaryColour = "#8AB4F8";
+        msp.DarkSecondaryColour = "#FFB74D";
+
+        var brand = PortalBranding.Resolve(msp, [new ScopedGroupBrand("Aurora Retail", null)]);
+
+        Assert.Equal(("#8AB4F8", "#FFB74D"), (brand.DarkPrimaryColour, brand.DarkSecondaryColour));
+    }
+
+    [Fact]
+    public void AGroupsOwnDarkColour_WinsOverTheMsps()
+    {
+        var msp = Msp();
+        msp.DarkPrimaryColour = "#8AB4F8";
+
+        var brand = PortalBranding.Resolve(msp, [new ScopedGroupBrand("Aurora Retail", new GroupBranding { DarkPrimaryColour = "#CE93D8" })]);
+
+        Assert.Equal("#CE93D8", brand.DarkPrimaryColour);
+    }
+
+    [Fact]
+    public void AGroupsLightColour_NeverPairsWithTheMspsDarkOne()
+    {
+        var msp = Msp();
+        msp.DarkPrimaryColour = "#8AB4F8";
+
+        var brand = PortalBranding.Resolve(msp, [new ScopedGroupBrand("Aurora Retail", new GroupBranding { PrimaryColour = "#7A1FA2" })]);
+
+        Assert.Equal(BrandColours.AutomaticDark("#7A1FA2", BrandColours.DefaultDarkSurface), brand.DarkPrimaryColour);
+    }
+
+    [Fact]
+    public void Backgrounds_ComeFromTheMsp_OrTheDefaults()
+    {
+        var msp = Msp();
+        msp.DarkSurfaceColour = "#000000";
+
+        var brand = PortalBranding.Resolve(msp, [new ScopedGroupBrand("Aurora Retail", null)]);
+
+        Assert.Equal((BrandColours.DefaultLightBackground, BrandColours.DefaultLightSurface, BrandColours.DefaultDarkBackground, "#000000"),
+            (brand.LightBackgroundColour, brand.LightSurfaceColour, brand.DarkBackgroundColour, brand.DarkSurfaceColour));
+        Assert.Equal(BrandColours.AutomaticDark("#0B5FFF", "#000000"), brand.DarkPrimaryColour);
+    }
+
+    [Fact]
     public void TheDarkLogo_FallsBackToTheLightOne()
     {
         var brand = PortalBranding.Resolve(Msp(), [new ScopedGroupBrand("Aurora Retail", null)]);

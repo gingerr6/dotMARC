@@ -424,6 +424,12 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(settings => settings.ProductName).HasMaxLength(60);
             entity.Property(settings => settings.PrimaryColour).HasMaxLength(7);
             entity.Property(settings => settings.SecondaryColour).HasMaxLength(7);
+            entity.Property(settings => settings.DarkPrimaryColour).HasMaxLength(7);
+            entity.Property(settings => settings.DarkSecondaryColour).HasMaxLength(7);
+            entity.Property(settings => settings.LightBackgroundColour).HasMaxLength(7);
+            entity.Property(settings => settings.LightSurfaceColour).HasMaxLength(7);
+            entity.Property(settings => settings.DarkBackgroundColour).HasMaxLength(7);
+            entity.Property(settings => settings.DarkSurfaceColour).HasMaxLength(7);
             entity.Property(settings => settings.SupportEmail).HasMaxLength(254);
             entity.Property(settings => settings.SupportUrl).HasMaxLength(500);
             entity.Property(settings => settings.SupportPhone).HasMaxLength(40);
@@ -482,6 +488,8 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(branding => branding.DisplayName).HasMaxLength(100);
             entity.Property(branding => branding.PrimaryColour).HasMaxLength(7);
             entity.Property(branding => branding.SecondaryColour).HasMaxLength(7);
+            entity.Property(branding => branding.DarkPrimaryColour).HasMaxLength(7);
+            entity.Property(branding => branding.DarkSecondaryColour).HasMaxLength(7);
         });
     }
 }

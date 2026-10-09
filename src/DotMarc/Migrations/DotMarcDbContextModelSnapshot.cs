@@ -1454,12 +1454,36 @@ namespace DotMarc.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("DarkBackgroundColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
                     b.Property<Guid?>("DarkLogoImageId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("DarkPrimaryColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("DarkSecondaryColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("DarkSurfaceColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
 
                     b.Property<string>("FooterText")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("LightBackgroundColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("LightSurfaceColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
 
                     b.Property<Guid?>("LogoImageId")
                         .HasColumnType("uuid");
@@ -1512,6 +1536,14 @@ namespace DotMarc.Migrations
 
                     b.Property<Guid?>("DarkLogoImageId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("DarkPrimaryColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<string>("DarkSecondaryColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
 
                     b.Property<string>("DisplayName")
                         .HasMaxLength(100)

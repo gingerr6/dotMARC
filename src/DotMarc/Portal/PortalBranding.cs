@@ -3,9 +3,24 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Portal;
 
-/// <summary>The brand a portal user sees, after layering their Groups over the MSP default.</summary>
+/// <summary>The brand a portal user sees, after layering their Groups over the MSP default. The light colours are the
+/// constructor's; dark colours and backgrounds are set by <see cref="PortalBranding.Resolve"/>, and default to automatic
+/// dark colours on dotMARC's own backgrounds.</summary>
 public sealed record ResolvedBrand(string ProductName, string Heading, string PrimaryColour, string SecondaryColour,
-    Guid? LogoImageId, Guid? DarkLogoImageId, string? SupportEmail, string? SupportUrl, string? SupportPhone, string? FooterText);
+    Guid? LogoImageId, Guid? DarkLogoImageId, string? SupportEmail, string? SupportUrl, string? SupportPhone, string? FooterText)
+{
+    public string LightBackgroundColour { get; init; } = BrandColours.DefaultLightBackground;
+    public string LightSurfaceColour { get; init; } = BrandColours.DefaultLightSurface;
+    public string DarkBackgroundColour { get; init; } = BrandColours.DefaultDarkBackground;
+    public string DarkSurfaceColour { get; init; } = BrandColours.DefaultDarkSurface;
+
+    /// <summary>A dark colour someone chose, or null for automatic.</summary>
+    public string? ExplicitDarkPrimaryColour { get; init; }
+    public string? ExplicitDarkSecondaryColour { get; init; }
+
+    public string DarkPrimaryColour => ExplicitDarkPrimaryColour ?? BrandColours.AutomaticDark(PrimaryColour, DarkSurfaceColour);
+    public string DarkSecondaryColour => ExplicitDarkSecondaryColour ?? BrandColours.AutomaticDark(SecondaryColour, DarkSurfaceColour);
+}
 
 public sealed record ScopedGroupBrand(string GroupName, GroupBranding? Branding);
 
@@ -29,8 +44,21 @@ public static class PortalBranding
 
         return new ResolvedBrand(msp.ProductName, heading,
             groupBrand?.PrimaryColour ?? msp.PrimaryColour, groupBrand?.SecondaryColour ?? msp.SecondaryColour,
-            logo, darkLogo, msp.SupportEmail, msp.SupportUrl, msp.SupportPhone, msp.FooterText);
+            logo, darkLogo, msp.SupportEmail, msp.SupportUrl, msp.SupportPhone, msp.FooterText)
+        {
+            ExplicitDarkPrimaryColour = DarkColour(groupBrand?.DarkPrimaryColour, groupBrand?.PrimaryColour, msp.DarkPrimaryColour),
+            ExplicitDarkSecondaryColour = DarkColour(groupBrand?.DarkSecondaryColour, groupBrand?.SecondaryColour, msp.DarkSecondaryColour),
+            LightBackgroundColour = msp.LightBackgroundColour ?? BrandColours.DefaultLightBackground,
+            LightSurfaceColour = msp.LightSurfaceColour ?? BrandColours.DefaultLightSurface,
+            DarkBackgroundColour = msp.DarkBackgroundColour ?? BrandColours.DefaultDarkBackground,
+            DarkSurfaceColour = msp.DarkSurfaceColour ?? BrandColours.DefaultDarkSurface,
+        };
     }
+
+    /// <summary>A Group's own dark colour; else, when the Group has its own light colour, automatic from it (null); else
+    /// the MSP's dark colour, which is null for automatic too. The MSP's dark colour never pairs with a Group's light one.</summary>
+    private static string? DarkColour(string? groupDark, string? groupLight, string? mspDark) =>
+        groupDark ?? (groupLight is not null ? null : mspDark);
 
     /// <summary>The logo for the app bar. Light mode's app bar is the secondary colour, often dark, so the dark logo is
     /// used whenever the bar is dark, not only in dark mode.</summary>

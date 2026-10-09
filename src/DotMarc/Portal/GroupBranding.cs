@@ -13,6 +13,12 @@ public sealed class GroupBranding
     public Guid? DarkLogoImageId { get; set; }
     public string? PrimaryColour { get; set; }
     public string? SecondaryColour { get; set; }
+
+    /// <summary>Dark mode's colours for this client. Null means automatic from this Group's light colour, or the MSP's
+    /// dark colour when this Group has no light colour of its own.</summary>
+    public string? DarkPrimaryColour { get; set; }
+    public string? DarkSecondaryColour { get; set; }
 }
 
-public sealed record GroupBrandingInput(string? DisplayName, Guid? LogoImageId, Guid? DarkLogoImageId, string? PrimaryColour, string? SecondaryColour);
+public sealed record GroupBrandingInput(string? DisplayName, Guid? LogoImageId, Guid? DarkLogoImageId, string? PrimaryColour, string? SecondaryColour,
+    string? DarkPrimaryColour = null, string? DarkSecondaryColour = null);
