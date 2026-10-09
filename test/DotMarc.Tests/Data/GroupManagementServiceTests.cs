@@ -389,4 +389,35 @@ public sealed class GroupManagementServiceTests : IAsyncLifetime
         Assert.Empty(verify.GroupBrandings);
         Assert.Empty(verify.BrandingImages);
     }
+
+    [Fact]
+    public async Task SetBrandingAsync_KeepsAGroupWithOnlyDarkColours_AndAuditsThem()
+    {
+        await using var context = CreateContext();
+        var group = new Group { Name = "Aurora Retail" };
+        context.Groups.Add(group);
+        await context.SaveChangesAsync();
+
+        await GroupManagementService.SetBrandingAsync(context, TestActors.Admin, group.Id,
+            new GroupBrandingInput(null, null, null, null, null, DarkPrimaryColour: "#ce93d8", DarkSecondaryColour: null));
+
+        await using var verify = CreateContext();
+        var saved = await GroupManagementService.GetBrandingAsync(verify, group.Id);
+        Assert.Equal("#CE93D8", saved!.DarkPrimaryColour);
+        Assert.Contains((await verify.AuditEntries.SingleAsync()).Changes, change => change.Field == "Dark primary colour" && change.New == "#CE93D8");
+    }
+
+    [Fact]
+    public async Task SetBrandingAsync_RefusesAnInvalidDarkColour()
+    {
+        await using var context = CreateContext();
+        var group = new Group { Name = "Aurora Retail" };
+        context.Groups.Add(group);
+        await context.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => GroupManagementService.SetBrandingAsync(context, TestActors.Admin, group.Id,
+            new GroupBrandingInput(null, null, null, null, null, DarkSecondaryColour: "teal")));
+
+        Assert.StartsWith("Dark secondary colour must be a hex colour such as #1A73E8.", exception.Message);
+    }
 }

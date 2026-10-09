@@ -25,6 +25,12 @@ public static class BrandingSettingsService
             .Field("Product name", saved.ProductName, updated.ProductName)
             .Field("Primary colour", saved.PrimaryColour, updated.PrimaryColour)
             .Field("Secondary colour", saved.SecondaryColour, updated.SecondaryColour)
+            .Field("Dark primary colour", saved.DarkPrimaryColour ?? "Automatic", updated.DarkPrimaryColour ?? "Automatic")
+            .Field("Dark secondary colour", saved.DarkSecondaryColour ?? "Automatic", updated.DarkSecondaryColour ?? "Automatic")
+            .Field("Light page background", saved.LightBackgroundColour ?? "Default", updated.LightBackgroundColour ?? "Default")
+            .Field("Light card background", saved.LightSurfaceColour ?? "Default", updated.LightSurfaceColour ?? "Default")
+            .Field("Dark page background", saved.DarkBackgroundColour ?? "Default", updated.DarkBackgroundColour ?? "Default")
+            .Field("Dark card background", saved.DarkSurfaceColour ?? "Default", updated.DarkSurfaceColour ?? "Default")
             .Field("Logo", LogoState(saved.LogoImageId, saved.LogoImageId), LogoState(saved.LogoImageId, updated.LogoImageId))
             .Field("Dark logo", LogoState(saved.DarkLogoImageId, saved.DarkLogoImageId), LogoState(saved.DarkLogoImageId, updated.DarkLogoImageId))
             .Field("Support email", saved.SupportEmail, updated.SupportEmail)
@@ -79,6 +85,12 @@ public static class BrandingSettingsService
         settings.ProductName = settings.ProductName?.Trim() ?? "";
         settings.PrimaryColour = settings.PrimaryColour?.Trim().ToUpperInvariant() ?? "";
         settings.SecondaryColour = settings.SecondaryColour?.Trim().ToUpperInvariant() ?? "";
+        settings.DarkPrimaryColour = Colour(settings.DarkPrimaryColour);
+        settings.DarkSecondaryColour = Colour(settings.DarkSecondaryColour);
+        settings.LightBackgroundColour = Colour(settings.LightBackgroundColour);
+        settings.LightSurfaceColour = Colour(settings.LightSurfaceColour);
+        settings.DarkBackgroundColour = Colour(settings.DarkBackgroundColour);
+        settings.DarkSurfaceColour = Colour(settings.DarkSurfaceColour);
         settings.SupportEmail = Blank(settings.SupportEmail);
         settings.SupportUrl = Blank(settings.SupportUrl);
         settings.SupportPhone = Blank(settings.SupportPhone);
@@ -87,12 +99,28 @@ public static class BrandingSettingsService
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static string? Colour(string? value) => Blank(value)?.ToUpperInvariant();
+
+    private static void ValidateOptionalColour(string? colour, string name)
+    {
+        if (colour is not null && !BrandColours.IsValid(colour))
+        {
+            throw new ArgumentException($"{name} must be a hex colour such as #1A73E8.", "settings");
+        }
+    }
+
     private static void Validate(BrandingSettings settings)
     {
         if (settings.ProductName.Length == 0) throw new ArgumentException("Product name can't be empty.", nameof(settings));
         if (settings.ProductName.Length > 60) throw new ArgumentException("Product name can be at most 60 characters.", nameof(settings));
         if (!BrandColours.IsValid(settings.PrimaryColour)) throw new ArgumentException("Primary colour must be a hex colour such as #1A73E8.", nameof(settings));
         if (!BrandColours.IsValid(settings.SecondaryColour)) throw new ArgumentException("Secondary colour must be a hex colour such as #1A73E8.", nameof(settings));
+        ValidateOptionalColour(settings.DarkPrimaryColour, "Dark primary colour");
+        ValidateOptionalColour(settings.DarkSecondaryColour, "Dark secondary colour");
+        ValidateOptionalColour(settings.LightBackgroundColour, "Light page background");
+        ValidateOptionalColour(settings.LightSurfaceColour, "Light card background");
+        ValidateOptionalColour(settings.DarkBackgroundColour, "Dark page background");
+        ValidateOptionalColour(settings.DarkSurfaceColour, "Dark card background");
         if (settings.SupportEmail is { } email && !MailAddress.TryCreate(email, out _)) throw new ArgumentException("Support email isn't a valid email address.", nameof(settings));
         if (settings.SupportEmail is { Length: > 254 }) throw new ArgumentException("Support email can be at most 254 characters.", nameof(settings));
         if (settings.SupportUrl is { } url && !(Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)) throw new ArgumentException("Support URL must be an absolute https:// address.", nameof(settings));

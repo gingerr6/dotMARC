@@ -183,9 +183,13 @@ public static class GroupManagementService
         var displayName = Blank(input.DisplayName);
         var primaryColour = Blank(input.PrimaryColour)?.ToUpperInvariant();
         var secondaryColour = Blank(input.SecondaryColour)?.ToUpperInvariant();
+        var darkPrimaryColour = Blank(input.DarkPrimaryColour)?.ToUpperInvariant();
+        var darkSecondaryColour = Blank(input.DarkSecondaryColour)?.ToUpperInvariant();
         if (displayName is { Length: > 100 }) throw new ArgumentException("Display name can be at most 100 characters.", nameof(input));
         if (primaryColour is not null && !BrandColours.IsValid(primaryColour)) throw new ArgumentException("Primary colour must be a hex colour such as #1A73E8.", nameof(input));
         if (secondaryColour is not null && !BrandColours.IsValid(secondaryColour)) throw new ArgumentException("Secondary colour must be a hex colour such as #1A73E8.", nameof(input));
+        if (darkPrimaryColour is not null && !BrandColours.IsValid(darkPrimaryColour)) throw new ArgumentException("Dark primary colour must be a hex colour such as #1A73E8.", nameof(input));
+        if (darkSecondaryColour is not null && !BrandColours.IsValid(darkSecondaryColour)) throw new ArgumentException("Dark secondary colour must be a hex colour such as #1A73E8.", nameof(input));
 
         await BrandingImageCleanup.EnsureStoredAsync(context, [input.LogoImageId, input.DarkLogoImageId], cancellationToken).ConfigureAwait(false);
 
@@ -196,14 +200,17 @@ public static class GroupManagementService
             .Field("Logo", LogoState(existing?.LogoImageId, existing?.LogoImageId), LogoState(existing?.LogoImageId, input.LogoImageId))
             .Field("Dark logo", LogoState(existing?.DarkLogoImageId, existing?.DarkLogoImageId), LogoState(existing?.DarkLogoImageId, input.DarkLogoImageId))
             .Field("Primary colour", existing?.PrimaryColour, primaryColour)
-            .Field("Secondary colour", existing?.SecondaryColour, secondaryColour);
+            .Field("Secondary colour", existing?.SecondaryColour, secondaryColour)
+            .Field("Dark primary colour", existing?.DarkPrimaryColour, darkPrimaryColour)
+            .Field("Dark secondary colour", existing?.DarkSecondaryColour, darkSecondaryColour);
         if (!changes.Any)
         {
             return;
         }
 
         var released = new[] { existing?.LogoImageId, existing?.DarkLogoImageId }.OfType<Guid>().ToList();
-        var cleared = displayName is null && input.LogoImageId is null && input.DarkLogoImageId is null && primaryColour is null && secondaryColour is null;
+        var cleared = displayName is null && input.LogoImageId is null && input.DarkLogoImageId is null && primaryColour is null && secondaryColour is null
+            && darkPrimaryColour is null && darkSecondaryColour is null;
         if (cleared)
         {
             if (existing is not null)
@@ -224,6 +231,8 @@ public static class GroupManagementService
             existing.DarkLogoImageId = input.DarkLogoImageId;
             existing.PrimaryColour = primaryColour;
             existing.SecondaryColour = secondaryColour;
+            existing.DarkPrimaryColour = darkPrimaryColour;
+            existing.DarkSecondaryColour = darkSecondaryColour;
         }
 
         AuditLog.Record(context, actor, AuditActions.GroupBrandingChanged, AuditTarget.For(group), $"Changed the portal branding for group {group.Name}", changes);

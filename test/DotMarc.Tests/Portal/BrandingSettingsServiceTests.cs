@@ -180,4 +180,39 @@ public sealed class BrandingSettingsServiceTests : IAsyncLifetime
     }
 
     private static byte[] PngBytes() => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
+
+    [Fact]
+    public async Task Save_StoresDarkColoursAndBackgrounds_BlankAsNull_AndAuditsThem()
+    {
+        await using var context = CreateContext();
+        var updated = await BrandingSettingsService.GetAsync(context);
+        updated.DarkPrimaryColour = "#8ab4f8";
+        updated.DarkSurfaceColour = "  ";
+
+        await BrandingSettingsService.SaveAsync(context, TestActors.Admin, updated);
+
+        await using var verify = CreateContext();
+        var saved = await BrandingSettingsService.GetAsync(verify);
+        Assert.Equal(("#8AB4F8", null), (saved.DarkPrimaryColour, saved.DarkSurfaceColour));
+        var entry = await verify.AuditEntries.SingleAsync();
+        Assert.Contains(entry.Changes, change => change.Field == "Dark primary colour" && change.Old == "Automatic" && change.New == "#8AB4F8");
+    }
+
+    [Theory]
+    [InlineData("DarkPrimaryColour", "Dark primary colour must be a hex colour such as #1A73E8.")]
+    [InlineData("DarkSecondaryColour", "Dark secondary colour must be a hex colour such as #1A73E8.")]
+    [InlineData("LightBackgroundColour", "Light page background must be a hex colour such as #1A73E8.")]
+    [InlineData("LightSurfaceColour", "Light card background must be a hex colour such as #1A73E8.")]
+    [InlineData("DarkBackgroundColour", "Dark page background must be a hex colour such as #1A73E8.")]
+    [InlineData("DarkSurfaceColour", "Dark card background must be a hex colour such as #1A73E8.")]
+    public async Task Save_RefusesAnInvalidNewColour(string property, string message)
+    {
+        await using var context = CreateContext();
+        var updated = await BrandingSettingsService.GetAsync(context);
+        typeof(BrandingSettings).GetProperty(property)!.SetValue(updated, "blue");
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => BrandingSettingsService.SaveAsync(context, TestActors.Admin, updated));
+
+        Assert.StartsWith(message, exception.Message);
+    }
 }
