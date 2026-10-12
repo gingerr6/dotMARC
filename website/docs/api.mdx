@@ -55,6 +55,36 @@ curl https://dotmarc.example.com/api/v1/domains/contoso.example   -H "Authorizat
 Names match however they're written: any case, with or without a trailing dot. A domain name can never be all digits,
 so a number is always read as an id.
 
+## Filtering
+
+The list endpoints take filters as query parameters, so a script asks for just what it needs. Every filter is in the
+[API reference](/api/dotmarc-api) with the values it accepts.
+
+- **Several values:** give a filter more than one value with commas (`type=SpfRecordBroken,DkimRecordBroken`) or by
+  repeating it (`type=SpfRecordBroken&type=DkimRecordBroken`). A record matches if it matches any of them.
+- **Several filters:** a record must match every filter you give.
+- **Letter case doesn't matter:** `spf=toomanylookups` works.
+- **Domains** can be given by id or name. A domain the key can't see is a 404.
+- **Dates** are a day (`2026-10-01`, from midnight UTC) or a time with its zone (`2026-10-01T09:30:00Z`). Filters ending
+  `After` include the time you give; filters ending `Before` don't, so back-to-back ranges never overlap.
+- **A value dotMARC doesn't recognise** is a 400 that names the filter and lists the values it accepts.
+
+Some examples:
+
+| To get | Ask for |
+| --- | --- |
+| Domains in group 3 whose SPF has too many lookups or is misconfigured | `GET /api/v1/domains?group=3&spf=TooManyLookups,Misconfigured` |
+| Domains that need attention, as the client portal shows them | `GET /api/v1/domains?status=NeedsAttention` |
+| Open SPF and DKIM alerts raised this week | `GET /api/v1/alerts?type=SpfRecordBroken,DkimRecordBroken&raisedAfter=2026-10-05` |
+| Everything that happened to one domain | `GET /api/v1/audit?domain=contoso.example` |
+| Sign-ins in September | `GET /api/v1/audit?kind=signIn&occurredAfter=2026-09-01&occurredBefore=2026-10-01` |
+
+### The audit log
+
+`GET /api/v1/audit` needs the AuditView permission. It returns changes and sign-ins by default; add `kind=pageView` or
+`kind=all` for pages people opened. A key limited to certain groups sees only entries about its own domains, its groups
+and their alerts, never sign-ins, settings or access changes.
+
 ## Keys limited to groups
 
 A key limited to groups sees only domains in at least one of its groups, and only those groups. A domain or alert outside
