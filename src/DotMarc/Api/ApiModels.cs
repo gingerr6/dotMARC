@@ -133,3 +133,19 @@ public sealed record ApiDmarcReport(int Id, string ReportingOrg, string ReportId
             .ToList());
     }
 }
+
+public sealed record ApiTlsFailure(string ResultType, long Sessions, string? ReceivingMx, string? ReasonCode, string? AdditionalInformation);
+
+public sealed record ApiTlsPolicy(string Type, string Domain, long SuccessfulSessions, long FailedSessions, IReadOnlyList<ApiTlsFailure> Failures);
+
+public sealed record ApiTlsReport(int Id, string ReportingOrg, string ReportId, DateTimeOffset DateRangeBeginUtc, DateTimeOffset DateRangeEndUtc,
+    DateTimeOffset ReceivedUtc, long SuccessfulSessions, long FailedSessions, IReadOnlyList<ApiTlsPolicy> Policies)
+{
+    /// <summary>Needs Policies with FailureDetails loaded.</summary>
+    public static ApiTlsReport From(TlsrptReport report) => new(
+        report.Id, report.ReportingOrg, report.ReportId, report.DateRangeBeginUtc, report.DateRangeEndUtc, report.ReceivedUtc,
+        report.Policies.Sum(policy => policy.SuccessfulSessionCount), report.Policies.Sum(policy => policy.FailedSessionCount),
+        report.Policies.Select(policy => new ApiTlsPolicy(policy.PolicyType, policy.PolicyDomain, policy.SuccessfulSessionCount, policy.FailedSessionCount,
+            policy.FailureDetails.Select(failure => new ApiTlsFailure(failure.ResultType, failure.FailedSessionCount, failure.ReceivingMxHostname,
+                failure.FailureReasonCode, failure.AdditionalInformation)).ToList())).ToList());
+}
