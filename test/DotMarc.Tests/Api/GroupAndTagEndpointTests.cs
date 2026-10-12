@@ -65,4 +65,20 @@ public sealed class GroupAndTagEndpointTests : IAsyncLifetime
         Assert.Equal(2, unscopedTag.DomainCount);
         Assert.Equal("Primary", unscopedTag.Color);
     }
+
+    [Fact]
+    public async Task GroupsAndTags_CanBeSearchedByName()
+    {
+        await _host.SeedGroupAsync("api-search-Contoso");
+        await _host.SeedTagAsync("api-search-Microsoft 365");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.GroupsView, Permission.TagsView]);
+        using var client = _host.ClientFor(secret);
+
+        var groups = await client.GetFromJsonAsync<List<ApiGroup>>("/api/v1/groups?search=SEARCH-cont");
+        var tags = await client.GetFromJsonAsync<List<ApiTag>>("/api/v1/tags?search=microsoft");
+
+        Assert.Equal(["api-search-Contoso"], groups!.Select(group => group.Name));
+        Assert.Contains("api-search-Microsoft 365", tags!.Select(tag => tag.Name));
+        Assert.All(tags!, tag => Assert.Contains("microsoft", tag.Name, StringComparison.OrdinalIgnoreCase));
+    }
 }

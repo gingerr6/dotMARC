@@ -80,7 +80,11 @@ public static class DomainReadEndpoints
             .WithTags(ApiTags.Domains)
             .WithName("GetReportSummary")
             .WithSummary("Summarise a domain's DMARC reports")
-            .WithDescription($"Volume, pass rate, why failing mail was let through or rejected, and the 20 busiest sending IPs, over the last 1 to 30 days (default 30). {ApiDomainKey.Description}")
+            .WithDescription($"Volume, pass rate, why failing mail was let through or rejected, and the busiest sending IPs (20 by default), over the last 1 to 30 days (default 30), or any range of up to 366 days with from and to. {ApiDomainKey.Description}")
+            .DocumentsFilter("days", "The last 1 to 30 days (default 30). Use this or from and to.")
+            .DocumentsFilter("from", "Start of the range: a date (2026-10-01) or time with a zone, included. At most 366 days before to.")
+            .DocumentsFilter("to", "End of the range: a date or time, not included. Defaults to now.")
+            .DocumentsFilter("top", "How many of the busiest sending IPs to return, 1 to 200 (default 20).")
             .ProducesProblem(StatusCodes.Status404NotFound);
     }
 
@@ -239,22 +243,50 @@ public static class DomainReadEndpoints
     }
 
     private static async Task<Results<Ok<ApiReportSummary>, ValidationProblem, ProblemHttpResult>> GetReportSummaryAsync(
-        [Microsoft.AspNetCore.Mvc.FromRoute(Name = "domain")] string domainKey, int? days, ClaimsPrincipal user, IDbContextFactory<DotMarcDbContext> dbFactory, TimeProvider timeProvider, CancellationToken cancellationToken)
+        [Microsoft.AspNetCore.Mvc.FromRoute(Name = "domain")] string domainKey, int? days, string? from, string? to, int? top, ClaimsPrincipal user,
+        IDbContextFactory<DotMarcDbContext> dbFactory, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
+        var reader = new ApiFilterReader();
         var maximumDays = (int)DomainStatistics.ReportWindow.TotalDays;
-        var windowDays = days ?? maximumDays;
-        if (windowDays < 1 || windowDays > maximumDays)
+        var rangeStart = reader.Date("from", from);
+        var rangeEnd = reader.Date("to", to);
+        reader.Range("from", rangeStart, "to", rangeEnd);
+        if (days is not null && (rangeStart is not null || rangeEnd is not null))
+        {
+            return ApiProblems.Validation("days", "Use days or from and to, not both.");
+        }
+
+        if (days is < 1 || days > maximumDays)
         {
             return ApiProblems.Validation("days", $"Must be between 1 and {maximumDays}.");
         }
 
-        var cutoffUtc = timeProvider.GetUtcNow().AddDays(-windowDays);
+        var sourceCount = top ?? TopSourceCount;
+        if (sourceCount is < 1 or > 200)
+        {
+            return ApiProblems.Validation("top", "Must be between 1 and 200.");
+        }
+
+        if (reader.Problem is { } problem)
+        {
+            return problem;
+        }
+
+        var nowUtc = timeProvider.GetUtcNow();
+        var endUtc = rangeEnd ?? nowUtc;
+        var startUtc = rangeStart ?? endUtc.AddDays(-(days ?? maximumDays));
+        if ((endUtc - startUtc).TotalDays > 366)
+        {
+            return ApiProblems.Validation("from", "The range can be at most 366 days.");
+        }
+
+        var windowDays = (int)Math.Ceiling((endUtc - startUtc).TotalDays);
         await using var context = await dbFactory.CreateDbContextAsync(cancellationToken);
         var domain = await ApiDomainKey.Matching(ApiScope.From(user).Domains(context.Domains.AsNoTracking()), domainKey)
-            .Include(candidate => candidate.Reports.Where(report => report.ReceivedUtc >= cutoffUtc))
+            .Include(candidate => candidate.Reports.Where(report => report.ReceivedUtc >= startUtc && report.ReceivedUtc < endUtc))
             .ThenInclude(report => report.Records)
             .ThenInclude(record => record.OverrideReasons)
-            .Include(candidate => candidate.Reports.Where(report => report.ReceivedUtc >= cutoffUtc))
+            .Include(candidate => candidate.Reports.Where(report => report.ReceivedUtc >= startUtc && report.ReceivedUtc < endUtc))
             .ThenInclude(report => report.Records)
             .ThenInclude(record => record.AuthDetails)
             .AsSplitQuery()
@@ -268,7 +300,7 @@ public static class DomainReadEndpoints
         var topSources = DomainStatistics.GetSourceAggregates(domain.Reports)
             .OrderByDescending(source => source.Volume)
             .ThenBy(source => source.SourceIp)
-            .Take(TopSourceCount)
+            .Take(sourceCount)
             .Select(source => new ApiSource(source.SourceIp, source.Volume, source.SpfResult.ToString(), source.DkimResult.ToString(), source.Disposition.ToString()))
             .ToList();
         return TypedResults.Ok(new ApiReportSummary(

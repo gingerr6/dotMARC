@@ -358,4 +358,23 @@ public sealed class DomainReadEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains("TooManyLookups", await response.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task ReportSummary_TakesADateRange_AndHowManySources()
+    {
+        await _host.SeedDomainAsync("api-summary-range.example", configure: domain =>
+        {
+            domain.Reports.Add(ReportWith(new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero), ("192.0.2.10", 5, AuthResult.Pass, AuthResult.Pass), ("192.0.2.11", 3, AuthResult.Pass, AuthResult.Pass)));
+            domain.Reports.Add(ReportWith(new DateTimeOffset(2026, 4, 10, 0, 0, 0, TimeSpan.Zero), ("192.0.2.12", 7, AuthResult.Pass, AuthResult.Pass)));
+        });
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var march = await client.GetFromJsonAsync<ApiReportSummary>("/api/v1/domains/api-summary-range.example/reports/summary?from=2026-03-01&to=2026-04-01&top=1");
+        var both = await client.GetAsync("/api/v1/domains/api-summary-range.example/reports/summary?days=7&from=2026-03-01");
+
+        Assert.Equal((31, 8), (march!.Days, march.TotalVolume));
+        Assert.Equal(["192.0.2.10"], march.TopSources.Select(source => source.SourceIp));
+        Assert.Equal(HttpStatusCode.BadRequest, both.StatusCode);
+    }
 }

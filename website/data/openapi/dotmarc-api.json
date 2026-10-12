@@ -2065,7 +2065,7 @@
     },
     "/api/v1/domains/{domain}/reports/summary": {
       "get": {
-        "description": "Volume, pass rate, why failing mail was let through or rejected, and the 20 busiest sending IPs, over the last 1 to 30 days (default 30). Accepts the domain's id or its name, such as contoso.example.\n\nNeeds the DomainsView permission.",
+        "description": "Volume, pass rate, why failing mail was let through or rejected, and the busiest sending IPs (20 by default), over the last 1 to 30 days (default 30), or any range of up to 366 days with from and to. Accepts the domain's id or its name, such as contoso.example.\n\nNeeds the DomainsView permission.",
         "operationId": "GetReportSummary",
         "parameters": [
           {
@@ -2077,8 +2077,34 @@
             }
           },
           {
+            "description": "The last 1 to 30 days (default 30). Use this or from and to.",
             "in": "query",
             "name": "days",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Start of the range: a date (2026-10-01) or time with a zone, included. At most 366 days before to.",
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "End of the range: a date or time, not included. Defaults to now.",
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many of the busiest sending IPs to return, 1 to 200 (default 20).",
+            "in": "query",
+            "name": "top",
             "schema": {
               "format": "int32",
               "type": "integer"
@@ -2264,6 +2290,16 @@
       "get": {
         "description": "Every group this key can see, with how many domains are in each. A key limited to certain groups sees only those.\n\nNeeds the GroupsView permission.",
         "operationId": "ListGroups",
+        "parameters": [
+          {
+            "description": "Part of the name, in any letter case.",
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2330,6 +2366,16 @@
       "get": {
         "description": "Every tag, with its colour and how many domains this key can see carry it.\n\nNeeds the TagsView permission.",
         "operationId": "ListTags",
+        "parameters": [
+          {
+            "description": "Part of the name, in any letter case.",
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
