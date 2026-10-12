@@ -783,6 +783,35 @@
         ],
         "type": "object"
       },
+      "ApiPageOfApiSourceDetail": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiSourceDetail"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount"
+        ],
+        "type": "object"
+      },
       "ApiReasonBreakdown": {
         "properties": {
           "benignOverride": {
@@ -958,6 +987,60 @@
           "spf",
           "dkim",
           "disposition"
+        ],
+        "type": "object"
+      },
+      "ApiSourceDetail": {
+        "properties": {
+          "country": {
+            "nullable": true,
+            "type": "string"
+          },
+          "disposition": {
+            "type": "string"
+          },
+          "dkim": {
+            "type": "string"
+          },
+          "failed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ip": {
+            "type": "string"
+          },
+          "organization": {
+            "nullable": true,
+            "type": "string"
+          },
+          "passRate": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "passed": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "spf": {
+            "type": "string"
+          },
+          "volume": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ip",
+          "volume",
+          "passed",
+          "failed",
+          "passRate",
+          "spf",
+          "dkim",
+          "disposition",
+          "organization",
+          "country"
         ],
         "type": "object"
       },
@@ -2617,6 +2700,215 @@
         "x-dotmarc-permission": "DomainsView"
       }
     },
+    "/api/v1/domains/{domain}/sources": {
+      "get": {
+        "description": "Every IP that sent as the domain over the range, busiest first, 50 a page by default and at most 200. Filters combine. Accepts the domain's id or its name, such as contoso.example.\n\nNeeds the DomainsView permission.",
+        "operationId": "ListSources",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The last 1 to 30 days (default 30). Use this or from and to.",
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Start of the range: a date (2026-10-01) or time with a zone, included. At most 366 days before to.",
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "End of the range: a date or time, not included. Defaults to now.",
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "passing for sources with no failed messages, failing for those with any.",
+            "in": "query",
+            "name": "result",
+            "schema": {
+              "enum": [
+                "passing",
+                "failing"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Pass for sources whose SPF passed at least once, Fail for the rest.",
+            "in": "query",
+            "name": "spf",
+            "schema": {
+              "enum": [
+                "Pass",
+                "Fail"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Pass for sources whose DKIM passed at least once, Fail for the rest.",
+            "in": "query",
+            "name": "dkim",
+            "schema": {
+              "enum": [
+                "Pass",
+                "Fail"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "The most severe action receivers took. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "disposition",
+            "schema": {
+              "items": {
+                "enum": [
+                  "None",
+                  "Quarantine",
+                  "Reject"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "At least this many messages.",
+            "in": "query",
+            "name": "minVolume",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Part of the IP address.",
+            "in": "query",
+            "name": "ip",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Part of the network owner's name, in any letter case. IPs dotMARC hasn't looked up yet never match.",
+            "in": "query",
+            "name": "organization",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Which page, from 1 (default 1).",
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "How many a page, 1 to 200 (default 50).",
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiPageOfApiSourceDetail"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            },
+            "description": "The request couldn't be used. `errors` names each field that's wrong and why."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No API key was sent, or the key is unknown, expired or revoked."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "There's no such item, or this key can't see it. A key limited to certain groups can't see what's outside them."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "This key has made more requests this minute than dotMARC allows (120 by default). Wait for the number of seconds in the Retry-After header, then try again."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong in dotMARC that the request didn't cause. It's safe to retry a read; check before retrying a change. If it keeps happening, dotMARC's logs have the details."
+          }
+        },
+        "summary": "List a domain's sending sources",
+        "tags": [
+          "Reports"
+        ],
+        "x-dotmarc-permission": "DomainsView"
+      }
+    },
     "/api/v1/domains/{domain}/tags": {
       "put": {
         "description": "Replaces the domain's tags with exactly these. Accepts the domain's id or its name, such as contoso.example.\n\nNeeds the DomainsEdit permission.",
@@ -2891,6 +3183,10 @@
     {
       "description": "Who did what in dotMARC: changes, sign-ins and, on request, pages opened.",
       "name": "Audit log"
+    },
+    {
+      "description": "Sending sources, DMARC and TLS reports with their original files, and the dashboard's headline figures.",
+      "name": "Reports"
     }
   ]
 }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using DotMarc.Reporting;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace DotMarc.Api;
@@ -178,6 +179,34 @@ public sealed partial class ApiFilterReader
         }
 
         return (number, size);
+    }
+
+    /// <summary>The report window: the last 1 to 30 days (default 30), or from and to for up to 366 days, not both. to
+    /// defaults to now; a from that isn't before it is refused.</summary>
+    public (DateTimeOffset Start, DateTimeOffset End) ReportRange(string? days, string? from, string? to, DateTimeOffset nowUtc)
+    {
+        var maximumDays = (int)DomainStatistics.ReportWindow.TotalDays;
+        var windowDays = Integer("days", days, 1, maximumDays);
+        var rangeStart = Date("from", from);
+        var rangeEnd = Date("to", to);
+        Range("from", rangeStart, "to", rangeEnd);
+        if (!string.IsNullOrWhiteSpace(days) && (!string.IsNullOrWhiteSpace(from) || !string.IsNullOrWhiteSpace(to)))
+        {
+            Fail("days", "Use days, or from and to, not both.");
+        }
+
+        var endUtc = rangeEnd ?? nowUtc;
+        var startUtc = rangeStart ?? endUtc.AddDays(-(windowDays ?? maximumDays));
+        if (rangeEnd is null && startUtc >= endUtc)
+        {
+            Fail("from", "Must be earlier than to, which is now when it isn't given.");
+        }
+        else if ((endUtc - startUtc).TotalDays > 366)
+        {
+            Fail("from", "The range can be at most 366 days.");
+        }
+
+        return (startUtc, endUtc);
     }
 
     /// <summary>Records a problem an endpoint finds itself, so it joins the others in the one 400.</summary>

@@ -103,3 +103,8 @@ public sealed record ApiAuditChange(string Field, string? Old, string? New, bool
 public sealed record ApiAuditEntry(
     long Id, DateTimeOffset OccurredUtc, string Kind, ApiAuditActor Actor, string Action, ApiAuditTarget? Target, string Summary,
     IReadOnlyList<ApiAuditChange> Changes);
+
+/// <summary>A sending IP over the range. Passed means SPF or DKIM passed; Spf and Dkim are Pass if they passed in any
+/// record; Disposition is the most severe seen. Organization and Country come from dotMARC's cache of IP lookups.</summary>
+public sealed record ApiSourceDetail(string Ip, int Volume, int Passed, int Failed, double? PassRate, string Spf, string Dkim, string Disposition,
+    string? Organization, string? Country);

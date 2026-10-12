@@ -81,7 +81,7 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
             .SelectMany(path => path.Value.EnumerateObject().Select(operation => (Name: $"{operation.Name.ToUpperInvariant()} {path.Name}", Body: operation.Value)))
             .ToList();
 
-        Assert.Equal(13, operations.Count);
+        Assert.Equal(14, operations.Count);
         Assert.All(operations, operation =>
         {
             Assert.True(operation.Body.TryGetProperty("summary", out _), $"{operation.Name} has no summary");
@@ -99,6 +99,7 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
         {
             ["GET /api/v1/alerts"] = [400, 404],
             ["GET /api/v1/audit"] = [400, 404],
+            ["GET /api/v1/domains/{domain}/sources"] = [400, 404],
             ["POST /api/v1/alerts/{id}/acknowledge"] = [404, 409],
             ["GET /api/v1/domains"] = [400],
             ["POST /api/v1/domains"] = [400, 409],
@@ -135,7 +136,7 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
     [Fact]
     public async Task EveryOperation_IsInOneReadableSection_AndEverySectionIsDescribed()
     {
-        string[] sections = ["Domains", "Imports", "Groups and tags", "Alerts", "Audit log"];
+        string[] sections = ["Domains", "Imports", "Groups and tags", "Alerts", "Audit log", "Reports"];
         using var document = JsonDocument.Parse(await FetchDocumentAsync());
         var operationTags = document.RootElement.GetProperty("paths").EnumerateObject()
             .SelectMany(path => path.Value.EnumerateObject())

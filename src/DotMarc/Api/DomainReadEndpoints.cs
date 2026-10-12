@@ -256,29 +256,8 @@ public static class DomainReadEndpoints
         IDbContextFactory<DotMarcDbContext> dbFactory, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         var reader = new ApiFilterReader();
-        var maximumDays = (int)DomainStatistics.ReportWindow.TotalDays;
-        var windowDays = reader.Integer("days", days, 1, maximumDays);
-        var rangeStart = reader.Date("from", from);
-        var rangeEnd = reader.Date("to", to);
-        reader.Range("from", rangeStart, "to", rangeEnd);
         var sourceCount = reader.Integer("top", top, 1, 200) ?? TopSourceCount;
-        if (!string.IsNullOrWhiteSpace(days) && (!string.IsNullOrWhiteSpace(from) || !string.IsNullOrWhiteSpace(to)))
-        {
-            reader.Refuse("days", "Use days, or from and to, not both.");
-        }
-
-        var nowUtc = timeProvider.GetUtcNow();
-        var endUtc = rangeEnd ?? nowUtc;
-        var startUtc = rangeStart ?? endUtc.AddDays(-(windowDays ?? maximumDays));
-        if (rangeEnd is null && startUtc >= endUtc)
-        {
-            reader.Refuse("from", "Must be earlier than to, which is now when it isn't given.");
-        }
-        else if ((endUtc - startUtc).TotalDays > 366)
-        {
-            reader.Refuse("from", "The range can be at most 366 days.");
-        }
-
+        var (startUtc, endUtc) = reader.ReportRange(days, from, to, timeProvider.GetUtcNow());
         if (reader.Problem is { } problem)
         {
             return problem;
