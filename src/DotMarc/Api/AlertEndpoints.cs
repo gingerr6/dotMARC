@@ -3,6 +3,7 @@ using DotMarc.Audit;
 using DotMarc.Data;
 using DotMarc.Notifications;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Api;
@@ -11,6 +12,28 @@ public static class AlertEndpoints
 {
     private const int DefaultPageSize = 50;
 
+    public static IReadOnlyList<string> Severities { get; } = ["Info", "Warning"];
+
+    private static readonly IReadOnlyList<string> Statuses = ["open", "resolved", "all"];
+
+    /// <summary>The alert list's filters; see the spec's section 3.</summary>
+    public sealed class AlertFilters
+    {
+        [FromQuery(Name = "status")] public string? Status { get; set; }
+        [FromQuery(Name = "type")] public string[]? Type { get; set; }
+        [FromQuery(Name = "severity")] public string[]? Severity { get; set; }
+        [FromQuery(Name = "domain")] public string[]? Domain { get; set; }
+        [FromQuery(Name = "group")] public string[]? Group { get; set; }
+        [FromQuery(Name = "tag")] public string[]? Tag { get; set; }
+        [FromQuery(Name = "acknowledgeable")] public bool? Acknowledgeable { get; set; }
+        [FromQuery(Name = "raisedAfter")] public string? RaisedAfter { get; set; }
+        [FromQuery(Name = "raisedBefore")] public string? RaisedBefore { get; set; }
+        [FromQuery(Name = "resolvedAfter")] public string? ResolvedAfter { get; set; }
+        [FromQuery(Name = "resolvedBefore")] public string? ResolvedBefore { get; set; }
+        [FromQuery(Name = "page")] public int? Page { get; set; }
+        [FromQuery(Name = "pageSize")] public int? PageSize { get; set; }
+    }
+
     public static void Map(RouteGroupBuilder api)
     {
         api.MapGet("/alerts", ListAlertsAsync)
@@ -18,7 +41,19 @@ public static class AlertEndpoints
             .WithTags(ApiTags.Alerts)
             .WithName("ListAlerts")
             .WithSummary("List alerts")
-            .WithDescription($"Alerts newest first, open ones by default (status=all includes resolved), {DefaultPageSize} a page by default and at most {DomainReadEndpoints.MaximumPageSize}. A key limited to certain groups sees only alerts about its domains.");
+            .WithDescription($"Alerts newest first, open ones by default, {DefaultPageSize} a page by default and at most {DomainReadEndpoints.MaximumPageSize}. Filters combine: an alert must match every filter given. A key limited to certain groups sees only alerts about its domains.")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .DocumentsFilter("status", "open (default), resolved or all.", Statuses)
+            .DocumentsFilter("type", "One or more alert types." + ApiFilterDocs.ListHint, AlertTypes.All.Select(type => type.Key))
+            .DocumentsFilter("severity", "One or more severities." + ApiFilterDocs.ListHint, Severities)
+            .DocumentsFilter("domain", "One or more domains, by id or name. A domain this key can't see is a 404." + ApiFilterDocs.ListHint)
+            .DocumentsFilter("group", "One or more group ids: alerts for domains in any of them." + ApiFilterDocs.ListHint)
+            .DocumentsFilter("tag", "One or more tag ids: alerts for domains with any of them." + ApiFilterDocs.ListHint)
+            .DocumentsFilter("acknowledgeable", "true for open alerts this API can acknowledge, false for the rest.")
+            .DocumentsFilter("raisedAfter", "Raised at or after this date (2026-10-01) or time with a zone (2026-10-01T09:30:00Z).")
+            .DocumentsFilter("raisedBefore", "Raised before this date or time.")
+            .DocumentsFilter("resolvedAfter", "Resolved at or after this date or time. Open alerts never match.")
+            .DocumentsFilter("resolvedBefore", "Resolved before this date or time. Open alerts never match.");
 
         api.MapPost("/alerts/{id:int}/acknowledge", AcknowledgeAsync)
             .RequirePermission(Permission.AlertsManage)
@@ -30,44 +65,111 @@ public static class AlertEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
     }
 
-    private static async Task<Results<Ok<ApiPage<ApiAlert>>, ValidationProblem>> ListAlertsAsync(
-        ClaimsPrincipal user, IDbContextFactory<DotMarcDbContext> dbFactory, string? status, int? page, int? pageSize, CancellationToken cancellationToken)
+    private static async Task<Results<Ok<ApiPage<ApiAlert>>, ValidationProblem, ProblemHttpResult>> ListAlertsAsync(
+        [AsParameters] AlertFilters filters, ClaimsPrincipal user, IDbContextFactory<DotMarcDbContext> dbFactory, CancellationToken cancellationToken)
     {
-        var includeResolved = (status ?? "open").ToLowerInvariant() switch
+        var reader = new ApiFilterReader();
+        var status = reader.Single("status", filters.Status, Statuses) ?? "open";
+        var types = reader.OneOf("type", filters.Type, AlertTypes.All.Select(type => type.Key).ToList());
+        var severities = reader.OneOf("severity", filters.Severity, Severities);
+        var groupIds = reader.Ids("group", filters.Group);
+        var tagIds = reader.Ids("tag", filters.Tag);
+        var raisedAfter = reader.Date("raisedAfter", filters.RaisedAfter);
+        var raisedBefore = reader.Date("raisedBefore", filters.RaisedBefore);
+        var resolvedAfter = reader.Date("resolvedAfter", filters.ResolvedAfter);
+        var resolvedBefore = reader.Date("resolvedBefore", filters.ResolvedBefore);
+        reader.Range("raisedAfter", raisedAfter, "raisedBefore", raisedBefore);
+        reader.Range("resolvedAfter", resolvedAfter, "resolvedBefore", resolvedBefore);
+        var (pageNumber, size) = reader.Paging(filters.Page, filters.PageSize, DefaultPageSize);
+        if (reader.Problem is { } problem)
         {
-            "open" => (bool?)false,
-            "all" => true,
-            _ => null,
-        };
-        if (includeResolved is null)
-        {
-            return ApiProblems.Validation("status", "Use open or all.");
-        }
-
-        var pageNumber = page ?? 1;
-        var size = pageSize ?? DefaultPageSize;
-        if (pageNumber < 1)
-        {
-            return ApiProblems.Validation("page", "Must be 1 or more.");
-        }
-
-        if (size is < 1 or > DomainReadEndpoints.MaximumPageSize)
-        {
-            return ApiProblems.Validation("pageSize", $"Must be between 1 and {DomainReadEndpoints.MaximumPageSize}.");
+            return problem;
         }
 
         var scope = ApiScope.From(user);
         await using var context = await dbFactory.CreateDbContextAsync(cancellationToken);
         var query = context.AlertEvents.AsNoTracking();
-        if (includeResolved == false)
+        query = status switch
         {
-            query = query.Where(alert => !alert.IsResolved);
-        }
+            "open" => query.Where(alert => !alert.IsResolved),
+            "resolved" => query.Where(alert => alert.IsResolved),
+            _ => query,
+        };
 
+        var visibleDomains = scope.Domains(context.Domains.AsNoTracking());
         if (scope.IsScoped)
         {
-            var visibleNames = scope.Domains(context.Domains).Select(domain => domain.Name);
+            var visibleNames = visibleDomains.Select(domain => domain.Name);
             query = query.Where(alert => visibleNames.Contains(alert.DomainName));
+        }
+
+        if (types.Count > 0)
+        {
+            query = query.Where(alert => types.Contains(alert.AlertType));
+        }
+
+        if (severities.Count > 0)
+        {
+            query = query.Where(alert => severities.Contains(alert.Severity));
+        }
+
+        var domainNames = new List<string>();
+        foreach (var domainKey in ApiFilterReader.Values(filters.Domain))
+        {
+            var name = await ApiDomainKey.Matching(visibleDomains, domainKey).Select(domain => domain.Name).SingleOrDefaultAsync(cancellationToken);
+            if (name is null)
+            {
+                return ApiProblems.NotFound($"domain {domainKey}");
+            }
+
+            domainNames.Add(name);
+        }
+
+        if (domainNames.Count > 0)
+        {
+            query = query.Where(alert => domainNames.Contains(alert.DomainName));
+        }
+
+        if (groupIds.Count > 0)
+        {
+            // Groups outside the key's scope count for nothing, rather than revealing which visible domains are in them.
+            var inScope = groupIds.Where(scope.Includes).ToList();
+            var inGroups = visibleDomains.Where(domain => domain.Groups.Any(group => inScope.Contains(group.Id))).Select(domain => domain.Name);
+            query = query.Where(alert => inGroups.Contains(alert.DomainName));
+        }
+
+        if (tagIds.Count > 0)
+        {
+            var tagged = visibleDomains.Where(domain => domain.Tags.Any(tag => tagIds.Contains(tag.Id))).Select(domain => domain.Name);
+            query = query.Where(alert => tagged.Contains(alert.DomainName));
+        }
+
+        if (filters.Acknowledgeable is { } acknowledgeable)
+        {
+            var acknowledgeableTypes = AlertTypes.All.Select(type => type.Key).Where(AlertAcknowledgement.IsAcknowledgeable).ToList();
+            query = acknowledgeable
+                ? query.Where(alert => !alert.IsResolved && acknowledgeableTypes.Contains(alert.AlertType))
+                : query.Where(alert => alert.IsResolved || !acknowledgeableTypes.Contains(alert.AlertType));
+        }
+
+        if (raisedAfter is { } raisedFrom)
+        {
+            query = query.Where(alert => alert.CreatedUtc >= raisedFrom);
+        }
+
+        if (raisedBefore is { } raisedUntil)
+        {
+            query = query.Where(alert => alert.CreatedUtc < raisedUntil);
+        }
+
+        if (resolvedAfter is { } resolvedFrom)
+        {
+            query = query.Where(alert => alert.ResolvedUtc != null && alert.ResolvedUtc >= resolvedFrom);
+        }
+
+        if (resolvedBefore is { } resolvedUntil)
+        {
+            query = query.Where(alert => alert.ResolvedUtc != null && alert.ResolvedUtc < resolvedUntil);
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

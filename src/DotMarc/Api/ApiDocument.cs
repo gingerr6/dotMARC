@@ -81,6 +81,22 @@ public static class ApiDocument
                     }
                 }
 
+                // Each filter's description and allowed values; a list filter's values describe its items.
+                foreach (var docs in context.Description.ActionDescriptor.EndpointMetadata.OfType<ApiFilterDocs>())
+                {
+                    if (operation.Parameters?.FirstOrDefault(parameter => parameter.Name == docs.Name) is not OpenApiParameter parameter)
+                    {
+                        continue;
+                    }
+
+                    parameter.Description = docs.Description;
+                    if (docs.Values is { } values && parameter.Schema is OpenApiSchema schema)
+                    {
+                        var valuesSchema = schema.Items as OpenApiSchema ?? schema;
+                        valuesSchema.Enum = values.Select(value => (JsonNode)JsonValue.Create(value)!).ToList();
+                    }
+                }
+
                 return Task.CompletedTask;
             });
 

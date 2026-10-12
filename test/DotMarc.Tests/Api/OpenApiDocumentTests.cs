@@ -97,7 +97,7 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
         int[] everyOperation = [401, 403, 429, 500];
         var particular = new Dictionary<string, int[]>
         {
-            ["GET /api/v1/alerts"] = [400],
+            ["GET /api/v1/alerts"] = [400, 404],
             ["POST /api/v1/alerts/{id}/acknowledge"] = [404, 409],
             ["GET /api/v1/domains"] = [400],
             ["POST /api/v1/domains"] = [400, 409],
@@ -216,4 +216,18 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
 
     [GeneratedRegex("<VersionPrefix>([^<]+)</VersionPrefix>")]
     private static partial Regex VersionPrefixPattern();
+
+    [Fact]
+    public async Task Filters_AreDescribed_WithTheirAllowedValues()
+    {
+        using var document = JsonDocument.Parse(await FetchDocumentAsync());
+        var parameters = document.RootElement.GetProperty("paths").GetProperty("/api/v1/alerts").GetProperty("get").GetProperty("parameters")
+            .EnumerateArray().ToDictionary(parameter => parameter.GetProperty("name").GetString()!);
+
+        var type = parameters["type"];
+        Assert.Contains("commas", type.GetProperty("description").GetString());
+        Assert.Equal("array", type.GetProperty("schema").GetProperty("type").GetString());
+        Assert.Contains(type.GetProperty("schema").GetProperty("items").GetProperty("enum").EnumerateArray(), value => value.GetString() == "SpfRecordBroken");
+        Assert.Equal(["open", "resolved", "all"], parameters["status"].GetProperty("schema").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+    }
 }

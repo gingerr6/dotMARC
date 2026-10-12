@@ -22,12 +22,12 @@ public sealed class AlertEndpointTests : IAsyncLifetime
 
     public async Task DisposeAsync() => await _host.DisposeAsync();
 
-    private async Task<int> SeedAlertAsync(string subject, string alertType, bool resolved = false, DateTimeOffset? createdUtc = null)
+    private async Task<int> SeedAlertAsync(string subject, string alertType, bool resolved = false, DateTimeOffset? createdUtc = null, string severity = "Warning")
     {
         await using var context = _host.CreateContext();
         var alert = new AlertEvent
         {
-            DomainName = subject, AlertType = alertType, Severity = "Warning", Title = $"{alertType} title", Message = "message",
+            DomainName = subject, AlertType = alertType, Severity = severity, Title = $"{alertType} title", Message = "message",
             IsResolved = resolved, ResolvedUtc = resolved ? DateTimeOffset.UtcNow : null, CreatedUtc = createdUtc ?? DateTimeOffset.UtcNow,
         };
         context.AlertEvents.Add(alert);
@@ -145,5 +145,89 @@ public sealed class AlertEndpointTests : IAsyncLifetime
         var response = await client.GetAsync("/api/v1/alerts?status=closed");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Filters_NarrowByTypeSeverityAndDomain_InAnyLetterCase()
+    {
+        var domainId = await _host.SeedDomainAsync("api-filter-alerts.example", monitored: false);
+        var wanted = await SeedAlertAsync("api-filter-alerts.example", AlertTypes.MissedReport, severity: "Warning");
+        await SeedAlertAsync("api-filter-alerts.example", AlertTypes.MissedReport, severity: "Info");
+        await SeedAlertAsync("api-filter-alerts.example", AlertTypes.TlsrptFailure, severity: "Warning");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.AlertsView]);
+        using var client = _host.ClientFor(secret);
+
+        var byName = await client.GetFromJsonAsync<ApiPage<ApiAlert>>("/api/v1/alerts?domain=api-filter-alerts.example&type=missedreport&severity=WARNING");
+        var byId = await client.GetFromJsonAsync<ApiPage<ApiAlert>>($"/api/v1/alerts?domain={domainId}&type=MissedReport,TlsrptFailure&severity=Warning");
+
+        Assert.Equal([wanted], byName!.Items.Select(alert => alert.Id));
+        Assert.Equal(2, byId!.TotalCount);
+    }
+
+    [Fact]
+    public async Task Status_Resolved_And_ResolvedDates_FindClosedAlerts()
+    {
+        await _host.SeedDomainAsync("api-filter-resolved.example", monitored: false);
+        var open = await SeedAlertAsync("api-filter-resolved.example", AlertTypes.MissedReport);
+        var closed = await SeedAlertAsync("api-filter-resolved.example", AlertTypes.MxRecordBroken, resolved: true);
+        var (_, secret) = await _host.CreateKeyAsync([Permission.AlertsView]);
+        using var client = _host.ClientFor(secret);
+        var since = DateTimeOffset.UtcNow.AddHours(-1).ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+
+        var resolved = await client.GetFromJsonAsync<ApiPage<ApiAlert>>($"/api/v1/alerts?domain=api-filter-resolved.example&status=resolved&resolvedAfter={since}");
+
+        Assert.Equal([closed], resolved!.Items.Select(alert => alert.Id));
+        Assert.DoesNotContain(open, resolved.Items.Select(alert => alert.Id));
+    }
+
+    [Fact]
+    public async Task GroupFilter_IgnoresAGroupOutsideAScopedKeysGroups()
+    {
+        var ownGroup = await _host.SeedGroupAsync("api-filter-alerts-own");
+        var otherGroup = await _host.SeedGroupAsync("api-filter-alerts-other");
+        await _host.SeedDomainAsync("api-filter-own.example", groupIds: [ownGroup], monitored: false);
+        await _host.SeedDomainAsync("api-filter-other.example", groupIds: [otherGroup, ownGroup], monitored: false);
+        var ownAlert = await SeedAlertAsync("api-filter-own.example", AlertTypes.MissedReport);
+        var (_, secret) = await _host.CreateKeyAsync([Permission.AlertsView], scopedGroupIds: [ownGroup]);
+        using var client = _host.ClientFor(secret);
+
+        var outsideOnly = await client.GetFromJsonAsync<ApiPage<ApiAlert>>($"/api/v1/alerts?group={otherGroup}");
+        var both = await client.GetFromJsonAsync<ApiPage<ApiAlert>>($"/api/v1/alerts?group={otherGroup},{ownGroup}");
+
+        Assert.Empty(outsideOnly!.Items);
+        Assert.Contains(ownAlert, both!.Items.Select(alert => alert.Id));
+    }
+
+    [Fact]
+    public async Task Acknowledgeable_And_RaisedDates_Filter()
+    {
+        await _host.SeedDomainAsync("api-filter-ack.example", monitored: false);
+        var weakened = await SeedAlertAsync("api-filter-ack.example", AlertTypes.DmarcPolicyWeakened);
+        var old = await SeedAlertAsync("api-filter-ack.example", AlertTypes.MissedReport, createdUtc: new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero));
+        var (_, secret) = await _host.CreateKeyAsync([Permission.AlertsView]);
+        using var client = _host.ClientFor(secret);
+
+        var acknowledgeable = await client.GetFromJsonAsync<ApiPage<ApiAlert>>("/api/v1/alerts?domain=api-filter-ack.example&acknowledgeable=true");
+        var january = await client.GetFromJsonAsync<ApiPage<ApiAlert>>("/api/v1/alerts?domain=api-filter-ack.example&raisedAfter=2026-01-01&raisedBefore=2026-02-01");
+
+        Assert.Equal([weakened], acknowledgeable!.Items.Select(alert => alert.Id));
+        Assert.Equal([old], january!.Items.Select(alert => alert.Id));
+    }
+
+    [Fact]
+    public async Task BadFilters_AreA400NamingThem_AndAnUnseenDomainIsA404()
+    {
+        var (_, secret) = await _host.CreateKeyAsync([Permission.AlertsView]);
+        using var client = _host.ClientFor(secret);
+
+        var badType = await client.GetAsync("/api/v1/alerts?type=NotAType&raisedAfter=2026-02-01&raisedBefore=2026-01-01");
+        var unseen = await client.GetAsync("/api/v1/alerts?domain=nowhere-at-all.example");
+
+        Assert.Equal(HttpStatusCode.BadRequest, badType.StatusCode);
+        var body = await badType.Content.ReadAsStringAsync();
+        Assert.Contains("\"type\"", body);
+        Assert.Contains("MissedReport", body);
+        Assert.Contains("Must be earlier than raisedBefore.", body);
+        Assert.Equal(HttpStatusCode.NotFound, unseen.StatusCode);
     }
 }

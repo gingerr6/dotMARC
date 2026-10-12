@@ -927,12 +927,134 @@
   "paths": {
     "/api/v1/alerts": {
       "get": {
-        "description": "Alerts newest first, open ones by default (status=all includes resolved), 50 a page by default and at most 200. A key limited to certain groups sees only alerts about its domains.\n\nNeeds the AlertsView permission.",
+        "description": "Alerts newest first, open ones by default, 50 a page by default and at most 200. Filters combine: an alert must match every filter given. A key limited to certain groups sees only alerts about its domains.\n\nNeeds the AlertsView permission.",
         "operationId": "ListAlerts",
         "parameters": [
           {
+            "description": "open (default), resolved or all.",
             "in": "query",
             "name": "status",
+            "schema": {
+              "enum": [
+                "open",
+                "resolved",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "One or more alert types. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "items": {
+                "enum": [
+                  "MissedReport",
+                  "SuspiciousRejectActivity",
+                  "TlsrptFailure",
+                  "UnexpectedActivityOnNullRoutedDomain",
+                  "DmarcRecordBroken",
+                  "DmarcAuthorizationBroken",
+                  "TlsrptRecordBroken",
+                  "SpfRecordBroken",
+                  "MxRecordBroken",
+                  "DkimRecordBroken",
+                  "MtaStsFailing",
+                  "DmarcPolicyWeakened",
+                  "NameserversChanged",
+                  "ApiKeyExpiring",
+                  "ClientReportFailed"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more severities. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "severity",
+            "schema": {
+              "items": {
+                "enum": [
+                  "Info",
+                  "Warning"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more domains, by id or name. A domain this key can't see is a 404. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "domain",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more group ids: alerts for domains in any of them. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "group",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more tag ids: alerts for domains with any of them. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "true for open alerts this API can acknowledge, false for the rest.",
+            "in": "query",
+            "name": "acknowledgeable",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Raised at or after this date (2026-10-01) or time with a zone (2026-10-01T09:30:00Z).",
+            "in": "query",
+            "name": "raisedAfter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Raised before this date or time.",
+            "in": "query",
+            "name": "raisedBefore",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Resolved at or after this date or time. Open alerts never match.",
+            "in": "query",
+            "name": "resolvedAfter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Resolved before this date or time. Open alerts never match.",
+            "in": "query",
+            "name": "resolvedBefore",
             "schema": {
               "type": "string"
             }
@@ -994,6 +1116,16 @@
               }
             },
             "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "There's no such item, or this key can't see it. A key limited to certain groups can't see what's outside them."
           },
           "429": {
             "content": {
