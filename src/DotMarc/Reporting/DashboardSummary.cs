@@ -10,6 +10,15 @@ namespace DotMarc.Reporting;
 /// split as <see cref="DomainStatistics"/>.</summary>
 public sealed record DashboardSummary(int DomainCount, double OverallPassRate, int WarningCount, int MissingCount, int ParseFailureCount, int SourceCount, ReasonBreakdown ReasonBreakdown)
 {
+    /// <summary>The dashboard's per-domain status: Missing when a monitored domain that sends mail has had no report for
+    /// two days, Warning when its pass rate is under 95%, otherwise OK. Shared with the API's summary.</summary>
+    public static string StatusOf(Domain domain, double? passRate)
+    {
+        var isNullRouted = domain.SpfCheckStatus == SpfCheckStatus.NullSpf;
+        var missingReport = domain.IsMonitored && !isNullRouted && (domain.LastReportReceivedUtc is null || domain.LastReportReceivedUtc < DateTimeOffset.UtcNow.AddDays(-2));
+        return missingReport ? "Missing" : passRate is null or >= 0.95 ? "OK" : "Warning";
+    }
+
     public static (DashboardSummary Summary, List<DashboardDomainRow> Rows) Build(IReadOnlyList<Domain> domains, int parseFailureCount)
     {
         var rows = domains
@@ -19,9 +28,7 @@ public sealed record DashboardSummary(int DomainCount, double OverallPassRate, i
             {
                 var passRate = DomainStatistics.GetPassRate(d.Reports);
 
-                var isNullRouted = d.SpfCheckStatus == SpfCheckStatus.NullSpf;
-                var missingReport = d.IsMonitored && !isNullRouted && (d.LastReportReceivedUtc is null || d.LastReportReceivedUtc < DateTimeOffset.UtcNow.AddDays(-2));
-                var status = missingReport ? "Missing" : passRate is null or >= 0.95 ? "OK" : "Warning";
+                var status = StatusOf(d, passRate);
                 var color = status switch { "Missing" => Color.Error, "Warning" => Color.Warning, _ => Color.Success };
 
                 return new DashboardDomainRow(d.Id, d.Name, status, color, passRate, d.LastReportReceivedUtc, d.IsMonitored, d.DmarcCheckStatus, d.DmarcAuthorizationCheckStatus, d.MtaStsStatus, d.SpfCheckStatus);

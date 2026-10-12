@@ -149,3 +149,8 @@ public sealed record ApiTlsReport(int Id, string ReportingOrg, string ReportId, 
             policy.FailureDetails.Select(failure => new ApiTlsFailure(failure.ResultType, failure.FailedSessionCount, failure.ReceivingMxHostname,
                 failure.FailureReasonCode, failure.AdditionalInformation)).ToList())).ToList());
 }
+
+public sealed record ApiStatusCounts(int Protected, int MonitoringOnly, int NeedsAttention, int NoReportsYet);
+
+public sealed record ApiSummary(int DomainCount, double OverallPassRate, int WarningCount, int MissingCount, int SourceCount,
+    ApiReasonBreakdown ReasonBreakdown, int? ParseFailureCount, ApiStatusCounts StatusCounts);
