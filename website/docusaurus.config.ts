@@ -237,16 +237,12 @@ const config: Config = {
         "r",
       ],
     },
+    // PowerShell first (it's the default tab), then C# and curl: what MSPs script and build with.
     languageTabs: [
       {
-        highlight: "python",
-        language: "python",
-        logoClass: "python",
-      },
-      {
-        highlight: "bash",
-        language: "curl",
-        logoClass: "curl",
+        highlight: "powershell",
+        language: "powershell",
+        logoClass: "powershell",
       },
       {
         highlight: "csharp",
@@ -254,9 +250,14 @@ const config: Config = {
         logoClass: "csharp",
       },
       {
-        highlight: "go",
-        language: "go",
-        logoClass: "go",
+        highlight: "bash",
+        language: "curl",
+        logoClass: "curl",
+      },
+      {
+        highlight: "python",
+        language: "python",
+        logoClass: "python",
       },
       {
         highlight: "javascript",
@@ -264,14 +265,14 @@ const config: Config = {
         logoClass: "nodejs",
       },
       {
-        highlight: "ruby",
-        language: "ruby",
-        logoClass: "ruby",
+        highlight: "javascript",
+        language: "javascript",
+        logoClass: "javascript",
       },
       {
-        highlight: "php",
-        language: "php",
-        logoClass: "php",
+        highlight: "go",
+        language: "go",
+        logoClass: "go",
       },
       {
         highlight: "java",
@@ -280,19 +281,34 @@ const config: Config = {
         variant: "unirest",
       },
       {
-        highlight: "powershell",
-        language: "powershell",
-        logoClass: "powershell",
+        highlight: "php",
+        language: "php",
+        logoClass: "php",
+      },
+      {
+        highlight: "ruby",
+        language: "ruby",
+        logoClass: "ruby",
+      },
+      {
+        highlight: "rust",
+        language: "rust",
+        logoClass: "rust",
+      },
+      {
+        highlight: "kotlin",
+        language: "kotlin",
+        logoClass: "kotlin",
+      },
+      {
+        highlight: "swift",
+        language: "swift",
+        logoClass: "swift",
       },
       {
         highlight: "dart",
         language: "dart",
         logoClass: "dart",
-      },
-      {
-        highlight: "javascript",
-        language: "javascript",
-        logoClass: "javascript",
       },
       {
         highlight: "c",
@@ -313,21 +329,6 @@ const config: Config = {
         highlight: "r",
         language: "r",
         logoClass: "r",
-      },
-      {
-        highlight: "swift",
-        language: "swift",
-        logoClass: "swift",
-      },
-      {
-        highlight: "kotlin",
-        language: "kotlin",
-        logoClass: "kotlin",
-      },
-      {
-        highlight: "rust",
-        language: "rust",
-        logoClass: "rust",
       },
     ],
     api: {
