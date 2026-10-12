@@ -1148,7 +1148,7 @@
             "name": "group",
             "schema": {
               "items": {
-                "type": "string"
+                "type": "integer"
               },
               "type": "array"
             }
@@ -1159,7 +1159,7 @@
             "name": "tag",
             "schema": {
               "items": {
-                "type": "string"
+                "type": "integer"
               },
               "type": "array"
             }
@@ -1205,18 +1205,18 @@
             }
           },
           {
+            "description": "Which page, from 1 (default 1).",
             "in": "query",
             "name": "page",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "How many a page, 1 to 200 (default 50).",
             "in": "query",
             "name": "pageSize",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           }
@@ -1476,6 +1476,10 @@
             "in": "query",
             "name": "kind",
             "schema": {
+              "default": [
+                "change",
+                "signIn"
+              ],
               "items": {
                 "enum": [
                   "change",
@@ -1580,18 +1584,18 @@
             }
           },
           {
+            "description": "Which page, from 1 (default 1).",
             "in": "query",
             "name": "page",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "How many a page, 1 to 200 (default 50).",
             "in": "query",
             "name": "pageSize",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           }
@@ -1694,7 +1698,7 @@
             "name": "group",
             "schema": {
               "items": {
-                "type": "string"
+                "type": "integer"
               },
               "type": "array"
             }
@@ -1705,12 +1709,13 @@
             "name": "tag",
             "schema": {
               "items": {
-                "type": "string"
+                "type": "integer"
               },
               "type": "array"
             }
           },
           {
+            "description": "true for domains dotMARC monitors, false for the rest.",
             "in": "query",
             "name": "monitored",
             "schema": {
@@ -1932,7 +1937,6 @@
             "in": "query",
             "name": "passRateBelow",
             "schema": {
-              "format": "double",
               "type": "number"
             }
           },
@@ -1941,23 +1945,22 @@
             "in": "query",
             "name": "passRateAtLeast",
             "schema": {
-              "format": "double",
               "type": "number"
             }
           },
           {
+            "description": "Which page, from 1 (default 1).",
             "in": "query",
             "name": "page",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "How many a page, 1 to 200 (default 50).",
             "in": "query",
             "name": "pageSize",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           }
@@ -2507,7 +2510,6 @@
             "in": "query",
             "name": "days",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           },
@@ -2532,7 +2534,6 @@
             "in": "query",
             "name": "top",
             "schema": {
-              "format": "int32",
               "type": "integer"
             }
           }

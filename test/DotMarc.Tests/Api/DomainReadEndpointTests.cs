@@ -390,4 +390,78 @@ public sealed class DomainReadEndpointTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task BadTrueFalseAndNumberFilters_AreA400NamingEachOne()
+    {
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var response = await client.GetAsync("/api/v1/domains?monitored=yes&passRateBelow=NaN&page=abc");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var errors = problem.RootElement.GetProperty("errors");
+        Assert.Equal("Use true or false.", errors.GetProperty("monitored")[0].GetString());
+        Assert.Equal("Use a number from 0 to 1, such as 0.95.", errors.GetProperty("passRateBelow")[0].GetString());
+        Assert.StartsWith("Use a whole number", errors.GetProperty("page")[0].GetString());
+    }
+
+    [Fact]
+    public async Task ReportSummary_NamesEveryProblemInOne400()
+    {
+        await _host.SeedDomainAsync("api-summary-problems.example");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var response = await client.GetAsync("/api/v1/domains/api-summary-problems.example/reports/summary?top=0&from=soon&days=abc");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var errors = problem.RootElement.GetProperty("errors");
+        Assert.True(errors.TryGetProperty("top", out _));
+        Assert.True(errors.TryGetProperty("from", out _));
+        Assert.True(errors.TryGetProperty("days", out _));
+    }
+
+    [Fact]
+    public async Task ReportSummary_MatchesDomainStatistics_OverMixedReports()
+    {
+        var receivedUtc = DateTimeOffset.UtcNow.AddDays(-2);
+        var domainId = await _host.SeedDomainAsync("api-summary-mixed.example", configure: domain =>
+        {
+            var report = ReportWith(receivedUtc,
+                ("192.0.2.20", 40, AuthResult.Pass, AuthResult.Pass),
+                ("192.0.2.21", 12, AuthResult.Fail, AuthResult.Fail),
+                ("192.0.2.21", 3, AuthResult.Pass, AuthResult.Fail),
+                ("192.0.2.22", 7, AuthResult.Fail, AuthResult.Fail),
+                ("192.0.2.23", 5, AuthResult.Fail, AuthResult.Fail));
+            report.Records[1].Disposition = DispositionResult.Quarantine;
+            report.Records[3].Disposition = DispositionResult.Reject;
+            report.Records[3].OverrideReasons.Add(new ReportRecordPolicyOverrideReason { Type = DmarcPolicyOverrideType.Forwarded });
+            report.Records[4].Disposition = DispositionResult.Reject;
+            report.Records[4].AuthDetails.Add(new ReportRecordAuthDetail { Mechanism = DmarcAuthMechanism.Spf, Domain = "elsewhere.example", Result = DmarcMechanismResult.Pass });
+            report.Records[4].AuthDetails.Add(new ReportRecordAuthDetail { Mechanism = DmarcAuthMechanism.Dkim, Domain = "example", Result = DmarcMechanismResult.Fail });
+            domain.Reports.Add(report);
+        });
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var summary = await client.GetFromJsonAsync<ApiReportSummary>("/api/v1/domains/api-summary-mixed.example/reports/summary?top=200");
+
+        await using var context = _host.CreateContext();
+        var reports = await context.Reports.Where(report => report.DomainId == domainId)
+            .Include(report => report.Records).ThenInclude(record => record.OverrideReasons)
+            .Include(report => report.Records).ThenInclude(record => record.AuthDetails)
+            .AsSplitQuery().ToListAsync();
+        var breakdown = DotMarc.Reporting.DomainStatistics.GetReasonBreakdown(reports);
+        var sources = DotMarc.Reporting.DomainStatistics.GetSourceAggregates(reports)
+            .OrderByDescending(source => source.Volume).ThenBy(source => source.SourceIp)
+            .Select(source => new ApiSource(source.SourceIp, source.Volume, source.SpfResult.ToString(), source.DkimResult.ToString(), source.Disposition.ToString()));
+        Assert.Equal(DotMarc.Reporting.DomainStatistics.GetTotalVolume(reports), summary!.TotalVolume);
+        Assert.Equal(DotMarc.Reporting.DomainStatistics.GetPassRate(reports), summary.PassRate);
+        Assert.Equal(new ApiReasonBreakdown(breakdown.BenignOverride, breakdown.LocalPolicy, breakdown.Other, breakdown.NoReasonGiven,
+            breakdown.InferredSpfFailure, breakdown.InferredDkimFailure, breakdown.InferredBothFailure), summary.ReasonBreakdown);
+        Assert.Equal(sources, summary.TopSources);
+    }
 }

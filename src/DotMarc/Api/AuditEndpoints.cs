@@ -5,6 +5,7 @@ using DotMarc.Audit;
 using DotMarc.Data;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.OpenApi;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Api;
@@ -30,8 +31,8 @@ public static class AuditEndpoints
         [FromQuery(Name = "occurredAfter")] public string? OccurredAfter { get; set; }
         [FromQuery(Name = "occurredBefore")] public string? OccurredBefore { get; set; }
         [FromQuery(Name = "search")] public string? Search { get; set; }
-        [FromQuery(Name = "page")] public int? Page { get; set; }
-        [FromQuery(Name = "pageSize")] public int? PageSize { get; set; }
+        [FromQuery(Name = "page")] public string? Page { get; set; }
+        [FromQuery(Name = "pageSize")] public string? PageSize { get; set; }
     }
 
     public static void Map(RouteGroupBuilder api)
@@ -44,7 +45,7 @@ public static class AuditEndpoints
             .WithDescription($"Who did what, newest first, {DefaultPageSize} a page by default and at most {DomainReadEndpoints.MaximumPageSize}. Changes and sign-ins by default; ask for page views with kind. Filters combine: an entry must match every filter given. A key limited to certain groups sees only entries about its domains, its groups and their alerts.")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .DocumentsFilter("action", "One or more action codes." + ApiFilterDocs.ListHint, AuditActions.All.Select(action => action.Action))
-            .DocumentsFilter("kind", "change and signIn by default; pageView, or all for every kind." + ApiFilterDocs.ListHint, Kinds)
+            .DocumentsFilter("kind", "change and signIn by default; pageView, or all for every kind." + ApiFilterDocs.ListHint, Kinds, defaults: ["change", "signIn"])
             .DocumentsFilter("actorKind", "Who acted: a person, dotMARC itself or an API key." + ApiFilterDocs.ListHint, ActorKinds)
             .DocumentsFilter("actor", "Part of the actor's name or email, in any letter case.")
             .DocumentsFilter("targetType", "One or more kinds of target." + ApiFilterDocs.ListHint, TargetTypes)
@@ -52,7 +53,9 @@ public static class AuditEndpoints
             .DocumentsFilter("domain", "One or more domains, by id or name: entries about the domain and its alerts. A domain this key can't see is a 404." + ApiFilterDocs.ListHint)
             .DocumentsFilter("occurredAfter", "At or after this date (2026-10-01) or time with a zone (2026-10-01T09:30:00Z).")
             .DocumentsFilter("occurredBefore", "Before this date or time.")
-            .DocumentsFilter("search", "Text in the summary or the target's name, in any letter case.");
+            .DocumentsFilter("search", "Text in the summary or the target's name, in any letter case.")
+            .DocumentsFilter("page", "Which page, from 1 (default 1).", type: JsonSchemaType.Integer)
+            .DocumentsFilter("pageSize", $"How many a page, 1 to {DomainReadEndpoints.MaximumPageSize} (default {DefaultPageSize}).", type: JsonSchemaType.Integer);
     }
 
     private static async Task<Results<Ok<ApiPage<ApiAuditEntry>>, ValidationProblem, ProblemHttpResult>> ListAuditAsync(
@@ -83,14 +86,14 @@ public static class AuditEndpoints
             // recorded), its groups, and alerts on its domains. Sign-ins, settings, access and the rest stay hidden.
             var visible = await scope.Domains(context.Domains.AsNoTracking()).Select(domain => new { domain.Id, domain.Name }).ToListAsync(cancellationToken);
             var domainIds = visible.Select(domain => domain.Id.ToString(CultureInfo.InvariantCulture)).ToList();
-            var domainNames = visible.Select(domain => domain.Name).ToList();
+            var domainNames = visible.Select(domain => domain.Name.ToLowerInvariant()).ToList();
             var groupIds = (await scope.Groups(context.Groups.AsNoTracking()).Select(group => group.Id).ToListAsync(cancellationToken))
                 .Select(id => id.ToString(CultureInfo.InvariantCulture)).ToList();
             query = query.Where(entry =>
                 (entry.TargetType == "Domain" && ((entry.TargetId != null && domainIds.Contains(entry.TargetId))
-                    || (entry.TargetId == null && entry.TargetName != null && domainNames.Contains(entry.TargetName))))
+                    || (entry.TargetId == null && entry.TargetName != null && domainNames.Contains(entry.TargetName.ToLower()))))
                 || (entry.TargetType == "Group" && entry.TargetId != null && groupIds.Contains(entry.TargetId))
-                || (entry.TargetType == "Alert" && entry.TargetName != null && domainNames.Contains(entry.TargetName)));
+                || (entry.TargetType == "Alert" && entry.TargetName != null && domainNames.Contains(entry.TargetName.ToLower())));
         }
 
         if (!kinds.Contains("all"))
@@ -148,13 +151,13 @@ public static class AuditEndpoints
                 }
 
                 ids.Add(domain.Id.ToString(CultureInfo.InvariantCulture));
-                names.Add(domain.Name);
+                names.Add(domain.Name.ToLowerInvariant());
             }
 
             query = query.Where(entry =>
                 (entry.TargetType == "Domain" && ((entry.TargetId != null && ids.Contains(entry.TargetId))
-                    || (entry.TargetId == null && entry.TargetName != null && names.Contains(entry.TargetName))))
-                || (entry.TargetType == "Alert" && entry.TargetName != null && names.Contains(entry.TargetName)));
+                    || (entry.TargetId == null && entry.TargetName != null && names.Contains(entry.TargetName.ToLower()))))
+                || (entry.TargetType == "Alert" && entry.TargetName != null && names.Contains(entry.TargetName.ToLower())));
         }
 
         if (occurredAfter is { } from)

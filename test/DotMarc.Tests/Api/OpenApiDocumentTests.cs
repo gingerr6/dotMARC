@@ -231,4 +231,22 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
         Assert.Contains(type.GetProperty("schema").GetProperty("items").GetProperty("enum").EnumerateArray(), value => value.GetString() == "SpfRecordBroken");
         Assert.Equal(["open", "resolved", "all"], parameters["status"].GetProperty("schema").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
     }
+
+    [Fact]
+    public async Task TypedFilters_AreDescribedWithTheirTypesAndDefaults()
+    {
+        using var document = JsonDocument.Parse(await FetchDocumentAsync());
+        JsonElement Parameter(string path, string name) =>
+            document.RootElement.GetProperty("paths").GetProperty(path).GetProperty("get").GetProperty("parameters")
+                .EnumerateArray().Single(parameter => parameter.GetProperty("name").GetString() == name);
+
+        var monitored = Parameter("/api/v1/domains", "monitored");
+        Assert.False(string.IsNullOrWhiteSpace(monitored.GetProperty("description").GetString()));
+        Assert.Equal("boolean", monitored.GetProperty("schema").GetProperty("type").GetString());
+        Assert.Equal("number", Parameter("/api/v1/domains", "passRateBelow").GetProperty("schema").GetProperty("type").GetString());
+        Assert.Equal("integer", Parameter("/api/v1/domains", "page").GetProperty("schema").GetProperty("type").GetString());
+        Assert.Equal("integer", Parameter("/api/v1/domains", "group").GetProperty("schema").GetProperty("items").GetProperty("type").GetString());
+        Assert.Equal("integer", Parameter("/api/v1/alerts", "tag").GetProperty("schema").GetProperty("items").GetProperty("type").GetString());
+        Assert.Equal(["change", "signIn"], Parameter("/api/v1/audit", "kind").GetProperty("schema").GetProperty("default").EnumerateArray().Select(value => value.GetString()));
+    }
 }

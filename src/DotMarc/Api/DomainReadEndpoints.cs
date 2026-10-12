@@ -4,6 +4,7 @@ using DotMarc.Portal;
 using DotMarc.Reporting;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.OpenApi;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Api;
@@ -20,7 +21,7 @@ public static class DomainReadEndpoints
         [FromQuery(Name = "search")] public string? Search { get; set; }
         [FromQuery(Name = "group")] public string[]? Group { get; set; }
         [FromQuery(Name = "tag")] public string[]? Tag { get; set; }
-        [FromQuery(Name = "monitored")] public bool? Monitored { get; set; }
+        [FromQuery(Name = "monitored")] public string? Monitored { get; set; }
         [FromQuery(Name = "dmarc")] public string[]? Dmarc { get; set; }
         [FromQuery(Name = "spf")] public string[]? Spf { get; set; }
         [FromQuery(Name = "dkim")] public string[]? Dkim { get; set; }
@@ -33,11 +34,11 @@ public static class DomainReadEndpoints
         [FromQuery(Name = "dnsProvider")] public string[]? DnsProvider { get; set; }
         [FromQuery(Name = "lastReportAfter")] public string? LastReportAfter { get; set; }
         [FromQuery(Name = "lastReportBefore")] public string? LastReportBefore { get; set; }
-        [FromQuery(Name = "noReports")] public bool? NoReports { get; set; }
-        [FromQuery(Name = "passRateBelow")] public double? PassRateBelow { get; set; }
-        [FromQuery(Name = "passRateAtLeast")] public double? PassRateAtLeast { get; set; }
-        [FromQuery(Name = "page")] public int? Page { get; set; }
-        [FromQuery(Name = "pageSize")] public int? PageSize { get; set; }
+        [FromQuery(Name = "noReports")] public string? NoReports { get; set; }
+        [FromQuery(Name = "passRateBelow")] public string? PassRateBelow { get; set; }
+        [FromQuery(Name = "passRateAtLeast")] public string? PassRateAtLeast { get; set; }
+        [FromQuery(Name = "page")] public string? Page { get; set; }
+        [FromQuery(Name = "pageSize")] public string? PageSize { get; set; }
     }
 
     public static void Map(RouteGroupBuilder api)
@@ -49,8 +50,9 @@ public static class DomainReadEndpoints
             .WithSummary("List domains")
             .WithDescription($"Domains this key can see, in dashboard order, {DefaultPageSize} a page by default and at most {MaximumPageSize}. Filters combine: a domain must match every filter given. The pass rate covers the last 30 days and is null with no reports.")
             .DocumentsFilter("search", "Part of the domain name, in any letter case.")
-            .DocumentsFilter("group", "One or more group ids." + ApiFilterDocs.ListHint)
-            .DocumentsFilter("tag", "One or more tag ids." + ApiFilterDocs.ListHint)
+            .DocumentsFilter("group", "One or more group ids." + ApiFilterDocs.ListHint, type: JsonSchemaType.Integer)
+            .DocumentsFilter("tag", "One or more tag ids." + ApiFilterDocs.ListHint, type: JsonSchemaType.Integer)
+            .DocumentsFilter("monitored", "true for domains dotMARC monitors, false for the rest.", type: JsonSchemaType.Boolean)
             .DocumentsFilter("dmarc", "One or more DMARC check results." + ApiFilterDocs.ListHint, Enum.GetNames<DmarcCheckStatus>())
             .DocumentsFilter("spf", "One or more SPF check results." + ApiFilterDocs.ListHint, Enum.GetNames<SpfCheckStatus>())
             .DocumentsFilter("dkim", "One or more DKIM check results." + ApiFilterDocs.ListHint, Enum.GetNames<DkimCheckStatus>())
@@ -63,9 +65,11 @@ public static class DomainReadEndpoints
             .DocumentsFilter("dnsProvider", "One or more DNS providers." + ApiFilterDocs.ListHint, Enum.GetNames<DetectedDnsProvider>())
             .DocumentsFilter("lastReportAfter", "Last report received at or after this date or time. Domains with no report never match.")
             .DocumentsFilter("lastReportBefore", "Last report received before this date or time. Domains with no report never match.")
-            .DocumentsFilter("noReports", "true for domains that have never had a report, false for those that have.")
-            .DocumentsFilter("passRateBelow", "30-day pass rate below this, from 0 to 1. Domains with no pass rate never match.")
-            .DocumentsFilter("passRateAtLeast", "30-day pass rate at least this, from 0 to 1. Domains with no pass rate never match.");
+            .DocumentsFilter("noReports", "true for domains that have never had a report, false for those that have.", type: JsonSchemaType.Boolean)
+            .DocumentsFilter("passRateBelow", "30-day pass rate below this, from 0 to 1. Domains with no pass rate never match.", type: JsonSchemaType.Number)
+            .DocumentsFilter("passRateAtLeast", "30-day pass rate at least this, from 0 to 1. Domains with no pass rate never match.", type: JsonSchemaType.Number)
+            .DocumentsFilter("page", "Which page, from 1 (default 1).", type: JsonSchemaType.Integer)
+            .DocumentsFilter("pageSize", $"How many a page, 1 to {DomainReadEndpoints.MaximumPageSize} (default {DefaultPageSize}).", type: JsonSchemaType.Integer);
 
         api.MapGet("/domains/{domain}", GetDomainAsync)
             .RequirePermission(Permission.DomainsView)
@@ -81,10 +85,10 @@ public static class DomainReadEndpoints
             .WithName("GetReportSummary")
             .WithSummary("Summarise a domain's DMARC reports")
             .WithDescription($"Volume, pass rate, why failing mail was let through or rejected, and the busiest sending IPs (20 by default), over the last 1 to 30 days (default 30), or any range of up to 366 days with from and to. {ApiDomainKey.Description}")
-            .DocumentsFilter("days", "The last 1 to 30 days (default 30). Use this or from and to.")
+            .DocumentsFilter("days", "The last 1 to 30 days (default 30). Use this or from and to.", type: JsonSchemaType.Integer)
             .DocumentsFilter("from", "Start of the range: a date (2026-10-01) or time with a zone, included. At most 366 days before to.")
             .DocumentsFilter("to", "End of the range: a date or time, not included. Defaults to now.")
-            .DocumentsFilter("top", "How many of the busiest sending IPs to return, 1 to 200 (default 20).")
+            .DocumentsFilter("top", "How many of the busiest sending IPs to return, 1 to 200 (default 20).", type: JsonSchemaType.Integer)
             .ProducesProblem(StatusCodes.Status404NotFound);
     }
 
@@ -140,6 +144,8 @@ public static class DomainReadEndpoints
         var lastReportAfter = reader.Date("lastReportAfter", filters.LastReportAfter);
         var lastReportBefore = reader.Date("lastReportBefore", filters.LastReportBefore);
         reader.Range("lastReportAfter", lastReportAfter, "lastReportBefore", lastReportBefore);
+        var monitored = reader.Bool("monitored", filters.Monitored);
+        var noReports = reader.Bool("noReports", filters.NoReports);
         var passRateBelow = reader.Fraction("passRateBelow", filters.PassRateBelow);
         var passRateAtLeast = reader.Fraction("passRateAtLeast", filters.PassRateAtLeast);
         var (pageNumber, size) = reader.Paging(filters.Page, filters.PageSize, DefaultPageSize);
@@ -168,7 +174,7 @@ public static class DomainReadEndpoints
             query = query.Where(domain => domain.Tags.Any(tag => tagIds.Contains(tag.Id)));
         }
 
-        if (filters.Monitored is { } isMonitored)
+        if (monitored is { } isMonitored)
         {
             query = query.Where(domain => domain.IsMonitored == isMonitored);
         }
@@ -184,7 +190,7 @@ public static class DomainReadEndpoints
         if (providers.Count > 0) query = query.Where(domain => providers.Contains(domain.DnsProvider));
         if (lastReportAfter is { } reportFrom) query = query.Where(domain => domain.LastReportReceivedUtc != null && domain.LastReportReceivedUtc >= reportFrom);
         if (lastReportBefore is { } reportUntil) query = query.Where(domain => domain.LastReportReceivedUtc != null && domain.LastReportReceivedUtc < reportUntil);
-        if (filters.NoReports is { } noReports) query = query.Where(domain => (domain.LastReportReceivedUtc == null) == noReports);
+        if (noReports is { } neverReported) query = query.Where(domain => (domain.LastReportReceivedUtc == null) == neverReported);
 
         var ordered = query.OrderBy(domain => domain.SortOrder).ThenBy(domain => domain.Name);
         var cutoffUtc = DomainStatistics.GetWindowCutoffUtc(timeProvider.GetUtcNow());
@@ -199,7 +205,10 @@ public static class DomainReadEndpoints
         {
             // The status and pass rate are worked out outside the query, so filter every candidate here, then page.
             var candidates = await ordered.ToListAsync(cancellationToken);
-            var candidateRates = await PassRatesAsync(context, candidates.Select(domain => domain.Id).ToList(), cutoffUtc, cancellationToken);
+            // Each is worked out only when a filter needs it.
+            var candidateRates = passRateBelow is not null || passRateAtLeast is not null
+                ? await PassRatesAsync(context, candidates.Select(domain => domain.Id).ToList(), cutoffUtc, cancellationToken)
+                : [];
             var openAlerts = statuses.Count > 0
                 ? await PortalData.OpenAlertsAsync(context, candidates.Select(domain => domain.Name).ToList(), cancellationToken)
                 : null;
@@ -243,28 +252,31 @@ public static class DomainReadEndpoints
     }
 
     private static async Task<Results<Ok<ApiReportSummary>, ValidationProblem, ProblemHttpResult>> GetReportSummaryAsync(
-        [Microsoft.AspNetCore.Mvc.FromRoute(Name = "domain")] string domainKey, int? days, string? from, string? to, int? top, ClaimsPrincipal user,
+        [Microsoft.AspNetCore.Mvc.FromRoute(Name = "domain")] string domainKey, string? days, string? from, string? to, string? top, ClaimsPrincipal user,
         IDbContextFactory<DotMarcDbContext> dbFactory, TimeProvider timeProvider, CancellationToken cancellationToken)
     {
         var reader = new ApiFilterReader();
         var maximumDays = (int)DomainStatistics.ReportWindow.TotalDays;
+        var windowDays = reader.Integer("days", days, 1, maximumDays);
         var rangeStart = reader.Date("from", from);
         var rangeEnd = reader.Date("to", to);
         reader.Range("from", rangeStart, "to", rangeEnd);
-        if (days is not null && (rangeStart is not null || rangeEnd is not null))
+        var sourceCount = reader.Integer("top", top, 1, 200) ?? TopSourceCount;
+        if (!string.IsNullOrWhiteSpace(days) && (!string.IsNullOrWhiteSpace(from) || !string.IsNullOrWhiteSpace(to)))
         {
-            return ApiProblems.Validation("days", "Use days or from and to, not both.");
+            reader.Refuse("days", "Use days, or from and to, not both.");
         }
 
-        if (days is < 1 || days > maximumDays)
+        var nowUtc = timeProvider.GetUtcNow();
+        var endUtc = rangeEnd ?? nowUtc;
+        var startUtc = rangeStart ?? endUtc.AddDays(-(windowDays ?? maximumDays));
+        if (rangeEnd is null && startUtc >= endUtc)
         {
-            return ApiProblems.Validation("days", $"Must be between 1 and {maximumDays}.");
+            reader.Refuse("from", "Must be earlier than to, which is now when it isn't given.");
         }
-
-        var sourceCount = top ?? TopSourceCount;
-        if (sourceCount is < 1 or > 200)
+        else if ((endUtc - startUtc).TotalDays > 366)
         {
-            return ApiProblems.Validation("top", "Must be between 1 and 200.");
+            reader.Refuse("from", "The range can be at most 366 days.");
         }
 
         if (reader.Problem is { } problem)
@@ -272,44 +284,62 @@ public static class DomainReadEndpoints
             return problem;
         }
 
-        var nowUtc = timeProvider.GetUtcNow();
-        var endUtc = rangeEnd ?? nowUtc;
-        var startUtc = rangeStart ?? endUtc.AddDays(-(days ?? maximumDays));
-        if (startUtc >= endUtc)
-        {
-            // Only reachable when to defaults to now; an explicit to is checked with the other filters.
-            return ApiProblems.Validation("from", "Must be earlier than to, which is now when it isn't given.");
-        }
-        if ((endUtc - startUtc).TotalDays > 366)
-        {
-            return ApiProblems.Validation("from", "The range can be at most 366 days.");
-        }
-
-        var windowDays = (int)Math.Ceiling((endUtc - startUtc).TotalDays);
         await using var context = await dbFactory.CreateDbContextAsync(cancellationToken);
         var domain = await ApiDomainKey.Matching(ApiScope.From(user).Domains(context.Domains.AsNoTracking()), domainKey)
-            .Include(candidate => candidate.Reports.Where(report => report.ReceivedUtc >= startUtc && report.ReceivedUtc < endUtc))
-            .ThenInclude(report => report.Records)
-            .ThenInclude(record => record.OverrideReasons)
-            .Include(candidate => candidate.Reports.Where(report => report.ReceivedUtc >= startUtc && report.ReceivedUtc < endUtc))
-            .ThenInclude(report => report.Records)
-            .ThenInclude(record => record.AuthDetails)
-            .AsSplitQuery()
+            .Select(candidate => new { candidate.Id, candidate.Name })
             .SingleOrDefaultAsync(cancellationToken);
         if (domain is null)
         {
             return ApiProblems.NotFound($"domain {domainKey}");
         }
 
-        var breakdown = DomainStatistics.GetReasonBreakdown(domain.Reports);
-        var topSources = DomainStatistics.GetSourceAggregates(domain.Reports)
+        // Totalled in the database, so a long range never loads every record. Only the records a receiver acted on
+        // (quarantined or rejected) are loaded, with their details, for the reason breakdown's rules.
+        var records = context.ReportRecords.AsNoTracking()
+            .Where(record => record.Report.DomainId == domain.Id && record.Report.ReceivedUtc >= startUtc && record.Report.ReceivedUtc < endUtc);
+        var totals = await records
+            .GroupBy(record => 1)
+            .Select(grouping => new
+            {
+                Total = grouping.Sum(record => (long)record.MessageCount),
+                Passing = grouping.Sum(record => record.SpfResult == AuthResult.Pass || record.DkimResult == AuthResult.Pass ? (long)record.MessageCount : 0L),
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        var sourceRows = await records
+            .GroupBy(record => record.SourceIp)
+            .Select(grouping => new
+            {
+                SourceIp = grouping.Key,
+                Volume = grouping.Sum(record => record.MessageCount),
+                SpfPasses = grouping.Sum(record => record.SpfResult == AuthResult.Pass ? 1 : 0),
+                DkimPasses = grouping.Sum(record => record.DkimResult == AuthResult.Pass ? 1 : 0),
+                Rejected = grouping.Sum(record => record.Disposition == DispositionResult.Reject ? 1 : 0),
+                Quarantined = grouping.Sum(record => record.Disposition == DispositionResult.Quarantine ? 1 : 0),
+            })
             .OrderByDescending(source => source.Volume)
             .ThenBy(source => source.SourceIp)
             .Take(sourceCount)
-            .Select(source => new ApiSource(source.SourceIp, source.Volume, source.SpfResult.ToString(), source.DkimResult.ToString(), source.Disposition.ToString()))
+            .ToListAsync(cancellationToken);
+        var actedOn = await records
+            .Where(record => record.Disposition != DispositionResult.None)
+            .Include(record => record.OverrideReasons)
+            .Include(record => record.AuthDetails)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+
+        // Combined as DomainStatistics.GetSourceAggregates does: a pass seen once counts, and the most severe disposition wins.
+        var topSources = sourceRows.Select(source => new ApiSource(
+                source.SourceIp,
+                source.Volume,
+                (source.SpfPasses > 0 ? AuthResult.Pass : AuthResult.Fail).ToString(),
+                (source.DkimPasses > 0 ? AuthResult.Pass : AuthResult.Fail).ToString(),
+                (source.Rejected > 0 ? DispositionResult.Reject : source.Quarantined > 0 ? DispositionResult.Quarantine : DispositionResult.None).ToString()))
             .ToList();
+        var breakdown = DomainStatistics.GetReasonBreakdown(actedOn);
+        var totalVolume = totals?.Total ?? 0;
         return TypedResults.Ok(new ApiReportSummary(
-            domain.Id, domain.Name, windowDays, DomainStatistics.GetTotalVolume(domain.Reports), DomainStatistics.GetPassRate(domain.Reports),
+            domain.Id, domain.Name, (int)Math.Ceiling((endUtc - startUtc).TotalDays), (int)totalVolume,
+            totalVolume == 0 ? null : (double)totals!.Passing / totalVolume,
             new ApiReasonBreakdown(breakdown.BenignOverride, breakdown.LocalPolicy, breakdown.Other, breakdown.NoReasonGiven,
                 breakdown.InferredSpfFailure, breakdown.InferredDkimFailure, breakdown.InferredBothFailure),
             topSources));

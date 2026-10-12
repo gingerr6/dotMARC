@@ -67,6 +67,7 @@ public sealed class ApiFilterReaderTests
     [InlineData("2026-10-01", "2026-10-01T00:00:00+00:00")]
     [InlineData("2026-10-01T09:30:00Z", "2026-10-01T09:30:00+00:00")]
     [InlineData("2026-10-01T10:30:00+01:00", "2026-10-01T09:30:00+00:00")]
+    [InlineData("2026-10-01T10:30:00 01:00", "2026-10-01T09:30:00+00:00")]
     public void Date_AcceptsADateOrADateTimeWithAZone(string raw, string expected)
     {
         var reader = new ApiFilterReader();
@@ -103,7 +104,7 @@ public sealed class ApiFilterReaderTests
     {
         var reader = new ApiFilterReader();
 
-        reader.Fraction("passRateBelow", 1.5);
+        reader.Fraction("passRateBelow", "1.5");
 
         Assert.Equal(["Must be between 0 and 1."], ErrorsOf(reader)["passRateBelow"]);
     }
@@ -114,7 +115,7 @@ public sealed class ApiFilterReaderTests
         var reader = new ApiFilterReader();
 
         Assert.Equal((1, 50), reader.Paging(null, null, 50));
-        reader.Paging(0, 201, 50);
+        reader.Paging("0", "201", 50);
 
         Assert.Equal(["Must be 1 or more."], ErrorsOf(reader)["page"]);
         Assert.Equal(["Must be between 1 and 200."], ErrorsOf(reader)["pageSize"]);
@@ -134,4 +135,41 @@ public sealed class ApiFilterReaderTests
     [Fact]
     public void LikePattern_EscapesWildcards() =>
         Assert.Equal("%100\\%\\_off%", LikePattern.Contains(" 100%_off "));
+
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("abc")]
+    [InlineData("Infinity")]
+    public void Fraction_RefusesWhatIsntANumber(string raw)
+    {
+        var reader = new ApiFilterReader();
+
+        Assert.Null(reader.Fraction("passRateBelow", raw));
+        Assert.Equal(["Use a number from 0 to 1, such as 0.95."], ErrorsOf(reader)["passRateBelow"]);
+    }
+
+    [Fact]
+    public void Bool_AcceptsTrueOrFalse_InAnyCase_AndNamesTheFilterOtherwise()
+    {
+        var reader = new ApiFilterReader();
+
+        Assert.True(reader.Bool("monitored", "TRUE"));
+        Assert.Null(reader.Bool("noReports", null));
+        Assert.Null(reader.Bool("acknowledgeable", "yes"));
+
+        Assert.Equal(["Use true or false."], ErrorsOf(reader)["acknowledgeable"]);
+    }
+
+    [Fact]
+    public void Integer_NamesTheFilter_ForAnythingButAWholeNumberInRange()
+    {
+        var reader = new ApiFilterReader();
+
+        Assert.Equal(7, reader.Integer("days", "7", 1, 30));
+        reader.Integer("top", "abc", 1, 200);
+        reader.Integer("days", "31", 1, 30);
+
+        Assert.Equal(["Use a whole number from 1 to 200."], ErrorsOf(reader)["top"]);
+        Assert.Equal(["Use a whole number from 1 to 30."], ErrorsOf(reader)["days"]);
+    }
 }

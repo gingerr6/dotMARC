@@ -250,11 +250,16 @@ public static class DomainStatistics
     /// per-mechanism AuthDetails to attribute the failure from, and only to the genuinely
     /// uninformative NoReasonGiven bucket when it doesn't - e.g. a report ingested before
     /// AuthDetails existed, or not yet caught up by PollingService's backfill cycle.</summary>
-    public static ReasonBreakdown GetReasonBreakdown(IEnumerable<Report> reportsInWindow)
+    public static ReasonBreakdown GetReasonBreakdown(IEnumerable<Report> reportsInWindow) =>
+        GetReasonBreakdown(reportsInWindow.SelectMany(r => r.Records));
+
+    /// <summary>The same bucketing over records directly, for callers that load only the records a receiver acted on
+    /// (with their OverrideReasons and AuthDetails) rather than whole reports.</summary>
+    public static ReasonBreakdown GetReasonBreakdown(IEnumerable<ReportRecord> recordsInWindow)
     {
         int benign = 0, localPolicy = 0, other = 0, noReason = 0, spfFailure = 0, dkimFailure = 0, bothFailure = 0;
 
-        foreach (var record in reportsInWindow.SelectMany(r => r.Records).Where(r => r.Disposition != DispositionResult.None))
+        foreach (var record in recordsInWindow.Where(r => r.Disposition != DispositionResult.None))
         {
             var reasonTypes = record.OverrideReasons.Select(o => o.Type).ToList();
 

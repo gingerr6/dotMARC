@@ -156,4 +156,41 @@ public sealed class AuditEndpointTests : IAsyncLifetime
         Assert.Equal(new ApiAuditChange("Groups", null, null, false), Assert.Single(limited.Changes));
         Assert.Equal("api-audit-groups-other, api-audit-groups-own", Assert.Single(full.Changes).New);
     }
+
+    [Fact]
+    public async Task AGroupLimitedKey_DoesntSeeADeletedDomainsEntries()
+    {
+        var ownGroup = await _host.SeedGroupAsync("api-audit-deleted-own");
+        var doomed = await _host.SeedDomainAsync("api-audit-deleted.example", groupIds: [ownGroup]);
+        var entry = await SeedEntryAsync(AuditActions.DomainAdded, "Domain", IdText(doomed), "api-audit-deleted.example", summary: "api-audit-deleted");
+        await using (var context = _host.CreateContext())
+        {
+            context.Domains.Remove(await context.Domains.FindAsync(doomed) ?? throw new InvalidOperationException("Seeded domain missing."));
+            await context.SaveChangesAsync();
+        }
+
+        var (_, limitedSecret) = await _host.CreateKeyAsync([Permission.AuditView], scopedGroupIds: [ownGroup]);
+        var (_, fullSecret) = await _host.CreateKeyAsync([Permission.AuditView]);
+        using var limitedClient = _host.ClientFor(limitedSecret);
+        using var fullClient = _host.ClientFor(fullSecret);
+
+        Assert.Empty((await limitedClient.GetFromJsonAsync<ApiPage<ApiAuditEntry>>("/api/v1/audit?search=api-audit-deleted"))!.Items);
+        Assert.Contains(entry, (await fullClient.GetFromJsonAsync<ApiPage<ApiAuditEntry>>("/api/v1/audit?search=api-audit-deleted"))!.Items.Select(found => found.Id));
+    }
+
+    [Fact]
+    public async Task EntriesRecordedByName_MatchInAnyLetterCase()
+    {
+        var ownGroup = await _host.SeedGroupAsync("api-audit-case-own");
+        await _host.SeedDomainAsync("api-audit-case.example", groupIds: [ownGroup]);
+        var pageView = await SeedEntryAsync(AuditActions.PageViewed, "Domain", null, "API-Audit-Case.Example", kind: AuditEntryKind.PageView, summary: "api-audit-case view");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.AuditView], scopedGroupIds: [ownGroup]);
+        using var client = _host.ClientFor(secret);
+
+        var scoped = await client.GetFromJsonAsync<ApiPage<ApiAuditEntry>>("/api/v1/audit?kind=pageView&search=api-audit-case");
+        var byDomain = await client.GetFromJsonAsync<ApiPage<ApiAuditEntry>>("/api/v1/audit?kind=pageView&domain=api-audit-case.example");
+
+        Assert.Equal([pageView], scoped!.Items.Select(found => found.Id));
+        Assert.Equal([pageView], byDomain!.Items.Select(found => found.Id));
+    }
 }

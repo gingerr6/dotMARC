@@ -66,7 +66,9 @@ The list endpoints take filters as query parameters, so a script asks for just w
 - **Letter case doesn't matter:** `spf=toomanylookups` works.
 - **Domains** can be given by id or name. A domain the key can't see is a 404.
 - **Dates** are a day (`2026-10-01`, from midnight UTC) or a time with its zone (`2026-10-01T09:30:00Z`). Filters ending
-  `After` include the time you give; filters ending `Before` don't, so back-to-back ranges never overlap.
+  `After` include the time you give; filters ending `Before` don't, so back-to-back ranges never overlap. In a URL a `+`
+  offset should be sent as `%2B` (`2026-10-01T10:30:00%2B01:00`); dotMARC also reads an unencoded `+`, which arrives as a
+  space, the same way.
 - **A value dotMARC doesn't recognise** is a 400 that names the filter and lists the values it accepts.
 
 Some examples:

@@ -82,7 +82,8 @@ public sealed partial class ApiFilterReader
             return null;
         }
 
-        var value = raw.Trim();
+        // An unencoded + in a query string arrives as a space, so "10:30:00 01:00" is the offset +01:00.
+        var value = SpacedOffset().Replace(raw.Trim(), "+$1");
         if (DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
         {
             return new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
@@ -106,8 +107,21 @@ public sealed partial class ApiFilterReader
         }
     }
 
-    public double? Fraction(string name, double? value)
+    /// <summary>A number from 0 to 1. Anything that isn't a finite number, NaN included, is refused rather than
+    /// quietly matching nothing.</summary>
+    public double? Fraction(string name, string? raw)
     {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (!double.TryParse(raw.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || !double.IsFinite(value))
+        {
+            Fail(name, "Use a number from 0 to 1, such as 0.95.");
+            return null;
+        }
+
         if (value is < 0 or > 1)
         {
             Fail(name, "Must be between 0 and 1.");
@@ -117,10 +131,42 @@ public sealed partial class ApiFilterReader
         return value;
     }
 
-    public (int Page, int PageSize) Paging(int? page, int? pageSize, int defaultPageSize)
+    public bool? Bool(string name, string? raw)
     {
-        var number = page ?? 1;
-        var size = pageSize ?? defaultPageSize;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (bool.TryParse(raw.Trim(), out var value))
+        {
+            return value;
+        }
+
+        Fail(name, "Use true or false.");
+        return null;
+    }
+
+    public int? Integer(string name, string? raw, int minimum, int maximum)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (int.TryParse(raw.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value) && value >= minimum && value <= maximum)
+        {
+            return value;
+        }
+
+        Fail(name, $"Use a whole number from {minimum} to {maximum}.");
+        return null;
+    }
+
+    public (int Page, int PageSize) Paging(string? page, string? pageSize, int defaultPageSize)
+    {
+        var number = WholeNumber("page", page, "Use a whole number of 1 or more.") ?? 1;
+        var size = WholeNumber("pageSize", pageSize, $"Use a whole number from 1 to {DomainReadEndpoints.MaximumPageSize}.") ?? defaultPageSize;
         if (number < 1)
         {
             Fail("page", "Must be 1 or more.");
@@ -134,6 +180,25 @@ public sealed partial class ApiFilterReader
         return (number, size);
     }
 
+    /// <summary>Records a problem an endpoint finds itself, so it joins the others in the one 400.</summary>
+    public void Refuse(string name, string message) => Fail(name, message);
+
+    private int? WholeNumber(string name, string? raw, string message)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (int.TryParse(raw.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
+        {
+            return value;
+        }
+
+        Fail(name, message);
+        return null;
+    }
+
     private void Fail(string name, string message) => _errors.TryAdd(name, [message]);
 
     private static string Readable(IReadOnlyList<string> values) =>
@@ -141,4 +206,7 @@ public sealed partial class ApiFilterReader
 
     [GeneratedRegex(@"T.*(Z|[+-]\d{2}:\d{2})$", RegexOptions.IgnoreCase)]
     private static partial Regex ZonePattern();
+
+    [GeneratedRegex(@"(?<=T[\d:.]+) (\d{2}:\d{2})$")]
+    private static partial Regex SpacedOffset();
 }

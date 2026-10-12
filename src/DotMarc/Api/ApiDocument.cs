@@ -90,10 +90,25 @@ public static class ApiDocument
                     }
 
                     parameter.Description = docs.Description;
-                    if (docs.Values is { } values && parameter.Schema is OpenApiSchema schema)
+                    if (parameter.Schema is not OpenApiSchema schema)
                     {
-                        var valuesSchema = schema.Items as OpenApiSchema ?? schema;
+                        continue;
+                    }
+
+                    var valuesSchema = schema.Items as OpenApiSchema ?? schema;
+                    if (docs.Values is { } values)
+                    {
                         valuesSchema.Enum = values.Select(value => (JsonNode)JsonValue.Create(value)!).ToList();
+                    }
+
+                    if (docs.Type is { } type)
+                    {
+                        valuesSchema.Type = type;
+                    }
+
+                    if (docs.Defaults is { } defaults)
+                    {
+                        schema.Default = new JsonArray(defaults.Select(value => (JsonNode)JsonValue.Create(value)!).ToArray());
                     }
                 }
 

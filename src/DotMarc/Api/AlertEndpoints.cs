@@ -4,6 +4,7 @@ using DotMarc.Data;
 using DotMarc.Notifications;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.OpenApi;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Api;
@@ -25,13 +26,13 @@ public static class AlertEndpoints
         [FromQuery(Name = "domain")] public string[]? Domain { get; set; }
         [FromQuery(Name = "group")] public string[]? Group { get; set; }
         [FromQuery(Name = "tag")] public string[]? Tag { get; set; }
-        [FromQuery(Name = "acknowledgeable")] public bool? Acknowledgeable { get; set; }
+        [FromQuery(Name = "acknowledgeable")] public string? Acknowledgeable { get; set; }
         [FromQuery(Name = "raisedAfter")] public string? RaisedAfter { get; set; }
         [FromQuery(Name = "raisedBefore")] public string? RaisedBefore { get; set; }
         [FromQuery(Name = "resolvedAfter")] public string? ResolvedAfter { get; set; }
         [FromQuery(Name = "resolvedBefore")] public string? ResolvedBefore { get; set; }
-        [FromQuery(Name = "page")] public int? Page { get; set; }
-        [FromQuery(Name = "pageSize")] public int? PageSize { get; set; }
+        [FromQuery(Name = "page")] public string? Page { get; set; }
+        [FromQuery(Name = "pageSize")] public string? PageSize { get; set; }
     }
 
     public static void Map(RouteGroupBuilder api)
@@ -47,13 +48,15 @@ public static class AlertEndpoints
             .DocumentsFilter("type", "One or more alert types." + ApiFilterDocs.ListHint, AlertTypes.All.Select(type => type.Key))
             .DocumentsFilter("severity", "One or more severities." + ApiFilterDocs.ListHint, Severities)
             .DocumentsFilter("domain", "One or more domains, by id or name. A domain this key can't see is a 404." + ApiFilterDocs.ListHint)
-            .DocumentsFilter("group", "One or more group ids: alerts for domains in any of them." + ApiFilterDocs.ListHint)
-            .DocumentsFilter("tag", "One or more tag ids: alerts for domains with any of them." + ApiFilterDocs.ListHint)
-            .DocumentsFilter("acknowledgeable", "true for open alerts this API can acknowledge, false for the rest.")
+            .DocumentsFilter("group", "One or more group ids: alerts for domains in any of them." + ApiFilterDocs.ListHint, type: JsonSchemaType.Integer)
+            .DocumentsFilter("tag", "One or more tag ids: alerts for domains with any of them." + ApiFilterDocs.ListHint, type: JsonSchemaType.Integer)
+            .DocumentsFilter("acknowledgeable", "true for open alerts this API can acknowledge, false for the rest.", type: JsonSchemaType.Boolean)
             .DocumentsFilter("raisedAfter", "Raised at or after this date (2026-10-01) or time with a zone (2026-10-01T09:30:00Z).")
             .DocumentsFilter("raisedBefore", "Raised before this date or time.")
             .DocumentsFilter("resolvedAfter", "Resolved at or after this date or time. Open alerts never match.")
-            .DocumentsFilter("resolvedBefore", "Resolved before this date or time. Open alerts never match.");
+            .DocumentsFilter("resolvedBefore", "Resolved before this date or time. Open alerts never match.")
+            .DocumentsFilter("page", "Which page, from 1 (default 1).", type: JsonSchemaType.Integer)
+            .DocumentsFilter("pageSize", $"How many a page, 1 to {DomainReadEndpoints.MaximumPageSize} (default {DefaultPageSize}).", type: JsonSchemaType.Integer);
 
         api.MapPost("/alerts/{id:int}/acknowledge", AcknowledgeAsync)
             .RequirePermission(Permission.AlertsManage)
@@ -74,6 +77,7 @@ public static class AlertEndpoints
         var severities = reader.OneOf("severity", filters.Severity, Severities);
         var groupIds = reader.Ids("group", filters.Group);
         var tagIds = reader.Ids("tag", filters.Tag);
+        var acknowledgeable = reader.Bool("acknowledgeable", filters.Acknowledgeable);
         var raisedAfter = reader.Date("raisedAfter", filters.RaisedAfter);
         var raisedBefore = reader.Date("raisedBefore", filters.RaisedBefore);
         var resolvedAfter = reader.Date("resolvedAfter", filters.ResolvedAfter);
@@ -144,10 +148,10 @@ public static class AlertEndpoints
             query = query.Where(alert => tagged.Contains(alert.DomainName));
         }
 
-        if (filters.Acknowledgeable is { } acknowledgeable)
+        if (acknowledgeable is { } onlyAcknowledgeable)
         {
             var acknowledgeableTypes = AlertTypes.All.Select(type => type.Key).Where(AlertAcknowledgement.IsAcknowledgeable).ToList();
-            query = acknowledgeable
+            query = onlyAcknowledgeable
                 ? query.Where(alert => !alert.IsResolved && acknowledgeableTypes.Contains(alert.AlertType))
                 : query.Where(alert => alert.IsResolved || !acknowledgeableTypes.Contains(alert.AlertType));
         }
