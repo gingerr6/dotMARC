@@ -124,6 +124,122 @@
         ],
         "type": "object"
       },
+      "ApiAuditActor": {
+        "properties": {
+          "email": {
+            "nullable": true,
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "email"
+        ],
+        "type": "object"
+      },
+      "ApiAuditChange": {
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "new": {
+            "nullable": true,
+            "type": "string"
+          },
+          "old": {
+            "nullable": true,
+            "type": "string"
+          },
+          "secret": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "field",
+          "old",
+          "new",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "ApiAuditEntry": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/ApiAuditActor"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ApiAuditChange"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "occurredUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "target": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ApiAuditTarget"
+              }
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "occurredUtc",
+          "kind",
+          "actor",
+          "action",
+          "target",
+          "summary",
+          "changes"
+        ],
+        "type": "object"
+      },
+      "ApiAuditTarget": {
+        "properties": {
+          "id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "ApiCheck": {
         "example": {
           "checkedUtc": "2026-10-01T09:30:00+00:00",
@@ -585,6 +701,35 @@
           "items": {
             "items": {
               "$ref": "#/components/schemas/ApiAlert"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount"
+        ],
+        "type": "object"
+      },
+      "ApiPageOfApiAuditEntry": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiAuditEntry"
             },
             "type": "array"
           },
@@ -1247,6 +1392,287 @@
           "Alerts"
         ],
         "x-dotmarc-permission": "AlertsManage"
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "description": "Who did what, newest first, 50 a page by default and at most 200. Changes and sign-ins by default; ask for page views with kind. Filters combine: an entry must match every filter given. A key limited to certain groups sees only entries about its domains, its groups and their alerts.\n\nNeeds the AuditView permission.",
+        "operationId": "ListAuditEntries",
+        "parameters": [
+          {
+            "description": "One or more action codes. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "items": {
+                "enum": [
+                  "domain.added",
+                  "domain.removed",
+                  "domain.monitoring_changed",
+                  "domain.halo_client_changed",
+                  "domain.psa_company_changed",
+                  "domain.mta_sts_changed",
+                  "domain.dkim_selectors_changed",
+                  "domain.dkim_records_changed",
+                  "domains.reordered",
+                  "domains.imported",
+                  "domain.groups_changed",
+                  "domain.tags_changed",
+                  "group.added",
+                  "group.renamed",
+                  "group.removed",
+                  "group.halo_client_changed",
+                  "group.psa_company_changed",
+                  "tag.added",
+                  "tag.updated",
+                  "tag.removed",
+                  "role.added",
+                  "role.updated",
+                  "role.removed",
+                  "access.granted",
+                  "access.updated",
+                  "access.revoked",
+                  "api_key.created",
+                  "api_key.revoked",
+                  "ticket_rule.global_changed",
+                  "ticket_rule.group_changed",
+                  "alert.acknowledged",
+                  "access.client_portal_changed",
+                  "alert.resolved_by_ticket",
+                  "settings.notifications.saved",
+                  "settings.halo.saved",
+                  "settings.connectwise.saved",
+                  "settings.autotask.saved",
+                  "settings.branding.saved",
+                  "settings.email.saved",
+                  "settings.reports.saved",
+                  "group.report_schedule_changed",
+                  "group.report_sent",
+                  "group.branding_changed",
+                  "settings.cloudflare_dns.saved",
+                  "settings.azure_dns.saved",
+                  "settings.google_cloud_dns.saved",
+                  "settings.dns_records.saved",
+                  "settings.audit.saved",
+                  "dns.pushed",
+                  "dns.push_failed",
+                  "halo.integration_tested",
+                  "connectwise.integration_tested",
+                  "autotask.integration_tested",
+                  "autotask.zone_cleared",
+                  "halo.sign_in_cleared",
+                  "audit.exported",
+                  "signin.succeeded",
+                  "signin.refused",
+                  "page.viewed"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "change and signIn by default; pageView, or all for every kind. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "items": {
+                "enum": [
+                  "change",
+                  "signIn",
+                  "pageView",
+                  "all"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "Who acted: a person, dotMARC itself or an API key. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "actorKind",
+            "schema": {
+              "items": {
+                "enum": [
+                  "user",
+                  "system",
+                  "apiKey"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "Part of the actor's name or email, in any letter case.",
+            "in": "query",
+            "name": "actor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "One or more kinds of target. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "targetType",
+            "schema": {
+              "items": {
+                "enum": [
+                  "Domain",
+                  "Group",
+                  "Tag",
+                  "Alert",
+                  "Role",
+                  "UserAccess",
+                  "ApiKey",
+                  "Settings"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more target ids; use with targetType. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "targetId",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more domains, by id or name: entries about the domain and its alerts. A domain this key can't see is a 404. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "domain",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "At or after this date (2026-10-01) or time with a zone (2026-10-01T09:30:00Z).",
+            "in": "query",
+            "name": "occurredAfter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Before this date or time.",
+            "in": "query",
+            "name": "occurredBefore",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Text in the summary or the target's name, in any letter case.",
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiPageOfApiAuditEntry"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            },
+            "description": "The request couldn't be used. `errors` names each field that's wrong and why."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No API key was sent, or the key is unknown, expired or revoked."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "There's no such item, or this key can't see it. A key limited to certain groups can't see what's outside them."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "This key has made more requests this minute than dotMARC allows (120 by default). Wait for the number of seconds in the Retry-After header, then try again."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong in dotMARC that the request didn't cause. It's safe to retry a read; check before retrying a change. If it keeps happening, dotMARC's logs have the details."
+          }
+        },
+        "summary": "List audit log entries",
+        "tags": [
+          "Audit log"
+        ],
+        "x-dotmarc-permission": "AuditView"
       }
     },
     "/api/v1/domains": {
@@ -2460,6 +2886,10 @@
     {
       "description": "List alerts and acknowledge DMARC policy and nameserver alerts.",
       "name": "Alerts"
+    },
+    {
+      "description": "Who did what in dotMARC: changes, sign-ins and, on request, pages opened.",
+      "name": "Audit log"
     }
   ]
 }

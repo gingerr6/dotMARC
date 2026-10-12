@@ -8,6 +8,7 @@ public static class ApiTags
     public const string Imports = "Imports";
     public const string GroupsAndTags = "Groups and tags";
     public const string Alerts = "Alerts";
+    public const string AuditLog = "Audit log";
 
     public static IReadOnlyList<(string Name, string Description)> All { get; } =
     [
@@ -15,5 +16,6 @@ public static class ApiTags
         (Imports, "Add and update many domains at once, as the Import domains page does."),
         (GroupsAndTags, "The groups and tags domains are organised by."),
         (Alerts, "List alerts and acknowledge DMARC policy and nameserver alerts."),
+        (AuditLog, "Who did what in dotMARC: changes, sign-ins and, on request, pages opened."),
     ];
 }

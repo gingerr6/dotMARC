@@ -25,6 +25,7 @@ public static class ApiEndpoints
         DomainWriteEndpoints.Map(api);
         ImportEndpoints.Map(api);
         AlertEndpoints.Map(api);
+        AuditEndpoints.Map(api);
 
         // Without this, a path under /api that isn't an endpoint falls to the UI's fallback policy and redirects to
         // sign-in. Because it accepts every method, routing never gets to answer 405 itself, so it does that here.

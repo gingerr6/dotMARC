@@ -92,3 +92,14 @@ public sealed record ApiAlert(
 /// <summary>The outcome of acknowledging an alert. TicketClosed is true when no PSA ticket failed to close (also when the
 /// alert had none); a ticket that failed stays open in dotMARC and is retried.</summary>
 public sealed record ApiAcknowledgement(bool TicketClosed, int TicketsClosed, int TicketsFailed);
+
+public sealed record ApiAuditActor(string Kind, string Name, string? Email);
+
+public sealed record ApiAuditTarget(string Type, string? Id, string? Name);
+
+/// <summary>A changed field; a secret one has Secret true and no values, as stored.</summary>
+public sealed record ApiAuditChange(string Field, string? Old, string? New, bool Secret);
+
+public sealed record ApiAuditEntry(
+    long Id, DateTimeOffset OccurredUtc, string Kind, ApiAuditActor Actor, string Action, ApiAuditTarget? Target, string Summary,
+    IReadOnlyList<ApiAuditChange> Changes);
