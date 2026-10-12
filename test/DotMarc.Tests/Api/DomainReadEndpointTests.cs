@@ -377,4 +377,17 @@ public sealed class DomainReadEndpointTests : IAsyncLifetime
         Assert.Equal(["192.0.2.10"], march.TopSources.Select(source => source.SourceIp));
         Assert.Equal(HttpStatusCode.BadRequest, both.StatusCode);
     }
+
+    [Fact]
+    public async Task ReportSummary_RefusesAFromInTheFuture()
+    {
+        await _host.SeedDomainAsync("api-summary-future.example");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+        var tomorrow = DateTimeOffset.UtcNow.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+        var response = await client.GetAsync($"/api/v1/domains/api-summary-future.example/reports/summary?from={tomorrow}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

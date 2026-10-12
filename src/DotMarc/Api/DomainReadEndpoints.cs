@@ -275,6 +275,11 @@ public static class DomainReadEndpoints
         var nowUtc = timeProvider.GetUtcNow();
         var endUtc = rangeEnd ?? nowUtc;
         var startUtc = rangeStart ?? endUtc.AddDays(-(days ?? maximumDays));
+        if (startUtc >= endUtc)
+        {
+            // Only reachable when to defaults to now; an explicit to is checked with the other filters.
+            return ApiProblems.Validation("from", "Must be earlier than to, which is now when it isn't given.");
+        }
         if ((endUtc - startUtc).TotalDays > 366)
         {
             return ApiProblems.Validation("from", "The range can be at most 366 days.");

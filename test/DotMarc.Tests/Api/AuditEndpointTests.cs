@@ -136,4 +136,24 @@ public sealed class AuditEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(AuditActions.DomainAdded, await response.Content.ReadAsStringAsync());
     }
+
+    [Fact]
+    public async Task AGroupLimitedKey_DoesntSeeOtherGroupsNames_InAGroupsChange()
+    {
+        var ownGroup = await _host.SeedGroupAsync("api-audit-groups-own");
+        var otherGroup = await _host.SeedGroupAsync("api-audit-groups-other");
+        var shared = await _host.SeedDomainAsync("api-audit-shared.example", groupIds: [ownGroup, otherGroup]);
+        await SeedEntryAsync(AuditActions.DomainGroupsChanged, "Domain", IdText(shared), "api-audit-shared.example", summary: "api-audit-groups",
+            changes: [new AuditFieldChange("Groups", "api-audit-groups-other", "api-audit-groups-other, api-audit-groups-own")]);
+        var (_, limitedSecret) = await _host.CreateKeyAsync([Permission.AuditView], scopedGroupIds: [ownGroup]);
+        var (_, fullSecret) = await _host.CreateKeyAsync([Permission.AuditView]);
+        using var limitedClient = _host.ClientFor(limitedSecret);
+        using var fullClient = _host.ClientFor(fullSecret);
+
+        var limited = Assert.Single((await limitedClient.GetFromJsonAsync<ApiPage<ApiAuditEntry>>("/api/v1/audit?search=api-audit-groups"))!.Items);
+        var full = Assert.Single((await fullClient.GetFromJsonAsync<ApiPage<ApiAuditEntry>>("/api/v1/audit?search=api-audit-groups"))!.Items);
+
+        Assert.Equal(new ApiAuditChange("Groups", null, null, false), Assert.Single(limited.Changes));
+        Assert.Equal("api-audit-groups-other, api-audit-groups-own", Assert.Single(full.Changes).New);
+    }
 }

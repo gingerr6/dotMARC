@@ -188,8 +188,15 @@ public static class AuditEndpoints
                 entry.Action,
                 entry.TargetType is null ? null : new ApiAuditTarget(entry.TargetType, entry.TargetId, entry.TargetName),
                 entry.Summary,
-                entry.Changes.Select(change => new ApiAuditChange(change.Field, change.Old, change.New, change.Secret)).ToList()))
+                entry.Changes.Select(change => HidesValues(scope, entry, change)
+                    ? new ApiAuditChange(change.Field, null, null, change.Secret)
+                    : new ApiAuditChange(change.Field, change.Old, change.New, change.Secret)).ToList()))
             .ToList();
         return TypedResults.Ok(new ApiPage<ApiAuditEntry>(items, pageNumber, size, totalCount));
     }
+
+    /// <summary>A domain's group change lists every group by name, including other clients' groups, which a key limited
+    /// to certain groups must never learn. Such a key sees that the groups changed, without the names.</summary>
+    private static bool HidesValues(ApiScope scope, AuditEntry entry, AuditFieldChange change) =>
+        scope.IsScoped && entry.Action == AuditActions.DomainGroupsChanged && change.Field == "Groups";
 }
