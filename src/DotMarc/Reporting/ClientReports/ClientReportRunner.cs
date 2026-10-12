@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Reporting.ClientReports;
 
-public sealed record ManualSendResult(bool Sent, string Message);
+public sealed record ManualSendResult(bool Sent, string Message, int? DeliveryId = null);
 
 /// <summary>On-demand reports from the Reports dialog: send now (recorded as a Manual delivery and audited) and
 /// download. Neither affects the schedule.</summary>
@@ -103,9 +103,9 @@ public sealed class ClientReportRunner(
         if (delivery.Status == ClientReportDeliveryStatus.Sent)
         {
             await alerting.ResolveClientReportFailedAsync(groupId, cancellationToken).ConfigureAwait(false);
-            return new ManualSendResult(true, $"Sent the {period.Label} report to {tidied.Count} recipient{(tidied.Count == 1 ? "" : "s")}.");
+            return new ManualSendResult(true, $"Sent the {period.Label} report to {tidied.Count} recipient{(tidied.Count == 1 ? "" : "s")}.", delivery.Id);
         }
 
-        return new ManualSendResult(false, $"Couldn't send the report: {delivery.Error}");
+        return new ManualSendResult(false, $"Couldn't send the report: {delivery.Error}", delivery.Id);
     }
 }

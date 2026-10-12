@@ -81,7 +81,7 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
             .SelectMany(path => path.Value.EnumerateObject().Select(operation => (Name: $"{operation.Name.ToUpperInvariant()} {path.Name}", Body: operation.Value)))
             .ToList();
 
-        Assert.Equal(21, operations.Count);
+        Assert.Equal(25, operations.Count);
         Assert.All(operations, operation =>
         {
             Assert.True(operation.Body.TryGetProperty("summary", out _), $"{operation.Name} has no summary");
@@ -107,6 +107,10 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
             ["GET /api/v1/domains/{domain}/tls-reports/{id}"] = [404],
             ["GET /api/v1/domains/{domain}/tls-reports/{id}/raw"] = [404],
             ["GET /api/v1/summary"] = [],
+            ["GET /api/v1/groups/{group}/report-schedule"] = [404],
+            ["GET /api/v1/groups/{group}/report-deliveries"] = [400, 404],
+            ["GET /api/v1/groups/{group}/report"] = [400, 404],
+            ["POST /api/v1/groups/{group}/report/send"] = [400, 404, 409],
             ["POST /api/v1/alerts/{id}/acknowledge"] = [404, 409],
             ["GET /api/v1/domains"] = [400],
             ["POST /api/v1/domains"] = [400, 409],
@@ -143,7 +147,7 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
     [Fact]
     public async Task EveryOperation_IsInOneReadableSection_AndEverySectionIsDescribed()
     {
-        string[] sections = ["Domains", "Imports", "Groups and tags", "Alerts", "Audit log", "Reports"];
+        string[] sections = ["Domains", "Imports", "Groups and tags", "Alerts", "Audit log", "Reports", "Client reports"];
         using var document = JsonDocument.Parse(await FetchDocumentAsync());
         var operationTags = document.RootElement.GetProperty("paths").EnumerateObject()
             .SelectMany(path => path.Value.EnumerateObject())

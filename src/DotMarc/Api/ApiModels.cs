@@ -154,3 +154,17 @@ public sealed record ApiStatusCounts(int Protected, int MonitoringOnly, int Need
 
 public sealed record ApiSummary(int DomainCount, double OverallPassRate, int WarningCount, int MissingCount, int SourceCount,
     ApiReasonBreakdown ReasonBreakdown, int? ParseFailureCount, ApiStatusCounts StatusCounts);
+
+public sealed record ApiReportPeriod(DateOnly Start, DateOnly End, string Kind);
+
+public sealed record ApiReportSchedule(string Frequency, IReadOnlyList<string> Recipients, DateTimeOffset? StartedUtc, ApiReportPeriod? NextPeriod, DateTimeOffset? NextDueUtc);
+
+public sealed record ApiReportDelivery(int Id, DateOnly PeriodStart, DateOnly PeriodEnd, string Kind, string Status, IReadOnlyList<string> Recipients,
+    int Attempts, DateTimeOffset? FirstAttemptUtc, DateTimeOffset? LastAttemptUtc, DateTimeOffset? SentUtc, string? Error, string? RequestedBy)
+{
+    public static ApiReportDelivery From(DotMarc.Reporting.ClientReports.ClientReportDelivery delivery) => new(
+        delivery.Id, delivery.PeriodStart, delivery.PeriodEnd, delivery.Kind.ToString(), delivery.Status.ToString(), delivery.Recipients,
+        delivery.Attempts, delivery.FirstAttemptUtc, delivery.LastAttemptUtc, delivery.SentUtc, delivery.Error, delivery.RequestedBy);
+}
+
+public sealed record ApiSendReportRequest(string? Period, string? Of, string? Start, string? End, IReadOnlyList<string>? Recipients);

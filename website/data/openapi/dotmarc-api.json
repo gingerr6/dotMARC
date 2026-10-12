@@ -956,6 +956,35 @@
         ],
         "type": "object"
       },
+      "ApiPageOfApiReportDelivery": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiReportDelivery"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount"
+        ],
+        "type": "object"
+      },
       "ApiPageOfApiSourceDetail": {
         "properties": {
           "items": {
@@ -1056,6 +1085,137 @@
         ],
         "type": "object"
       },
+      "ApiReportDelivery": {
+        "properties": {
+          "attempts": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "error": {
+            "nullable": true,
+            "type": "string"
+          },
+          "firstAttemptUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "lastAttemptUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "periodEnd": {
+            "format": "date",
+            "type": "string"
+          },
+          "periodStart": {
+            "format": "date",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "requestedBy": {
+            "nullable": true,
+            "type": "string"
+          },
+          "sentUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "periodStart",
+          "periodEnd",
+          "kind",
+          "status",
+          "recipients",
+          "attempts",
+          "firstAttemptUtc",
+          "lastAttemptUtc",
+          "sentUtc",
+          "error",
+          "requestedBy"
+        ],
+        "type": "object"
+      },
+      "ApiReportPeriod": {
+        "properties": {
+          "end": {
+            "format": "date",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "start": {
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ApiReportSchedule": {
+        "properties": {
+          "frequency": {
+            "type": "string"
+          },
+          "nextDueUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "nextPeriod": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ApiReportPeriod"
+              }
+            ],
+            "type": "object"
+          },
+          "recipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "startedUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "frequency",
+          "recipients",
+          "startedUtc",
+          "nextPeriod",
+          "nextDueUtc"
+        ],
+        "type": "object"
+      },
       "ApiReportSummary": {
         "properties": {
           "days": {
@@ -1096,6 +1256,41 @@
           "passRate",
           "reasonBreakdown",
           "topSources"
+        ],
+        "type": "object"
+      },
+      "ApiSendReportRequest": {
+        "properties": {
+          "end": {
+            "nullable": true,
+            "type": "string"
+          },
+          "of": {
+            "nullable": true,
+            "type": "string"
+          },
+          "period": {
+            "nullable": true,
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "start": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "period",
+          "of",
+          "start",
+          "end",
+          "recipients"
         ],
         "type": "object"
       },
@@ -4138,6 +4333,499 @@
         "x-dotmarc-permission": "GroupsView"
       }
     },
+    "/api/v1/groups/{group}/report": {
+      "get": {
+        "description": "The report for one period, as the Reports dialog downloads it. Give period with of, or start and end. A group this key can't see is a 404.\n\nNeeds the ReportsManage permission.",
+        "operationId": "GetReportPdf",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "week, month or quarter, with of.",
+            "in": "query",
+            "name": "period",
+            "schema": {
+              "enum": [
+                "week",
+                "month",
+                "quarter"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "A date inside the period (default: today in the report time zone).",
+            "in": "query",
+            "name": "of",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A custom range's first day, such as 2026-09-01, with end.",
+            "in": "query",
+            "name": "start",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "A custom range's last day, included.",
+            "in": "query",
+            "name": "end",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            },
+            "description": "The request couldn't be used. `errors` names each field that's wrong and why."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No API key was sent, or the key is unknown, expired or revoked."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "There's no such item, or this key can't see it. A key limited to certain groups can't see what's outside them."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "This key has made more requests this minute than dotMARC allows (120 by default). Wait for the number of seconds in the Retry-After header, then try again."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong in dotMARC that the request didn't cause. It's safe to retry a read; check before retrying a change. If it keeps happening, dotMARC's logs have the details."
+          }
+        },
+        "summary": "Download a group's report as a PDF",
+        "tags": [
+          "Client reports"
+        ],
+        "x-dotmarc-permission": "ReportsManage"
+      }
+    },
+    "/api/v1/groups/{group}/report-deliveries": {
+      "get": {
+        "description": "Scheduled and manual sends, newest first, 50 a page by default and at most 200. Filters combine. A group this key can't see is a 404.\n\nNeeds the ReportsManage permission.",
+        "operationId": "ListReportDeliveries",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One or more delivery statuses. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "items": {
+                "enum": [
+                  "Pending",
+                  "Sent",
+                  "Failed",
+                  "Skipped"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "Scheduled or Manual. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "items": {
+                "enum": [
+                  "Scheduled",
+                  "Manual"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "Sent at or after this date (2026-10-01) or time with a zone. Unsent deliveries never match.",
+            "in": "query",
+            "name": "sentAfter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Sent before this date or time. Unsent deliveries never match.",
+            "in": "query",
+            "name": "sentBefore",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Which page, from 1 (default 1).",
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "How many a page, 1 to 200 (default 50).",
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiPageOfApiReportDelivery"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            },
+            "description": "The request couldn't be used. `errors` names each field that's wrong and why."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No API key was sent, or the key is unknown, expired or revoked."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "There's no such item, or this key can't see it. A key limited to certain groups can't see what's outside them."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "This key has made more requests this minute than dotMARC allows (120 by default). Wait for the number of seconds in the Retry-After header, then try again."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong in dotMARC that the request didn't cause. It's safe to retry a read; check before retrying a change. If it keeps happening, dotMARC's logs have the details."
+          }
+        },
+        "summary": "List a group's report deliveries",
+        "tags": [
+          "Client reports"
+        ],
+        "x-dotmarc-permission": "ReportsManage"
+      }
+    },
+    "/api/v1/groups/{group}/report-schedule": {
+      "get": {
+        "description": "How often the group's report is sent and to whom, and the next period and when it's due. With no schedule, frequency is Off. A group this key can't see is a 404.\n\nNeeds the ReportsManage permission.",
+        "operationId": "GetReportSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiReportSchedule"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No API key was sent, or the key is unknown, expired or revoked."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "There's no such item, or this key can't see it. A key limited to certain groups can't see what's outside them."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "This key has made more requests this minute than dotMARC allows (120 by default). Wait for the number of seconds in the Retry-After header, then try again."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong in dotMARC that the request didn't cause. It's safe to retry a read; check before retrying a change. If it keeps happening, dotMARC's logs have the details."
+          }
+        },
+        "summary": "Get a group's report schedule",
+        "tags": [
+          "Client reports"
+        ],
+        "x-dotmarc-permission": "ReportsManage"
+      }
+    },
+    "/api/v1/groups/{group}/report/send": {
+      "post": {
+        "description": "Sends the report for a period, as Send now in the Reports dialog: recorded as a manual delivery and audited. recipients defaults to the group's schedule. Returns the delivery, sent or failed. A group this key can't see is a 404.\n\nNeeds the ReportsManage permission.",
+        "operationId": "SendReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "nullable": true,
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ApiSendReportRequest"
+                  }
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiReportDelivery"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            },
+            "description": "The request couldn't be used. `errors` names each field that's wrong and why."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No API key was sent, or the key is unknown, expired or revoked."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "There's no such item, or this key can't see it. A key limited to certain groups can't see what's outside them."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The request conflicts with how things are now, such as a domain that's already in dotMARC or an alert that can't be acknowledged. `detail` says what."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "This key has made more requests this minute than dotMARC allows (120 by default). Wait for the number of seconds in the Retry-After header, then try again."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong in dotMARC that the request didn't cause. It's safe to retry a read; check before retrying a change. If it keeps happening, dotMARC's logs have the details."
+          }
+        },
+        "summary": "Send a group's report now",
+        "tags": [
+          "Client reports"
+        ],
+        "x-dotmarc-permission": "ReportsManage"
+      }
+    },
     "/api/v1/summary": {
       "get": {
         "description": "Over the domains this key can see: how many, the overall 30-day pass rate, warnings, missing reports, reporters, why failing mail was let through or rejected, and how many domains are in each client portal status. parseFailureCount is only for keys with DomainsEdit not limited to certain groups.\n\nNeeds the DomainsView permission.",
@@ -4307,6 +4995,10 @@
     {
       "description": "Sending sources, DMARC and TLS reports with their original files, and the dashboard's headline figures.",
       "name": "Reports"
+    },
+    {
+      "description": "Each group's report schedule and delivery history, report PDFs for any period, and sending a report now.",
+      "name": "Client reports"
     }
   ]
 }
