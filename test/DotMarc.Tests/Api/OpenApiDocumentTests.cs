@@ -262,4 +262,15 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
         Assert.Equal("integer", Parameter("/api/v1/alerts", "tag").GetProperty("schema").GetProperty("items").GetProperty("type").GetString());
         Assert.Equal(["change", "signIn"], Parameter("/api/v1/audit", "kind").GetProperty("schema").GetProperty("default").EnumerateArray().Select(value => value.GetString()));
     }
+
+    [Fact]
+    public async Task TheSendBody_HasOptionalFields_ThePeriodsValues_AndAnExample()
+    {
+        using var document = JsonDocument.Parse(await FetchDocumentAsync());
+        var schema = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("ApiSendReportRequest");
+
+        Assert.False(schema.TryGetProperty("required", out var required) && required.GetArrayLength() > 0, "Every field of the send body is optional.");
+        Assert.Equal(["week", "month", "quarter"], schema.GetProperty("properties").GetProperty("period").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+        Assert.True(schema.TryGetProperty("example", out _));
+    }
 }

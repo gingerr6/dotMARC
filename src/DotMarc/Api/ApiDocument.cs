@@ -132,6 +132,14 @@ public static class ApiDocument
                     schema.Pattern = null;
                 }
 
+                // The send body's period takes a fixed set of values, which the record's string can't say on its own.
+                if (context.JsonTypeInfo.Type == typeof(ApiSendReportRequest)
+                    && schema.Properties?.TryGetValue("period", out var periodProperty) == true && periodProperty is OpenApiSchema periodSchema)
+                {
+                    periodSchema.Enum = ["week", "month", "quarter"];
+                    periodSchema.Description = "week, month or quarter, with of (default: the period in progress); or leave it out and give start and end.";
+                }
+
                 if (ApiExamples.For(context.JsonTypeInfo.Type) is { } example)
                 {
                     schema.Example = example;
@@ -172,6 +180,7 @@ internal static class ApiExamples
         [typeof(ApiImportRequest)] = new ApiImportRequest("skip", "skip",
             [new ApiImportDomain("contoso.example", ["Contoso"], ["Microsoft 365"], true), new ApiImportDomain("fabrikam.example", ["Fabrikam"], null, null)]),
         [typeof(ApiAcknowledgement)] = new ApiAcknowledgement(true, 1, 0),
+        [typeof(ApiSendReportRequest)] = new ApiSendReportRequest("month", "2026-09-15", Recipients: ["it@contoso.example"]),
     };
 
     public static JsonNode? For(Type type) =>

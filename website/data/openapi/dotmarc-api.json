@@ -1365,6 +1365,15 @@
         "type": "object"
       },
       "ApiSendReportRequest": {
+        "example": {
+          "end": null,
+          "of": "2026-09-15",
+          "period": "month",
+          "recipients": [
+            "it@contoso.example"
+          ],
+          "start": null
+        },
         "properties": {
           "end": {
             "nullable": true,
@@ -1375,6 +1384,12 @@
             "type": "string"
           },
           "period": {
+            "description": "week, month or quarter, with of (default: the period in progress); or leave it out and give start and end.",
+            "enum": [
+              "week",
+              "month",
+              "quarter"
+            ],
             "nullable": true,
             "type": "string"
           },
@@ -1390,13 +1405,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "period",
-          "of",
-          "start",
-          "end",
-          "recipients"
-        ],
         "type": "object"
       },
       "ApiSetGroupsRequest": {

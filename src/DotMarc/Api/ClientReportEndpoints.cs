@@ -146,6 +146,12 @@ public static class ClientReportEndpoints
             return null;
         }
 
+        if (!hasPeriod && !string.IsNullOrWhiteSpace(of))
+        {
+            reader.Refuse("of", "Use of with period, not with start and end.");
+            return null;
+        }
+
         if (!hasPeriod && !hasStart && !hasEnd)
         {
             reader.Refuse("period", "Give period (week, month or quarter), or start and end.");
@@ -182,6 +188,12 @@ public static class ClientReportEndpoints
         var inside = string.IsNullOrWhiteSpace(of) ? ReportPeriods.LocalDay(nowUtc, zone) : Day(reader, "of", of);
         if (kind is null || inside is not { } day)
         {
+            return null;
+        }
+
+        if (day > ReportPeriods.LocalDay(nowUtc, zone))
+        {
+            reader.Refuse("of", "Must be today or earlier: a period that hasn't started has nothing to report.");
             return null;
         }
 
@@ -240,16 +252,23 @@ public static class ClientReportEndpoints
         var reader = new ApiFilterReader();
         var chosen = ReadPeriod(reader, request?.Period, request?.Of, request?.Start, request?.End, await runner.ZoneAsync(cancellationToken), timeProvider.GetUtcNow());
         var recipients = request?.Recipients ?? (await ClientReportService.GetScheduleAsync(context, groupId, cancellationToken))?.Recipients ?? [];
-        try
+        if (recipients.Any(string.IsNullOrWhiteSpace))
         {
-            if (ReportRecipients.Normalise(recipients).Count == 0)
-            {
-                reader.Refuse("recipients", "Give recipients: the group has none on its schedule.");
-            }
+            reader.Refuse("recipients", "Each recipient must be an email address.");
         }
-        catch (ArgumentException exception)
+        else
         {
-            reader.Refuse("recipients", exception.Message.Split(" (Parameter")[0]);
+            try
+            {
+                if (ReportRecipients.Normalise(recipients).Count == 0)
+                {
+                    reader.Refuse("recipients", "Give recipients: the group has none on its schedule.");
+                }
+            }
+            catch (ArgumentException exception)
+            {
+                reader.Refuse("recipients", exception.Message.Split(" (Parameter")[0]);
+            }
         }
 
         if (reader.Problem is not null || chosen is null)
@@ -263,13 +282,15 @@ public static class ClientReportEndpoints
             return ApiProblems.Conflict("Email isn't set up. Set it up on Email & reports in dotMARC first.");
         }
 
-        var result = await runner.SendNowAsync(AuditActor.FromPrincipal(user), groupId, chosen, recipients, cancellationToken);
+        // Not cancellable by the caller: an email that has gone out must be recorded and audited even if the caller hangs
+        // up, as the Reports dialog ensures.
+        var result = await runner.SendNowAsync(AuditActor.FromPrincipal(user), groupId, chosen, recipients, CancellationToken.None);
         if (result.DeliveryId is not { } deliveryId)
         {
             return TypedResults.Problem(result.Message, statusCode: StatusCodes.Status500InternalServerError);
         }
 
-        var delivery = await context.ClientReportDeliveries.AsNoTracking().SingleAsync(candidate => candidate.Id == deliveryId, cancellationToken);
+        var delivery = await context.ClientReportDeliveries.AsNoTracking().SingleAsync(candidate => candidate.Id == deliveryId, CancellationToken.None);
         return TypedResults.Ok(ApiReportDelivery.From(delivery));
     }
 }

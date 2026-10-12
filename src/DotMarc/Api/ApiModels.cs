@@ -167,7 +167,9 @@ public sealed record ApiReportDelivery(int Id, DateOnly PeriodStart, DateOnly Pe
         delivery.Attempts, delivery.FirstAttemptUtc, delivery.LastAttemptUtc, delivery.SentUtc, delivery.Error, delivery.RequestedBy);
 }
 
-public sealed record ApiSendReportRequest(string? Period, string? Of, string? Start, string? End, IReadOnlyList<string>? Recipients);
+/// <summary>Every field is optional: give period (with of, or for the period in progress) or start and end; recipients
+/// defaults to the group's schedule.</summary>
+public sealed record ApiSendReportRequest(string? Period = null, string? Of = null, string? Start = null, string? End = null, IReadOnlyList<string>? Recipients = null);
 
 public sealed record ApiParseFailure(int Id, string MessageId, string Reason, int Attempts, DateTimeOffset LastAttemptUtc);
 

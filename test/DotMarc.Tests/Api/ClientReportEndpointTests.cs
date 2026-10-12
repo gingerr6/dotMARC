@@ -31,10 +31,20 @@ public sealed class ClientReportEndpointTests : IAsyncLifetime
     {
         public List<EmailMessage> Sent { get; } = [];
 
-        public Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
+        /// <summary>When set, a send waits on it, so a test can act while the email is going out.</summary>
+        public TaskCompletionSource? Gate { get; set; }
+
+        public TaskCompletionSource Started { get; } = new();
+
+        public async Task SendAsync(EmailMessage message, CancellationToken cancellationToken)
         {
+            Started.TrySetResult();
+            if (Gate is { } gate)
+            {
+                await gate.Task;
+            }
+
             Sent.Add(message);
-            return Task.CompletedTask;
         }
     }
 
@@ -143,6 +153,53 @@ public sealed class ClientReportEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync($"/api/v1/groups/{other}/report/send", new { period = "month" })).StatusCode);
         Assert.Empty(_sender.Sent);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/v1/groups/{own}/report-schedule")).StatusCode);
+    }
+
+    [Fact]
+    public async Task SendNow_IsRecorded_EvenWhenTheCallerHangsUpMidSend()
+    {
+        var groupId = await SeedScheduledGroupAsync("api-reports-hangup", "it@contoso.example");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.ReportsManage]);
+        using var client = _host.ClientFor(secret);
+        _sender.Gate = new TaskCompletionSource();
+        using var hangUp = new CancellationTokenSource();
+
+        var request = client.PostAsJsonAsync($"/api/v1/groups/{groupId}/report/send", new { period = "month", of = "2026-09-15" }, hangUp.Token);
+        await _sender.Started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await hangUp.CancelAsync();
+        _sender.Gate.SetResult();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+
+        await using var context = _host.CreateContext();
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline && !await context.ClientReportDeliveries.AnyAsync(delivery => delivery.GroupId == groupId))
+        {
+            await Task.Delay(200);
+        }
+
+        Assert.Equal(ClientReportDeliveryStatus.Sent, (await context.ClientReportDeliveries.SingleAsync(delivery => delivery.GroupId == groupId)).Status);
+    }
+
+    [Fact]
+    public async Task APeriodThatHasntStarted_AndOfWithARange_AndANullRecipient_AreEach400s()
+    {
+        var groupId = await SeedScheduledGroupAsync("api-reports-refused", "it@contoso.example");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.ReportsManage]);
+        using var client = _host.ClientFor(secret);
+        var nextYear = DateTimeOffset.UtcNow.AddYears(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+        var future = await client.GetAsync($"/api/v1/groups/{groupId}/report?period=month&of={nextYear}");
+        var mixed = await client.GetAsync($"/api/v1/groups/{groupId}/report?of=2026-09-15&start=2026-09-01&end=2026-09-30");
+        var nullRecipient = await client.PostAsync($"/api/v1/groups/{groupId}/report/send",
+            new StringContent("""{"period":"month","recipients":["it@contoso.example",null]}""", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, future.StatusCode);
+        Assert.Contains("\"of\"", await future.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, mixed.StatusCode);
+        Assert.Contains("\"of\"", await mixed.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.BadRequest, nullRecipient.StatusCode);
+        Assert.Contains("\"recipients\"", await nullRecipient.Content.ReadAsStringAsync());
+        Assert.Empty(_sender.Sent);
     }
 }
 

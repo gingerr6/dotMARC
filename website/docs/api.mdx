@@ -104,7 +104,8 @@ and their alerts, never sign-ins, settings or access changes.
 
 - **Parse failures:** `GET /api/v1/parse-failures` lists report emails dotMARC couldn't read, for a key with the
   DomainsEdit permission that isn't limited to groups.
-- **PSA tickets:** each alert lists its tickets, and `hasOpenTicket=false` finds alerts no ticket has been raised for.
+- **PSA tickets:** each alert lists its tickets, and `hasOpenTicket=false` finds alerts without an open ticket: ones no
+  ticket has been raised for, and ones whose tickets are all closed.
 
 ## Keys limited to groups
 
