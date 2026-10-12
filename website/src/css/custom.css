@@ -318,3 +318,43 @@ body::before {
   box-shadow: 0 0 0 3px var(--openapi-code-tab-shadow-color-powershell);
   border-color: var(--openapi-code-tab-border-color-powershell);
 }
+
+/* API reference parameter lists: the plugin draws a parameter's name, allowed values and description at one size and
+   colour. Make the name stand out and set the details back a step, with space between parameters. */
+.openapi-params__list-item {
+  padding-bottom: 0.65rem;
+}
+
+.openapi-params__list-item + .openapi-params__list-item {
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--ifm-color-emphasis-200);
+}
+
+.openapi-params__list-item .openapi-schema__property {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ifm-color-primary);
+}
+
+.openapi-params__list-item .openapi-schema__type {
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--ifm-color-emphasis-100);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  opacity: 1;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.openapi-params__list-item > :not(.openapi-schema__container) {
+  margin-top: 0.3rem;
+  padding-left: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.openapi-params__list-item > :not(.openapi-schema__container) p {
+  margin-bottom: 0.25rem;
+}
