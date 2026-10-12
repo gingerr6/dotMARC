@@ -78,7 +78,7 @@ public sealed class PortalData(IDbContextFactory<DotMarcDbContext> dbFactory, Ti
             .AsSplitQuery();
     }
 
-    private static async Task<ILookup<string, AlertEvent>> OpenAlertsAsync(DotMarcDbContext context, IReadOnlyList<string> domainNames, CancellationToken cancellationToken) =>
+    internal static async Task<ILookup<string, AlertEvent>> OpenAlertsAsync(DotMarcDbContext context, IReadOnlyList<string> domainNames, CancellationToken cancellationToken) =>
         (await context.AlertEvents.AsNoTracking()
             .Where(alert => !alert.IsResolved && domainNames.Contains(alert.DomainName))
             .OrderByDescending(alert => alert.CreatedUtc)

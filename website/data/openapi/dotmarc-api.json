@@ -1251,9 +1251,274 @@
     },
     "/api/v1/domains": {
       "get": {
-        "description": "Domains this key can see, in dashboard order, 50 a page by default and at most 200. Filter by group id, tag id or monitoring. The pass rate covers the last 30 days and is null with no reports.\n\nNeeds the DomainsView permission.",
+        "description": "Domains this key can see, in dashboard order, 50 a page by default and at most 200. Filters combine: a domain must match every filter given. The pass rate covers the last 30 days and is null with no reports.\n\nNeeds the DomainsView permission.",
         "operationId": "ListDomains",
         "parameters": [
+          {
+            "description": "Part of the domain name, in any letter case.",
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "One or more group ids. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "group",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more tag ids. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "tag",
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "monitored",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "One or more DMARC check results. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "dmarc",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotChecked",
+                  "Ok",
+                  "MissingOwnRecord",
+                  "Misconfigured",
+                  "MissingAuthorizationRecord"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more SPF check results. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "spf",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotChecked",
+                  "Ok",
+                  "NullSpf",
+                  "MissingRecord",
+                  "MultipleRecords",
+                  "Misconfigured",
+                  "TooManyLookups"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more DKIM check results. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "dkim",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotConfigured",
+                  "Ok",
+                  "Missing",
+                  "Misconfigured"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more MX check results. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "mx",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotChecked",
+                  "Ok",
+                  "NullMx",
+                  "MissingRecord",
+                  "UnresolvableTarget"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more TLS reporting check results. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "tlsrpt",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotChecked",
+                  "Ok",
+                  "MissingOwnRecord",
+                  "Misconfigured"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more MTA-STS states. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "mtaSts",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotConfigured",
+                  "PendingDns",
+                  "PendingCertificate",
+                  "Active",
+                  "Failed"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more DMARC authorization check results. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "dmarcAuthorization",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotChecked",
+                  "NotApplicable",
+                  "Ok",
+                  "Missing"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more plain-language statuses, worked out as the client portal does. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NeedsAttention",
+                  "NoReportsYet",
+                  "MonitoringOnly",
+                  "Protected"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more published DMARC policies. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "policy",
+            "schema": {
+              "items": {
+                "enum": [
+                  "None",
+                  "Quarantine",
+                  "Reject"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "One or more DNS providers. Repeat it or separate values with commas.",
+            "in": "query",
+            "name": "dnsProvider",
+            "schema": {
+              "items": {
+                "enum": [
+                  "NotChecked",
+                  "Unknown",
+                  "Cloudflare",
+                  "AzureDns",
+                  "GoogleCloudDns",
+                  "Microsoft365",
+                  "AmazonRoute53",
+                  "GoDaddy",
+                  "Namecheap",
+                  "DigitalOcean",
+                  "Ovh",
+                  "Gandi",
+                  "Ns1",
+                  "DnsMadeEasy",
+                  "Vercel"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          {
+            "description": "Last report received at or after this date or time. Domains with no report never match.",
+            "in": "query",
+            "name": "lastReportAfter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last report received before this date or time. Domains with no report never match.",
+            "in": "query",
+            "name": "lastReportBefore",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "true for domains that have never had a report, false for those that have.",
+            "in": "query",
+            "name": "noReports",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "30-day pass rate below this, from 0 to 1. Domains with no pass rate never match.",
+            "in": "query",
+            "name": "passRateBelow",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "description": "30-day pass rate at least this, from 0 to 1. Domains with no pass rate never match.",
+            "in": "query",
+            "name": "passRateAtLeast",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
           {
             "in": "query",
             "name": "page",
@@ -1268,29 +1533,6 @@
             "schema": {
               "format": "int32",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "group",
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "tag",
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "monitored",
-            "schema": {
-              "type": "boolean"
             }
           }
         ],

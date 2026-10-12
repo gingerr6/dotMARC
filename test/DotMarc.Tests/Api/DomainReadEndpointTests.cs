@@ -4,6 +4,7 @@ using System.Text.Json;
 using DotMarc.Api;
 using DotMarc.Data;
 using DotMarc.Tests.Internal;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace DotMarc.Tests.Api;
@@ -244,5 +245,117 @@ public sealed class DomainReadEndpointTests : IAsyncLifetime
 
         Assert.Empty(page!.Items);
         Assert.Equal(0, page.TotalCount);
+    }
+
+    [Fact]
+    public async Task HealthSearchAndPolicyFilters_Narrow()
+    {
+        var broken = await _host.SeedDomainAsync("api-dfilter-broken.example", configure: domain =>
+        {
+            domain.SpfCheckStatus = SpfCheckStatus.TooManyLookups;
+            domain.DmarcPolicy = DmarcPolicyLevel.Reject;
+        });
+        await _host.SeedDomainAsync("api-dfilter-fine.example", configure: domain =>
+        {
+            domain.SpfCheckStatus = SpfCheckStatus.Ok;
+            domain.DmarcPolicy = DmarcPolicyLevel.None;
+        });
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var bySpf = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=api-dfilter-&spf=toomanylookups,Misconfigured");
+        var byPolicy = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=API-DFILTER-&policy=reject");
+
+        Assert.Equal([broken], bySpf!.Items.Select(domain => domain.Id));
+        Assert.Equal([broken], byPolicy!.Items.Select(domain => domain.Id));
+    }
+
+    [Fact]
+    public async Task SeveralGroupsAndTags_MatchAnyOfThem()
+    {
+        var firstGroup = await _host.SeedGroupAsync("api-dfilter-group-1");
+        var secondGroup = await _host.SeedGroupAsync("api-dfilter-group-2");
+        var first = await _host.SeedDomainAsync("api-dfilter-g1.example", groupIds: [firstGroup]);
+        var second = await _host.SeedDomainAsync("api-dfilter-g2.example", groupIds: [secondGroup]);
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var page = await client.GetFromJsonAsync<ApiPage<ApiDomain>>($"/api/v1/domains?group={firstGroup}&group={secondGroup}");
+
+        Assert.Equal([first, second], page!.Items.Select(domain => domain.Id).Order());
+    }
+
+    [Fact]
+    public async Task StatusFilter_MatchesThePortalsStatus()
+    {
+        var noReports = await _host.SeedDomainAsync("api-dfilter-new.example");
+        await _host.SeedDomainAsync("api-dfilter-reported.example", configure: domain => domain.LastReportReceivedUtc = DateTimeOffset.UtcNow);
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var page = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=api-dfilter-&status=NoReportsYet");
+
+        Assert.Contains(noReports, page!.Items.Select(domain => domain.Id));
+        await using var context = _host.CreateContext();
+        foreach (var item in page.Items)
+        {
+            var domain = await context.Domains.SingleAsync(candidate => candidate.Id == item.Id);
+            Assert.Equal(DotMarc.Portal.PortalHealth.NoReportsYet, DotMarc.Portal.PortalStatus.For(domain, domain.LastReportReceivedUtc is not null, []).Health);
+        }
+    }
+
+    [Fact]
+    public async Task PassRateFilters_PageCorrectly()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var index in Enumerable.Range(1, 3))
+        {
+            await _host.SeedDomainAsync($"api-dfilter-low{index}.example", configure: domain =>
+                domain.Reports.Add(ReportWith(now.AddDays(-1), ("192.0.2.1", 10, AuthResult.Fail, AuthResult.Fail), ("192.0.2.2", 10, AuthResult.Pass, AuthResult.Fail))));
+        }
+
+        await _host.SeedDomainAsync("api-dfilter-high.example", configure: domain =>
+            domain.Reports.Add(ReportWith(now.AddDays(-1), ("192.0.2.3", 10, AuthResult.Pass, AuthResult.Pass))));
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var firstPage = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=api-dfilter-&passRateBelow=0.9&pageSize=2");
+        var secondPage = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=api-dfilter-&passRateBelow=0.9&pageSize=2&page=2");
+        var high = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=api-dfilter-&passRateAtLeast=0.9");
+
+        Assert.Equal(3, firstPage!.TotalCount);
+        Assert.Equal(2, firstPage.Items.Count);
+        Assert.Single(secondPage!.Items);
+        Assert.Empty(firstPage.Items.Select(domain => domain.Id).Intersect(secondPage.Items.Select(domain => domain.Id)));
+        Assert.Equal(["api-dfilter-high.example"], high!.Items.Select(domain => domain.Name));
+    }
+
+    [Fact]
+    public async Task ReportDates_AndNoReports_Filter()
+    {
+        var stale = await _host.SeedDomainAsync("api-dfilter-stale.example", configure: domain => domain.LastReportReceivedUtc = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var never = await _host.SeedDomainAsync("api-dfilter-never.example");
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var staleOnes = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=api-dfilter-&lastReportBefore=2026-02-01");
+        var neverOnes = await client.GetFromJsonAsync<ApiPage<ApiDomain>>("/api/v1/domains?search=api-dfilter-&noReports=true");
+
+        Assert.Contains(stale, staleOnes!.Items.Select(domain => domain.Id));
+        Assert.DoesNotContain(never, staleOnes.Items.Select(domain => domain.Id));
+        Assert.Contains(never, neverOnes!.Items.Select(domain => domain.Id));
+        Assert.DoesNotContain(stale, neverOnes.Items.Select(domain => domain.Id));
+    }
+
+    [Fact]
+    public async Task AnUnknownHealthValue_IsA400ListingTheStatuses()
+    {
+        var (_, secret) = await _host.CreateKeyAsync([Permission.DomainsView]);
+        using var client = _host.ClientFor(secret);
+
+        var response = await client.GetAsync("/api/v1/domains?spf=Broken");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("TooManyLookups", await response.Content.ReadAsStringAsync());
     }
 }

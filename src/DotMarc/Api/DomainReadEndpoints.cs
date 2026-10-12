@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using DotMarc.Data;
+using DotMarc.Portal;
 using DotMarc.Reporting;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Api;
@@ -12,6 +14,32 @@ public static class DomainReadEndpoints
     private const int DefaultPageSize = 50;
     private const int TopSourceCount = 20;
 
+    /// <summary>The domain list's filters; see the spec's section 3.</summary>
+    public sealed class DomainFilters
+    {
+        [FromQuery(Name = "search")] public string? Search { get; set; }
+        [FromQuery(Name = "group")] public string[]? Group { get; set; }
+        [FromQuery(Name = "tag")] public string[]? Tag { get; set; }
+        [FromQuery(Name = "monitored")] public bool? Monitored { get; set; }
+        [FromQuery(Name = "dmarc")] public string[]? Dmarc { get; set; }
+        [FromQuery(Name = "spf")] public string[]? Spf { get; set; }
+        [FromQuery(Name = "dkim")] public string[]? Dkim { get; set; }
+        [FromQuery(Name = "mx")] public string[]? Mx { get; set; }
+        [FromQuery(Name = "tlsrpt")] public string[]? Tlsrpt { get; set; }
+        [FromQuery(Name = "mtaSts")] public string[]? MtaSts { get; set; }
+        [FromQuery(Name = "dmarcAuthorization")] public string[]? DmarcAuthorization { get; set; }
+        [FromQuery(Name = "status")] public string[]? Status { get; set; }
+        [FromQuery(Name = "policy")] public string[]? Policy { get; set; }
+        [FromQuery(Name = "dnsProvider")] public string[]? DnsProvider { get; set; }
+        [FromQuery(Name = "lastReportAfter")] public string? LastReportAfter { get; set; }
+        [FromQuery(Name = "lastReportBefore")] public string? LastReportBefore { get; set; }
+        [FromQuery(Name = "noReports")] public bool? NoReports { get; set; }
+        [FromQuery(Name = "passRateBelow")] public double? PassRateBelow { get; set; }
+        [FromQuery(Name = "passRateAtLeast")] public double? PassRateAtLeast { get; set; }
+        [FromQuery(Name = "page")] public int? Page { get; set; }
+        [FromQuery(Name = "pageSize")] public int? PageSize { get; set; }
+    }
+
     public static void Map(RouteGroupBuilder api)
     {
         api.MapGet("/domains", ListDomainsAsync)
@@ -19,7 +47,25 @@ public static class DomainReadEndpoints
             .WithTags(ApiTags.Domains)
             .WithName("ListDomains")
             .WithSummary("List domains")
-            .WithDescription($"Domains this key can see, in dashboard order, {DefaultPageSize} a page by default and at most {MaximumPageSize}. Filter by group id, tag id or monitoring. The pass rate covers the last 30 days and is null with no reports.");
+            .WithDescription($"Domains this key can see, in dashboard order, {DefaultPageSize} a page by default and at most {MaximumPageSize}. Filters combine: a domain must match every filter given. The pass rate covers the last 30 days and is null with no reports.")
+            .DocumentsFilter("search", "Part of the domain name, in any letter case.")
+            .DocumentsFilter("group", "One or more group ids." + ApiFilterDocs.ListHint)
+            .DocumentsFilter("tag", "One or more tag ids." + ApiFilterDocs.ListHint)
+            .DocumentsFilter("dmarc", "One or more DMARC check results." + ApiFilterDocs.ListHint, Enum.GetNames<DmarcCheckStatus>())
+            .DocumentsFilter("spf", "One or more SPF check results." + ApiFilterDocs.ListHint, Enum.GetNames<SpfCheckStatus>())
+            .DocumentsFilter("dkim", "One or more DKIM check results." + ApiFilterDocs.ListHint, Enum.GetNames<DkimCheckStatus>())
+            .DocumentsFilter("mx", "One or more MX check results." + ApiFilterDocs.ListHint, Enum.GetNames<MxCheckStatus>())
+            .DocumentsFilter("tlsrpt", "One or more TLS reporting check results." + ApiFilterDocs.ListHint, Enum.GetNames<TlsrptCheckStatus>())
+            .DocumentsFilter("mtaSts", "One or more MTA-STS states." + ApiFilterDocs.ListHint, Enum.GetNames<MtaStsStatus>())
+            .DocumentsFilter("dmarcAuthorization", "One or more DMARC authorization check results." + ApiFilterDocs.ListHint, Enum.GetNames<DmarcAuthorizationCheckStatus>())
+            .DocumentsFilter("status", "One or more plain-language statuses, worked out as the client portal does." + ApiFilterDocs.ListHint, Enum.GetNames<PortalHealth>())
+            .DocumentsFilter("policy", "One or more published DMARC policies." + ApiFilterDocs.ListHint, Enum.GetNames<DmarcPolicyLevel>())
+            .DocumentsFilter("dnsProvider", "One or more DNS providers." + ApiFilterDocs.ListHint, Enum.GetNames<DetectedDnsProvider>())
+            .DocumentsFilter("lastReportAfter", "Last report received at or after this date or time. Domains with no report never match.")
+            .DocumentsFilter("lastReportBefore", "Last report received before this date or time. Domains with no report never match.")
+            .DocumentsFilter("noReports", "true for domains that have never had a report, false for those that have.")
+            .DocumentsFilter("passRateBelow", "30-day pass rate below this, from 0 to 1. Domains with no pass rate never match.")
+            .DocumentsFilter("passRateAtLeast", "30-day pass rate at least this, from 0 to 1. Domains with no pass rate never match.");
 
         api.MapGet("/domains/{domain}", GetDomainAsync)
             .RequirePermission(Permission.DomainsView)
@@ -71,54 +117,108 @@ public static class DomainReadEndpoints
     }
 
     private static async Task<Results<Ok<ApiPage<ApiDomain>>, ValidationProblem>> ListDomainsAsync(
-        ClaimsPrincipal user, IDbContextFactory<DotMarcDbContext> dbFactory, TimeProvider timeProvider, int? page, int? pageSize, int? group, int? tag,
-        bool? monitored, CancellationToken cancellationToken)
+        [AsParameters] DomainFilters filters, ClaimsPrincipal user, IDbContextFactory<DotMarcDbContext> dbFactory, TimeProvider timeProvider,
+        CancellationToken cancellationToken)
     {
-        var pageNumber = page ?? 1;
-        var size = pageSize ?? DefaultPageSize;
-        if (pageNumber < 1)
+        var reader = new ApiFilterReader();
+        var groupIds = reader.Ids("group", filters.Group);
+        var tagIds = reader.Ids("tag", filters.Tag);
+        var dmarc = reader.Enum<DmarcCheckStatus>("dmarc", filters.Dmarc);
+        var spf = reader.Enum<SpfCheckStatus>("spf", filters.Spf);
+        var dkim = reader.Enum<DkimCheckStatus>("dkim", filters.Dkim);
+        var mx = reader.Enum<MxCheckStatus>("mx", filters.Mx);
+        var tlsrpt = reader.Enum<TlsrptCheckStatus>("tlsrpt", filters.Tlsrpt);
+        var mtaSts = reader.Enum<MtaStsStatus>("mtaSts", filters.MtaSts);
+        var dmarcAuthorization = reader.Enum<DmarcAuthorizationCheckStatus>("dmarcAuthorization", filters.DmarcAuthorization);
+        var statuses = reader.Enum<PortalHealth>("status", filters.Status);
+        var policies = reader.Enum<DmarcPolicyLevel>("policy", filters.Policy);
+        var providers = reader.Enum<DetectedDnsProvider>("dnsProvider", filters.DnsProvider);
+        var lastReportAfter = reader.Date("lastReportAfter", filters.LastReportAfter);
+        var lastReportBefore = reader.Date("lastReportBefore", filters.LastReportBefore);
+        reader.Range("lastReportAfter", lastReportAfter, "lastReportBefore", lastReportBefore);
+        var passRateBelow = reader.Fraction("passRateBelow", filters.PassRateBelow);
+        var passRateAtLeast = reader.Fraction("passRateAtLeast", filters.PassRateAtLeast);
+        var (pageNumber, size) = reader.Paging(filters.Page, filters.PageSize, DefaultPageSize);
+        if (reader.Problem is { } problem)
         {
-            return ApiProblems.Validation("page", "Must be 1 or more.");
-        }
-
-        if (size is < 1 or > MaximumPageSize)
-        {
-            return ApiProblems.Validation("pageSize", $"Must be between 1 and {MaximumPageSize}.");
+            return problem;
         }
 
         var scope = ApiScope.From(user);
         await using var context = await dbFactory.CreateDbContextAsync(cancellationToken);
         var query = scope.Domains(context.Domains.AsNoTracking());
-        if (group is { } groupId)
+        if (LikePattern.Contains(filters.Search) is { } searchPattern)
         {
-            // A group outside the key's scope matches nothing, rather than revealing which visible domains are in it.
-            query = scope.Includes(groupId)
-                ? query.Where(domain => domain.Groups.Any(candidate => candidate.Id == groupId))
-                : query.Where(_ => false);
+            query = query.Where(domain => EF.Functions.ILike(domain.Name, searchPattern, LikePattern.Escape));
         }
 
-        if (tag is { } tagId)
+        if (groupIds.Count > 0)
         {
-            query = query.Where(domain => domain.Tags.Any(candidate => candidate.Id == tagId));
+            // Groups outside the key's scope count for nothing, rather than revealing which visible domains are in them.
+            var inScope = groupIds.Where(scope.Includes).ToList();
+            query = query.Where(domain => domain.Groups.Any(group => inScope.Contains(group.Id)));
         }
 
-        if (monitored is { } isMonitored)
+        if (tagIds.Count > 0)
+        {
+            query = query.Where(domain => domain.Tags.Any(tag => tagIds.Contains(tag.Id)));
+        }
+
+        if (filters.Monitored is { } isMonitored)
         {
             query = query.Where(domain => domain.IsMonitored == isMonitored);
         }
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var domains = await query
-            .OrderBy(domain => domain.SortOrder)
-            .ThenBy(domain => domain.Name)
-            .Skip((pageNumber - 1) * size)
-            .Take(size)
-            .Include(domain => domain.Groups)
-            .Include(domain => domain.Tags)
-            .AsSplitQuery()
-            .ToListAsync(cancellationToken);
-        var passRates = await PassRatesAsync(context, domains.Select(domain => domain.Id).ToList(),
-            DomainStatistics.GetWindowCutoffUtc(timeProvider.GetUtcNow()), cancellationToken);
+        if (dmarc.Count > 0) query = query.Where(domain => dmarc.Contains(domain.DmarcCheckStatus));
+        if (spf.Count > 0) query = query.Where(domain => spf.Contains(domain.SpfCheckStatus));
+        if (dkim.Count > 0) query = query.Where(domain => dkim.Contains(domain.DkimCheckStatus));
+        if (mx.Count > 0) query = query.Where(domain => mx.Contains(domain.MxCheckStatus));
+        if (tlsrpt.Count > 0) query = query.Where(domain => tlsrpt.Contains(domain.TlsrptCheckStatus));
+        if (mtaSts.Count > 0) query = query.Where(domain => mtaSts.Contains(domain.MtaStsStatus));
+        if (dmarcAuthorization.Count > 0) query = query.Where(domain => dmarcAuthorization.Contains(domain.DmarcAuthorizationCheckStatus));
+        if (policies.Count > 0) query = query.Where(domain => domain.DmarcPolicy != null && policies.Contains(domain.DmarcPolicy.Value));
+        if (providers.Count > 0) query = query.Where(domain => providers.Contains(domain.DnsProvider));
+        if (lastReportAfter is { } reportFrom) query = query.Where(domain => domain.LastReportReceivedUtc != null && domain.LastReportReceivedUtc >= reportFrom);
+        if (lastReportBefore is { } reportUntil) query = query.Where(domain => domain.LastReportReceivedUtc != null && domain.LastReportReceivedUtc < reportUntil);
+        if (filters.NoReports is { } noReports) query = query.Where(domain => (domain.LastReportReceivedUtc == null) == noReports);
+
+        var ordered = query.OrderBy(domain => domain.SortOrder).ThenBy(domain => domain.Name);
+        var cutoffUtc = DomainStatistics.GetWindowCutoffUtc(timeProvider.GetUtcNow());
+        int totalCount;
+        List<int> pageIds;
+        if (statuses.Count == 0 && passRateBelow is null && passRateAtLeast is null)
+        {
+            totalCount = await ordered.CountAsync(cancellationToken);
+            pageIds = await ordered.Skip((pageNumber - 1) * size).Take(size).Select(domain => domain.Id).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            // The status and pass rate are worked out outside the query, so filter every candidate here, then page.
+            var candidates = await ordered.ToListAsync(cancellationToken);
+            var candidateRates = await PassRatesAsync(context, candidates.Select(domain => domain.Id).ToList(), cutoffUtc, cancellationToken);
+            var openAlerts = statuses.Count > 0
+                ? await PortalData.OpenAlertsAsync(context, candidates.Select(domain => domain.Name).ToList(), cancellationToken)
+                : null;
+            var matching = candidates.Where(domain =>
+            {
+                var rate = PassRateOf(candidateRates, domain.Id);
+                return (passRateBelow is null || (rate is { } below && below < passRateBelow))
+                    && (passRateAtLeast is null || (rate is { } atLeast && atLeast >= passRateAtLeast))
+                    && (statuses.Count == 0 || statuses.Contains(PortalStatus.For(domain, domain.LastReportReceivedUtc is not null, openAlerts![domain.Name].ToList()).Health));
+            }).Select(domain => domain.Id).ToList();
+            totalCount = matching.Count;
+            pageIds = matching.Skip((pageNumber - 1) * size).Take(size).ToList();
+        }
+
+        var domains = (await context.Domains.AsNoTracking()
+                .Where(domain => pageIds.Contains(domain.Id))
+                .Include(domain => domain.Groups)
+                .Include(domain => domain.Tags)
+                .AsSplitQuery()
+                .ToListAsync(cancellationToken))
+            .OrderBy(domain => pageIds.IndexOf(domain.Id))
+            .ToList();
+        var passRates = await PassRatesAsync(context, pageIds, cutoffUtc, cancellationToken);
         var items = domains.Select(domain => ApiDomain.From(domain, scope, PassRateOf(passRates, domain.Id))).ToList();
         return TypedResults.Ok(new ApiPage<ApiDomain>(items, pageNumber, size, totalCount));
     }
