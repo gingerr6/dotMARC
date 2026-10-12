@@ -1,5 +1,6 @@
 using System.Globalization;
 using DotMarc.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Api;
 
@@ -24,4 +25,37 @@ public static class ApiDomainKey
             ? domains.Where(domain => domain.Name == name)
             : domains.Where(_ => false);
     }
+
+    /// <summary>Several keys at once, in one query. <see cref="ResolvedDomains.MissingKey"/> is the first key that matched
+    /// nothing (including one that is neither an id nor a domain name), so a filter can 404 on it as a route would.</summary>
+    public static async Task<ResolvedDomains> ResolveAsync(IQueryable<Domain> domains, IReadOnlyList<string> keys, CancellationToken cancellationToken)
+    {
+        var ids = new List<int>();
+        var names = new List<string>();
+        foreach (var key in keys)
+        {
+            if (int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var id))
+            {
+                ids.Add(id);
+            }
+            else if (DomainNameValidator.TryNormalize(key, out var name))
+            {
+                names.Add(name);
+            }
+        }
+
+        var found = await domains
+            .Where(domain => ids.Contains(domain.Id) || names.Contains(domain.Name))
+            .Select(domain => new ResolvedDomain(domain.Id, domain.Name))
+            .ToListAsync(cancellationToken);
+        var missing = keys.FirstOrDefault(key =>
+            int.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+                ? found.All(domain => domain.Id != id)
+                : !DomainNameValidator.TryNormalize(key, out var name) || found.All(domain => domain.Name != name));
+        return new ResolvedDomains(found, missing);
+    }
 }
+
+public sealed record ResolvedDomain(int Id, string Name);
+
+public sealed record ResolvedDomains(IReadOnlyList<ResolvedDomain> Domains, string? MissingKey);

@@ -117,20 +117,16 @@ public static class AlertEndpoints
             query = query.Where(alert => severities.Contains(alert.Severity));
         }
 
-        var domainNames = new List<string>();
-        foreach (var domainKey in ApiFilterReader.Values(filters.Domain))
+        var domainKeys = ApiFilterReader.Values(filters.Domain);
+        if (domainKeys.Count > 0)
         {
-            var name = await ApiDomainKey.Matching(visibleDomains, domainKey).Select(domain => domain.Name).SingleOrDefaultAsync(cancellationToken);
-            if (name is null)
+            var resolved = await ApiDomainKey.ResolveAsync(visibleDomains, domainKeys, cancellationToken);
+            if (resolved.MissingKey is { } missingKey)
             {
-                return ApiProblems.NotFound($"domain {domainKey}");
+                return ApiProblems.NotFound($"domain {missingKey}");
             }
 
-            domainNames.Add(name);
-        }
-
-        if (domainNames.Count > 0)
-        {
+            var domainNames = resolved.Domains.Select(domain => domain.Name).ToList();
             query = query.Where(alert => domainNames.Contains(alert.DomainName));
         }
 

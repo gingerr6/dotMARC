@@ -139,20 +139,14 @@ public static class AuditEndpoints
         var domainKeys = ApiFilterReader.Values(filters.Domain);
         if (domainKeys.Count > 0)
         {
-            var ids = new List<string>();
-            var names = new List<string>();
-            foreach (var domainKey in domainKeys)
+            var resolved = await ApiDomainKey.ResolveAsync(scope.Domains(context.Domains.AsNoTracking()), domainKeys, cancellationToken);
+            if (resolved.MissingKey is { } missingKey)
             {
-                var domain = await ApiDomainKey.Matching(scope.Domains(context.Domains.AsNoTracking()), domainKey)
-                    .Select(candidate => new { candidate.Id, candidate.Name }).SingleOrDefaultAsync(cancellationToken);
-                if (domain is null)
-                {
-                    return ApiProblems.NotFound($"domain {domainKey}");
-                }
-
-                ids.Add(domain.Id.ToString(CultureInfo.InvariantCulture));
-                names.Add(domain.Name.ToLowerInvariant());
+                return ApiProblems.NotFound($"domain {missingKey}");
             }
+
+            var ids = resolved.Domains.Select(domain => domain.Id.ToString(CultureInfo.InvariantCulture)).ToList();
+            var names = resolved.Domains.Select(domain => domain.Name.ToLowerInvariant()).ToList();
 
             query = query.Where(entry =>
                 (entry.TargetType == "Domain" && ((entry.TargetId != null && ids.Contains(entry.TargetId))
