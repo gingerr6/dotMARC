@@ -1,3 +1,4 @@
+using DotMarc.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Audit;
@@ -5,8 +6,6 @@ namespace DotMarc.Audit;
 /// <summary>Applies an <see cref="AuditFilter"/> in the database, for the page's paging and for export.</summary>
 public static class AuditQuery
 {
-    private const string LikeEscape = "\\";
-
     public static IQueryable<AuditEntry> Apply(IQueryable<AuditEntry> entries, AuditFilter filter)
     {
         if (filter.From is { } from)
@@ -31,10 +30,10 @@ public static class AuditQuery
             entries = entries.Where(entry => entry.Kind != AuditEntryKind.PageView);
         }
 
-        if (ContainsPattern(filter.Who) is { } whoPattern)
+        if (LikePattern.Contains(filter.Who) is { } whoPattern)
         {
-            entries = entries.Where(entry => EF.Functions.ILike(entry.ActorName, whoPattern, LikeEscape)
-                || (entry.ActorEmail != null && EF.Functions.ILike(entry.ActorEmail, whoPattern, LikeEscape)));
+            entries = entries.Where(entry => EF.Functions.ILike(entry.ActorName, whoPattern, LikePattern.Escape)
+                || (entry.ActorEmail != null && EF.Functions.ILike(entry.ActorEmail, whoPattern, LikePattern.Escape)));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Action))
@@ -42,23 +41,16 @@ public static class AuditQuery
             entries = entries.Where(entry => entry.Action == filter.Action);
         }
 
-        if (ContainsPattern(filter.Target) is { } targetPattern)
+        if (LikePattern.Contains(filter.Target) is { } targetPattern)
         {
-            entries = entries.Where(entry => entry.TargetName != null && EF.Functions.ILike(entry.TargetName, targetPattern, LikeEscape));
+            entries = entries.Where(entry => entry.TargetName != null && EF.Functions.ILike(entry.TargetName, targetPattern, LikePattern.Escape));
         }
 
-        if (ContainsPattern(filter.Summary) is { } summaryPattern)
+        if (LikePattern.Contains(filter.Summary) is { } summaryPattern)
         {
-            entries = entries.Where(entry => EF.Functions.ILike(entry.Summary, summaryPattern, LikeEscape));
+            entries = entries.Where(entry => EF.Functions.ILike(entry.Summary, summaryPattern, LikePattern.Escape));
         }
 
         return entries;
     }
-
-    /// <summary>A case-insensitive "contains" pattern, with LIKE's own wildcards escaped so "100%" means the text
-    /// "100%", not "100 then anything".</summary>
-    private static string? ContainsPattern(string? text) =>
-        string.IsNullOrWhiteSpace(text)
-            ? null
-            : "%" + text.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
 }
