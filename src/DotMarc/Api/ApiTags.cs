@@ -11,6 +11,7 @@ public static class ApiTags
     public const string AuditLog = "Audit log";
     public const string Reports = "Reports";
     public const string ClientReports = "Client reports";
+    public const string ParseFailures = "Parse failures";
 
     public static IReadOnlyList<(string Name, string Description)> All { get; } =
     [
@@ -21,5 +22,6 @@ public static class ApiTags
         (AuditLog, "Who did what in dotMARC: changes, sign-ins and, on request, pages opened."),
         (Reports, "Sending sources, DMARC and TLS reports with their original files, and the dashboard's headline figures."),
         (ClientReports, "Each group's report schedule and delivery history, report PDFs for any period, and sending a report now."),
+        (ParseFailures, "Report emails dotMARC couldn't read, and why."),
     ];
 }

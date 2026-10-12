@@ -56,6 +56,15 @@
           "resolvedUtc": null,
           "severity": "Warning",
           "subject": "contoso.example",
+          "tickets": [
+            {
+              "createdUtc": "2026-10-01T09:30:00+00:00",
+              "lastCheckedUtc": "2026-10-01T09:30:00+00:00",
+              "open": true,
+              "psa": "HaloPsa",
+              "ticketId": "T-1042"
+            }
+          ],
           "title": "SPF record broken",
           "type": "SpfRecordBroken",
           "typeName": "SPF record broken"
@@ -98,6 +107,12 @@
           "subject": {
             "type": "string"
           },
+          "tickets": {
+            "items": {
+              "$ref": "#/components/schemas/ApiAlertTicket"
+            },
+            "type": "array"
+          },
           "title": {
             "type": "string"
           },
@@ -120,7 +135,38 @@
           "raisedUtc",
           "resolved",
           "resolvedUtc",
-          "acknowledgeable"
+          "acknowledgeable",
+          "tickets"
+        ],
+        "type": "object"
+      },
+      "ApiAlertTicket": {
+        "properties": {
+          "createdUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastCheckedUtc": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "open": {
+            "type": "boolean"
+          },
+          "psa": {
+            "type": "string"
+          },
+          "ticketId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "psa",
+          "ticketId",
+          "open",
+          "createdUtc",
+          "lastCheckedUtc"
         ],
         "type": "object"
       },
@@ -956,6 +1002,35 @@
         ],
         "type": "object"
       },
+      "ApiPageOfApiParseFailure": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiParseFailure"
+            },
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "totalCount"
+        ],
+        "type": "object"
+      },
       "ApiPageOfApiReportDelivery": {
         "properties": {
           "items": {
@@ -1040,6 +1115,36 @@
           "page",
           "pageSize",
           "totalCount"
+        ],
+        "type": "object"
+      },
+      "ApiParseFailure": {
+        "properties": {
+          "attempts": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "lastAttemptUtc": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "messageId",
+          "reason",
+          "attempts",
+          "lastAttemptUtc"
         ],
         "type": "object"
       },
@@ -1836,6 +1941,14 @@
             "description": "true for open alerts this API can acknowledge, false for the rest.",
             "in": "query",
             "name": "acknowledgeable",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "true for alerts with an open PSA ticket, false for those without.",
+            "in": "query",
+            "name": "hasOpenTicket",
             "schema": {
               "type": "boolean"
             }
@@ -4826,6 +4939,129 @@
         "x-dotmarc-permission": "ReportsManage"
       }
     },
+    "/api/v1/parse-failures": {
+      "get": {
+        "description": "Report emails dotMARC couldn't read, most recently tried first, 50 a page by default and at most 200. dotMARC retries them on every poll. A key limited to certain groups is refused, since failures belong to no domain.\n\nNeeds the DomainsEdit permission.",
+        "operationId": "ListParseFailures",
+        "parameters": [
+          {
+            "description": "Part of the reason, in any letter case.",
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tried at least this many times.",
+            "in": "query",
+            "name": "minAttempts",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Last tried at or after this date (2026-10-01) or time with a zone.",
+            "in": "query",
+            "name": "lastAttemptAfter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Last tried before this date or time.",
+            "in": "query",
+            "name": "lastAttemptBefore",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Which page, from 1 (default 1).",
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "How many a page, 1 to 200 (default 50).",
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiPageOfApiParseFailure"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            },
+            "description": "The request couldn't be used. `errors` names each field that's wrong and why."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "No API key was sent, or the key is unknown, expired or revoked."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "The key's role doesn't have the permission this operation needs, or the key is limited to certain groups and this would reach outside them. `detail` says which."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "This key has made more requests this minute than dotMARC allows (120 by default). Wait for the number of seconds in the Retry-After header, then try again."
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Something went wrong in dotMARC that the request didn't cause. It's safe to retry a read; check before retrying a change. If it keeps happening, dotMARC's logs have the details."
+          }
+        },
+        "summary": "List parse failures",
+        "tags": [
+          "Parse failures"
+        ],
+        "x-dotmarc-permission": "DomainsEdit"
+      }
+    },
     "/api/v1/summary": {
       "get": {
         "description": "Over the domains this key can see: how many, the overall 30-day pass rate, warnings, missing reports, reporters, why failing mail was let through or rejected, and how many domains are in each client portal status. parseFailureCount is only for keys with DomainsEdit not limited to certain groups.\n\nNeeds the DomainsView permission.",
@@ -4999,6 +5235,10 @@
     {
       "description": "Each group's report schedule and delivery history, report PDFs for any period, and sending a report now.",
       "name": "Client reports"
+    },
+    {
+      "description": "Report emails dotMARC couldn't read, and why.",
+      "name": "Parse failures"
     }
   ]
 }

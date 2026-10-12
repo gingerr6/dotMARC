@@ -27,6 +27,7 @@ public static class ApiEndpoints
         TlsReportEndpoints.Map(api);
         SummaryEndpoints.Map(api);
         ClientReportEndpoints.Map(api);
+        ParseFailureEndpoints.Map(api);
         DomainWriteEndpoints.Map(api);
         ImportEndpoints.Map(api);
         AlertEndpoints.Map(api);

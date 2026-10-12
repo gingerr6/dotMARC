@@ -87,7 +87,7 @@ public sealed record ApiImportResponse(
 /// a description. Domain is set when the subject is a domain this key can see.</summary>
 public sealed record ApiAlert(
     int Id, string Type, string TypeName, string Subject, ApiNamedRef? Domain, string Severity, string Title, string Message,
-    DateTimeOffset RaisedUtc, bool Resolved, DateTimeOffset? ResolvedUtc, bool Acknowledgeable);
+    DateTimeOffset RaisedUtc, bool Resolved, DateTimeOffset? ResolvedUtc, bool Acknowledgeable, IReadOnlyList<ApiAlertTicket> Tickets);
 
 /// <summary>The outcome of acknowledging an alert. TicketClosed is true when no PSA ticket failed to close (also when the
 /// alert had none); a ticket that failed stays open in dotMARC and is retried.</summary>
@@ -168,3 +168,7 @@ public sealed record ApiReportDelivery(int Id, DateOnly PeriodStart, DateOnly Pe
 }
 
 public sealed record ApiSendReportRequest(string? Period, string? Of, string? Start, string? End, IReadOnlyList<string>? Recipients);
+
+public sealed record ApiParseFailure(int Id, string MessageId, string Reason, int Attempts, DateTimeOffset LastAttemptUtc);
+
+public sealed record ApiAlertTicket(string Psa, string TicketId, bool Open, DateTimeOffset CreatedUtc, DateTimeOffset? LastCheckedUtc);

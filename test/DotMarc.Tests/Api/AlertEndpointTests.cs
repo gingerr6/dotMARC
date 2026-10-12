@@ -230,4 +230,30 @@ public sealed class AlertEndpointTests : IAsyncLifetime
         Assert.Contains("Must be earlier than raisedBefore.", body);
         Assert.Equal(HttpStatusCode.NotFound, unseen.StatusCode);
     }
+
+    [Fact]
+    public async Task Alerts_CarryTheirTickets_AndFilterByAnOpenTicket()
+    {
+        await _host.SeedDomainAsync("api-tickets.example", monitored: false);
+        var ticketed = await SeedAlertAsync("api-tickets.example", AlertTypes.MissedReport);
+        var bare = await SeedAlertAsync("api-tickets.example", AlertTypes.TlsrptFailure);
+        await using (var context = _host.CreateContext())
+        {
+            context.AlertTickets.Add(new DotMarc.Psa.AlertTicket { AlertEventId = ticketed, Psa = DotMarc.Psa.PsaKind.HaloPsa, TicketId = "T-1001", IsOpen = true, CreatedUtc = DateTimeOffset.UtcNow });
+            await context.SaveChangesAsync();
+        }
+
+        var (_, secret) = await _host.CreateKeyAsync([Permission.AlertsView]);
+        using var client = _host.ClientFor(secret);
+
+        var all = await client.GetFromJsonAsync<ApiPage<ApiAlert>>("/api/v1/alerts?domain=api-tickets.example");
+        var withTicket = await client.GetFromJsonAsync<ApiPage<ApiAlert>>("/api/v1/alerts?domain=api-tickets.example&hasOpenTicket=true");
+        var without = await client.GetFromJsonAsync<ApiPage<ApiAlert>>("/api/v1/alerts?domain=api-tickets.example&hasOpenTicket=false");
+
+        var ticket = Assert.Single(all!.Items.Single(alert => alert.Id == ticketed).Tickets);
+        Assert.Equal(("HaloPsa", "T-1001", true), (ticket.Psa, ticket.TicketId, ticket.Open));
+        Assert.Empty(all.Items.Single(alert => alert.Id == bare).Tickets);
+        Assert.Equal([ticketed], withTicket!.Items.Select(alert => alert.Id));
+        Assert.Equal([bare], without!.Items.Select(alert => alert.Id));
+    }
 }

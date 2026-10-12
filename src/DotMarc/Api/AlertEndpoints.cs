@@ -27,6 +27,7 @@ public static class AlertEndpoints
         [FromQuery(Name = "group")] public string[]? Group { get; set; }
         [FromQuery(Name = "tag")] public string[]? Tag { get; set; }
         [FromQuery(Name = "acknowledgeable")] public string? Acknowledgeable { get; set; }
+        [FromQuery(Name = "hasOpenTicket")] public string? HasOpenTicket { get; set; }
         [FromQuery(Name = "raisedAfter")] public string? RaisedAfter { get; set; }
         [FromQuery(Name = "raisedBefore")] public string? RaisedBefore { get; set; }
         [FromQuery(Name = "resolvedAfter")] public string? ResolvedAfter { get; set; }
@@ -51,6 +52,7 @@ public static class AlertEndpoints
             .DocumentsFilter("group", "One or more group ids: alerts for domains in any of them." + ApiFilterDocs.ListHint, type: JsonSchemaType.Integer)
             .DocumentsFilter("tag", "One or more tag ids: alerts for domains with any of them." + ApiFilterDocs.ListHint, type: JsonSchemaType.Integer)
             .DocumentsFilter("acknowledgeable", "true for open alerts this API can acknowledge, false for the rest.", type: JsonSchemaType.Boolean)
+            .DocumentsFilter("hasOpenTicket", "true for alerts with an open PSA ticket, false for those without.", type: JsonSchemaType.Boolean)
             .DocumentsFilter("raisedAfter", "Raised at or after this date (2026-10-01) or time with a zone (2026-10-01T09:30:00Z).")
             .DocumentsFilter("raisedBefore", "Raised before this date or time.")
             .DocumentsFilter("resolvedAfter", "Resolved at or after this date or time. Open alerts never match.")
@@ -78,6 +80,7 @@ public static class AlertEndpoints
         var groupIds = reader.Ids("group", filters.Group);
         var tagIds = reader.Ids("tag", filters.Tag);
         var acknowledgeable = reader.Bool("acknowledgeable", filters.Acknowledgeable);
+        var hasOpenTicket = reader.Bool("hasOpenTicket", filters.HasOpenTicket);
         var raisedAfter = reader.Date("raisedAfter", filters.RaisedAfter);
         var raisedBefore = reader.Date("raisedBefore", filters.RaisedBefore);
         var resolvedAfter = reader.Date("resolvedAfter", filters.ResolvedAfter);
@@ -152,6 +155,11 @@ public static class AlertEndpoints
                 : query.Where(alert => alert.IsResolved || !acknowledgeableTypes.Contains(alert.AlertType));
         }
 
+        if (hasOpenTicket is { } wantsOpenTicket)
+        {
+            query = query.Where(alert => context.AlertTickets.Any(ticket => ticket.AlertEventId == alert.Id && ticket.IsOpen) == wantsOpenTicket);
+        }
+
         if (raisedAfter is { } raisedFrom)
         {
             query = query.Where(alert => alert.CreatedUtc >= raisedFrom);
@@ -179,6 +187,10 @@ public static class AlertEndpoints
             .Skip((pageNumber - 1) * size)
             .Take(size)
             .ToListAsync(cancellationToken);
+        var alertIds = alerts.Select(alert => alert.Id).ToList();
+        var tickets = (await context.AlertTickets.AsNoTracking().Where(ticket => alertIds.Contains(ticket.AlertEventId))
+                .OrderBy(ticket => ticket.CreatedUtc).ToListAsync(cancellationToken))
+            .ToLookup(ticket => ticket.AlertEventId);
         var subjects = alerts.Select(alert => alert.DomainName).Distinct().ToList();
         var domainIds = await scope.Domains(context.Domains.AsNoTracking())
             .Where(domain => subjects.Contains(domain.Name))
@@ -195,7 +207,8 @@ public static class AlertEndpoints
                 alert.CreatedUtc,
                 alert.IsResolved,
                 alert.ResolvedUtc,
-                !alert.IsResolved && AlertAcknowledgement.IsAcknowledgeable(alert.AlertType)))
+                !alert.IsResolved && AlertAcknowledgement.IsAcknowledgeable(alert.AlertType),
+                tickets[alert.Id].Select(ticket => new ApiAlertTicket(ticket.Psa.ToString(), ticket.TicketId, ticket.IsOpen, ticket.CreatedUtc, ticket.LastCheckedUtc)).ToList()))
             .ToList();
         return TypedResults.Ok(new ApiPage<ApiAlert>(items, pageNumber, size, totalCount));
     }
