@@ -81,7 +81,7 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
             .SelectMany(path => path.Value.EnumerateObject().Select(operation => (Name: $"{operation.Name.ToUpperInvariant()} {path.Name}", Body: operation.Value)))
             .ToList();
 
-        Assert.Equal(14, operations.Count);
+        Assert.Equal(17, operations.Count);
         Assert.All(operations, operation =>
         {
             Assert.True(operation.Body.TryGetProperty("summary", out _), $"{operation.Name} has no summary");
@@ -100,6 +100,9 @@ public sealed partial class OpenApiDocumentTests : IAsyncLifetime
             ["GET /api/v1/alerts"] = [400, 404],
             ["GET /api/v1/audit"] = [400, 404],
             ["GET /api/v1/domains/{domain}/sources"] = [400, 404],
+            ["GET /api/v1/domains/{domain}/reports"] = [400, 404],
+            ["GET /api/v1/domains/{domain}/reports/{id}"] = [404],
+            ["GET /api/v1/domains/{domain}/reports/{id}/raw"] = [404],
             ["POST /api/v1/alerts/{id}/acknowledge"] = [404, 409],
             ["GET /api/v1/domains"] = [400],
             ["POST /api/v1/domains"] = [400, 409],

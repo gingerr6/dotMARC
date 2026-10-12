@@ -23,6 +23,7 @@ public static class ApiEndpoints
         GroupAndTagEndpoints.Map(api);
         DomainReadEndpoints.Map(api);
         SourceEndpoints.Map(api);
+        ReportEndpoints.Map(api);
         DomainWriteEndpoints.Map(api);
         ImportEndpoints.Map(api);
         AlertEndpoints.Map(api);

@@ -108,3 +108,28 @@ public sealed record ApiAuditEntry(
 /// record; Disposition is the most severe seen. Organization and Country come from dotMARC's cache of IP lookups.</summary>
 public sealed record ApiSourceDetail(string Ip, int Volume, int Passed, int Failed, double? PassRate, string Spf, string Dkim, string Disposition,
     string? Organization, string? Country);
+
+public sealed record ApiOverrideReason(string Type, string? Comment);
+
+public sealed record ApiAuthDetail(string Mechanism, string Domain, string Result, string? Selector, string? Scope);
+
+public sealed record ApiDmarcRecord(string SourceIp, int Count, string Disposition, string Spf, string Dkim, string HeaderFrom,
+    IReadOnlyList<ApiOverrideReason> OverrideReasons, IReadOnlyList<ApiAuthDetail> AuthDetails);
+
+public sealed record ApiDmarcReport(int Id, string ReportingOrg, string ReportId, DateTimeOffset DateRangeBeginUtc, DateTimeOffset DateRangeEndUtc,
+    DateTimeOffset ReceivedUtc, int MessageCount, double? PassRate, IReadOnlyList<ApiDmarcRecord> Records)
+{
+    /// <summary>Needs Records with OverrideReasons and AuthDetails loaded.</summary>
+    public static ApiDmarcReport From(Report report)
+    {
+        var total = report.Records.Sum(record => record.MessageCount);
+        var passing = report.Records.Where(DotMarc.Reporting.DomainStatistics.IsPassing).Sum(record => record.MessageCount);
+        return new ApiDmarcReport(report.Id, report.ReportingOrg, report.ReportId, report.DateRangeBeginUtc, report.DateRangeEndUtc, report.ReceivedUtc,
+            total, total == 0 ? null : (double)passing / total,
+            report.Records.Select(record => new ApiDmarcRecord(record.SourceIp, record.MessageCount, record.Disposition.ToString(), record.SpfResult.ToString(),
+                record.DkimResult.ToString(), record.HeaderFrom,
+                record.OverrideReasons.Select(reason => new ApiOverrideReason(reason.Type.ToString(), reason.Comment)).ToList(),
+                record.AuthDetails.Select(detail => new ApiAuthDetail(detail.Mechanism.ToString(), detail.Domain, detail.Result.ToString(), detail.Selector, detail.Scope)).ToList()))
+            .ToList());
+    }
+}
