@@ -87,6 +87,25 @@ Some examples:
 `kind=all` for pages people opened. A key limited to certain groups sees only entries about its own domains, its groups
 and their alerts, never sign-ins, settings or access changes.
 
+## Reports and downloads
+
+- **Sending sources:** `GET /api/v1/domains/{domain}/sources` lists every IP that sent as the domain, busiest first, with
+  its pass rate and, once dotMARC has looked it up, who owns it. The report summary only shows the top few.
+- **Individual reports:** `GET /api/v1/domains/{domain}/reports` and `.../tls-reports` list the DMARC and TLS reports
+  received. Add `/{id}/raw` to one report's address for the original file, exactly as the receiver sent it.
+- **The dashboard's figures:** `GET /api/v1/summary` gives the headline numbers over every domain the key can see.
+- **Client reports:** `GET /api/v1/groups/{group}/report?period=month&of=2026-09-15` downloads a group's report as a
+  PDF, and `POST /api/v1/groups/{group}/report/send` sends one now, as the Reports dialog does. For example:
+
+  ```bash
+  curl -H "Authorization: Bearer dmk_..." -o report.pdf \
+    "https://dotmarc.contoso.example/api/v1/groups/3/report?period=quarter&of=2026-07-01"
+  ```
+
+- **Parse failures:** `GET /api/v1/parse-failures` lists report emails dotMARC couldn't read, for a key with the
+  DomainsEdit permission that isn't limited to groups.
+- **PSA tickets:** each alert lists its tickets, and `hasOpenTicket=false` finds alerts no ticket has been raised for.
+
 ## Keys limited to groups
 
 A key limited to groups sees only domains in at least one of its groups, and only those groups. A domain or alert outside
