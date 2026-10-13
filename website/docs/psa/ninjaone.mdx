@@ -54,7 +54,8 @@ Save, then use **Test the integration** at the bottom of the tab to raise and re
 ## Keeping the connection alive
 
 NinjaOne's refresh tokens last an hour unless they're used. dotMARC uses its token when it starts and every 20 minutes
-after, even when no alerts are firing, so the connection stays alive while dotMARC is running.
+after, even when no alerts are firing and while NinjaOne tickets are switched off, so the connection stays alive while
+dotMARC is running.
 
 If dotMARC is stopped for more than an hour, for a long upgrade or an outage, NinjaOne forgets the sign-in. dotMARC then
 raises a **PSA connection lost** alert and stops raising NinjaOne tickets until someone selects **Reconnect** on the

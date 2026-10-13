@@ -7,8 +7,9 @@ using Microsoft.Extensions.Logging;
 namespace DotMarc.Psa.NinjaOne;
 
 /// <summary>NinjaOne's refresh tokens last an hour unless NinjaOne support turns on sliding tokens, so dotMARC uses its
-/// token at startup and every 20 minutes even when nothing is ticketing. This is also where the lost-connection alert is
-/// raised and resolved. It follows the saved state, so a loss a ticket call found is raised on the next run too.</summary>
+/// token at startup and every 20 minutes even when nothing is ticketing, and even while NinjaOne is switched off, so
+/// switching it back on doesn't find a dead sign-in. This is also where the lost-connection alert is raised (only while
+/// NinjaOne is on) and resolved. It follows the saved state, so a loss a ticket call found is raised on the next run too.</summary>
 public sealed class NinjaOneKeepAliveService(IDbContextFactory<DotMarcDbContext> dbFactory, INinjaOneClient client, IAlertingService alerting, ILogger<NinjaOneKeepAliveService> logger) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(20);
@@ -33,7 +34,7 @@ public sealed class NinjaOneKeepAliveService(IDbContextFactory<DotMarcDbContext>
     public async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         var settings = await ReadSettingsAsync(cancellationToken).ConfigureAwait(false);
-        if (settings.Enabled && settings.IsConnected)
+        if (settings.IsConnected)
         {
             try
             {

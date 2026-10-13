@@ -158,15 +158,26 @@ public sealed class NinjaOneKeepAliveServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenNinjaOneIsTurnedOff_ItDoesNotRefresh_AndResolvesTheAlert()
+    public async Task WhenNinjaOneIsTurnedOff_ItKeepsTheSignInAlive_SoTurningItBackOnWorks()
     {
-        await SetUpAsync(enabled: false, connected: true, lostUtc: DateTimeOffset.UtcNow);
+        await SetUpAsync(enabled: false, connected: true);
         var client = new RefreshingClient(_connectionString);
         var alerts = new ConnectionAlerts();
 
         await Service(client, alerts).RunOnceAsync(CancellationToken.None);
 
-        Assert.Equal(0, client.Refreshes);
+        Assert.Equal(1, client.Refreshes);
+        Assert.Empty(alerts.Raised);
+    }
+
+    [Fact]
+    public async Task WhenNinjaOneIsTurnedOff_ALostConnection_RaisesNoAlert_AndResolvesAnOpenOne()
+    {
+        await SetUpAsync(enabled: false, connected: true);
+        var alerts = new ConnectionAlerts();
+
+        await Service(new RefreshingClient(_connectionString) { Lose = true }, alerts).RunOnceAsync(CancellationToken.None);
+
         Assert.Empty(alerts.Raised);
         Assert.Equal(1, alerts.Resolves);
     }
