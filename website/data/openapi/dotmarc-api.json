@@ -1890,7 +1890,8 @@
                   "DmarcPolicyWeakened",
                   "NameserversChanged",
                   "ApiKeyExpiring",
-                  "ClientReportFailed"
+                  "ClientReportFailed",
+                  "PsaConnectionLost"
                 ],
                 "type": "string"
               },
@@ -2232,6 +2233,11 @@
                   "settings.halo.saved",
                   "settings.connectwise.saved",
                   "settings.autotask.saved",
+                  "settings.ninjaone.saved",
+                  "ninjaone.connected",
+                  "ninjaone.disconnected",
+                  "ninjaone.connection_lost",
+                  "ninjaone.integration_tested",
                   "settings.branding.saved",
                   "settings.email.saved",
                   "settings.reports.saved",

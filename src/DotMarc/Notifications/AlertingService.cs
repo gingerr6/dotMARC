@@ -15,6 +15,8 @@ public interface IAlertingService
     Task FlagUnexpectedActivityForNullRoutedDomainAsync(string domainName, ReasonBreakdown reasonBreakdown, CancellationToken cancellationToken = default);
     Task RaiseClientReportFailedAsync(int groupId, string groupName, string periodLabel, string error, CancellationToken cancellationToken = default);
     Task ResolveClientReportFailedAsync(int groupId, CancellationToken cancellationToken = default);
+    Task RaisePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, string reason, CancellationToken cancellationToken = default);
+    Task ResolvePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, CancellationToken cancellationToken = default);
 }
 
 public sealed class AlertingService : IAlertingService
@@ -411,6 +413,39 @@ public sealed class AlertingService : IAlertingService
         {
             await ResolveAllCopiesAsync(subject, AlertTypes.ClientReportFailed, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>What a PSA's lost-connection alert is about. Stored where a domain alert stores its domain name.</summary>
+    public static string PsaConnectionAlertSubject(DotMarc.Psa.PsaKind psa) => $"{DotMarc.Psa.PsaKindNames.DisplayName(psa)} connection";
+
+    public async Task RaisePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, string reason, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var settings = await NotificationSettingsService.GetAsync(db, cancellationToken).ConfigureAwait(false);
+        if (!settings.Enabled)
+        {
+            return;
+        }
+
+        var name = DotMarc.Psa.PsaKindNames.DisplayName(psa);
+        await EnsureAlertAsync(db, settings, PsaConnectionAlertSubject(psa), AlertTypes.PsaConnectionLost, "Warning", "PSA connection lost",
+            $"dotMARC can no longer refresh its {name} sign-in ({reason}). New alerts won't raise {name} tickets until someone reconnects under Settings > PSA > {name}.",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ResolvePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, CancellationToken cancellationToken = default)
+    {
+        var subject = PsaConnectionAlertSubject(psa);
+        await using (var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            // Called every keep-alive run, so a quiet run costs one query.
+            if (!await db.AlertEvents.AnyAsync(alert => alert.AlertType == AlertTypes.PsaConnectionLost && alert.DomainName == subject && !alert.IsResolved, cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+        }
+
+        await ResolveAllCopiesAsync(subject, AlertTypes.PsaConnectionLost, cancellationToken).ConfigureAwait(false);
     }
 
     public static readonly TimeSpan ApiKeyExpiryWarning = TimeSpan.FromDays(14);

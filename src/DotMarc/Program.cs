@@ -203,6 +203,7 @@ builder.Services.AddHostedService<PinnedDomainHealthMonitor>();
 builder.Services.AddHostedService<DotMarc.Audit.AuditRetentionService>();
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddHostedService<DotMarc.Psa.PsaTicketPoller>();
+builder.Services.AddHostedService<DotMarc.Psa.NinjaOne.NinjaOneKeepAliveService>();
 
 builder.Services.AddHttpClient<DotMarc.MtaSts.IMtaStsDnsVerifier, DotMarc.MtaSts.MtaStsDnsVerifier>(client =>
 {

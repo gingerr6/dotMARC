@@ -33,7 +33,7 @@ public sealed class AlertTypesTests
         Assert.Equal(
             ["MissedReport", "SuspiciousRejectActivity", "TlsrptFailure", "UnexpectedActivityOnNullRoutedDomain",
              "DmarcRecordBroken", "DmarcAuthorizationBroken", "TlsrptRecordBroken", "SpfRecordBroken", "MxRecordBroken",
-             "DkimRecordBroken", "MtaStsFailing", "DmarcPolicyWeakened", "NameserversChanged", "ApiKeyExpiring", "ClientReportFailed"],
+             "DkimRecordBroken", "MtaStsFailing", "DmarcPolicyWeakened", "NameserversChanged", "ApiKeyExpiring", "ClientReportFailed", "PsaConnectionLost"],
             AlertTypes.All.Select(alertType => alertType.Key));
     }
 
@@ -44,7 +44,7 @@ public sealed class AlertTypesTests
         {
             Assert.False(string.IsNullOrWhiteSpace(alertType.DisplayName));
             Assert.False(string.IsNullOrWhiteSpace(alertType.Description));
-            Assert.Equal(alertType.Key is not (AlertTypes.NameserversChanged or AlertTypes.ApiKeyExpiring or AlertTypes.ClientReportFailed), alertType.CreatesTicketByDefault);
+            Assert.Equal(alertType.Key is not (AlertTypes.NameserversChanged or AlertTypes.ApiKeyExpiring or AlertTypes.ClientReportFailed or AlertTypes.PsaConnectionLost), alertType.CreatesTicketByDefault);
         }
     }
 

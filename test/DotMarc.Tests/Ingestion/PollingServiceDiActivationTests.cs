@@ -111,5 +111,7 @@ public sealed class PollingServiceDiActivationTests : IAsyncLifetime
         public Task RaiseClientReportFailedAsync(int groupId, string groupName, string periodLabel, string error, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task ResolveClientReportFailedAsync(int groupId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RaisePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, string reason, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ResolvePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

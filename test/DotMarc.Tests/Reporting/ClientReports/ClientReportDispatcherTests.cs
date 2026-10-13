@@ -342,6 +342,8 @@ public sealed class ClientReportDispatcherTests : IAsyncLifetime
         public Task FlagUnexpectedActivityForNullRoutedDomainAsync(string domainName, DotMarc.Reporting.ReasonBreakdown reasonBreakdown, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RaiseClientReportFailedAsync(int groupId, string groupName, string periodLabel, string error, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task ResolveClientReportFailedAsync(int groupId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("The alert store is down.");
+        public Task RaisePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, string reason, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ResolvePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class FailFirstSender : IEmailSender
