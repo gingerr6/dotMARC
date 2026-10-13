@@ -32,6 +32,15 @@ public static class PsaOptionNameCache
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>A status shows by its display name, falling back to its name.</summary>
+    public static async Task RememberNinjaOneAsync(DotMarcDbContext context, IEnumerable<PsaOption> forms, IEnumerable<DotMarc.Psa.NinjaOne.NinjaOneStatus> statuses, CancellationToken cancellationToken = default)
+    {
+        var saved = await context.NinjaOneSettings.SingleAsync(cancellationToken).ConfigureAwait(false);
+        saved.TicketFormName = NameOf(forms, saved.TicketFormId) ?? saved.TicketFormName;
+        saved.NewStatusName = NameOf(statuses.Select(status => new PsaOption(status.StatusId, status.DisplayName ?? status.Name)), saved.NewStatusId) ?? saved.NewStatusName;
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public static async Task RememberAutotaskAsync(DotMarcDbContext context, AutotaskTicketPicklists picklists, CancellationToken cancellationToken = default)
     {
         var saved = await context.AutotaskSettings.SingleAsync(cancellationToken).ConfigureAwait(false);

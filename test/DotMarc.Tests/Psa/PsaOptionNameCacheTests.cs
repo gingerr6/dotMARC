@@ -125,4 +125,23 @@ public sealed class PsaOptionNameCacheTests : IAsyncLifetime
         Assert.Equal(("Client Portal", "Service Request", "Email", "Medium", "Complete"),
             (saved.QueueName, saved.TicketTypeName, saved.IssueTypeName, saved.PriorityName, saved.ClosedStatusName));
     }
+
+    [Fact]
+    public async Task NinjaOne_RemembersTheSavedFormAndStatusNames()
+    {
+        await using (var setup = CreateContext())
+        {
+            var settings = await setup.NinjaOneSettings.SingleAsync();
+            (settings.TicketFormId, settings.TicketFormName, settings.NewStatusId, settings.NewStatusName) = (2, null, 2000, null);
+            await setup.SaveChangesAsync();
+        }
+
+        await using var context = CreateContext();
+        await PsaOptionNameCache.RememberNinjaOneAsync(context, [new PsaOption(1, "Default"), new PsaOption(2, "Email security")],
+            [new DotMarc.Psa.NinjaOne.NinjaOneStatus(1000, "NEW", "New", null), new DotMarc.Psa.NinjaOne.NinjaOneStatus(2000, "OPEN", "Open", null)]);
+
+        await using var verify = CreateContext();
+        var saved = await verify.NinjaOneSettings.SingleAsync();
+        Assert.Equal(("Email security", "Open"), (saved.TicketFormName, saved.NewStatusName));
+    }
 }

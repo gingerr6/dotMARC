@@ -1,0 +1,296 @@
+@using DotMarc.Data
+@using DotMarc.Components.Shared
+@using DotMarc.Notifications
+@using DotMarc.Psa
+@using DotMarc.Psa.NinjaOne
+@using Microsoft.EntityFrameworkCore
+@inject AuditActorAccessor AuditActorAccessor
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject ISnackbar Snackbar
+@inject ILogger<NinjaOneSettingsTab> Logger
+@inject INinjaOneClient NinjaOneClient
+@inject NinjaOneTokenCache TokenCache
+@inject ISecretStore SecretStoreAccessor
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+
+@if (_settings is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudPaper Class="pa-4">
+        <div class="d-flex align-center justify-space-between flex-wrap mb-2" style="gap: 0.5rem;">
+            <MudText Typo="Typo.h5">NinjaOne</MudText>
+            <FieldWithHelp Topic="NinjaOne tickets" Inline="true" Help="Opens a NinjaOne ticket for each alert (as set under 'Which alerts create tickets' on Alert settings) and resolves it when the alert resolves. dotMARC checks open tickets every few minutes, so a ticket resolved or closed in NinjaOne resolves its alert.">
+<MudSwitch @bind-Value="_settings.Enabled" Color="Color.Primary" Label="Enable NinjaOne tickets" />
+</FieldWithHelp>
+        </div>
+
+        <MudText Typo="Typo.subtitle1" Class="mt-2 mb-2">Connection</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Instance" Help="The NinjaOne region you sign in to, shown in your browser's address bar when you use NinjaOne.">
+<MudSelect T="string" Label="Instance" @bind-Value="_settings.Instance" Variant="Variant.Outlined">
+                    @foreach (var instance in NinjaOneOptions.Instances)
+                    {
+                        <MudSelectItem T="string" Value="@instance.Host">@instance.Label</MudSelectItem>
+                    }
+                </MudSelect>
+</FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Client ID" Help="From the client app you added for dotMARC under Administration, Apps, API, Client app IDs in NinjaOne.">
+<MudTextField Label="Client ID" @bind-Value="_settings.ClientId" Variant="Variant.Outlined" />
+</FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Client secret" Help="Shown once, when the client app is created. dotMARC keeps it in its secret store and never shows it again, so leave this blank to keep the saved one.">
+<MudTextField Label="Client secret" @bind-Value="_newClientSecret" InputType="InputType.Password" Variant="Variant.Outlined"
+              HelperText="@(_settings.ClientSecretConfigured ? "A client secret is already saved - leave blank to keep it." : "No client secret saved yet.")" />
+</FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Redirect URI" Help="Add this as a redirect URI on the client app in NinjaOne. NinjaOne sends you back here after you sign in.">
+<MudTextField Label="Redirect URI" Value="@RedirectUri" ReadOnly="true" Variant="Variant.Outlined" />
+</FieldWithHelp>
+            </MudItem>
+        </MudGrid>
+
+        <MudAlert Severity="@ConnectionSeverity" Dense="true" Class="mt-4">@ConnectionText</MudAlert>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
+            NinjaOne's sign-in lasts an hour unless it's used, so dotMARC uses it every 20 minutes. If dotMARC is stopped
+            for longer than that, reconnect here. <MudLink Href="https://dotmarc.app/docs/psa/ninjaone#keeping-the-connection-alive" Target="_blank">Longer-lived sign-ins</MudLink>
+        </MudText>
+        <div class="d-flex flex-wrap mt-2" style="gap: 0.5rem;">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link" Disabled="@(!CanConnect)" OnClick="Connect">
+                @(_settings.RefreshTokenConfigured ? "Reconnect" : "Connect to NinjaOne")
+            </MudButton>
+            @if (_settings.RefreshTokenConfigured)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.LinkOff" OnClick="DisconnectAsync">Disconnect</MudButton>
+            }
+        </div>
+        @if (!CanConnect)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">Choose the instance, enter the client ID and secret, and save before connecting.</MudText>
+        }
+
+        <div class="d-flex align-center justify-space-between flex-wrap mt-6 mb-1" style="gap: 0.5rem;">
+            <MudText Typo="Typo.subtitle1">New tickets</MudText>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CloudDownload" Disabled="@(_loading || !_settings.IsConnected)" OnClick="LoadOptionsAsync">Load options from NinjaOne</MudButton>
+        </div>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">Loads the ticket forms and statuses to choose from. Connect first.</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <FieldWithHelp Topic="Ticket form" Help="The ticket form alert tickets use.">
+<MudSelect T="int?" Label="Ticket form" @bind-Value="_settings.TicketFormId" Variant="Variant.Outlined">
+                    @foreach (var form in WithSaved(_forms, _settings.TicketFormId, _settings.TicketFormName))
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)form.Id)">@form.Name</MudSelectItem>
+                    }
+                </MudSelect>
+</FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <FieldWithHelp Topic="New ticket status" Help="The status alert tickets start in. When the alert resolves, dotMARC sets the ticket to Resolved, and NinjaOne closes it.">
+<MudSelect T="int?" Label="New ticket status" @bind-Value="_settings.NewStatusId" Variant="Variant.Outlined">
+                    @foreach (var status in WithSaved(_statuses, _settings.NewStatusId, _settings.NewStatusName))
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)status.Id)">@status.Name</MudSelectItem>
+                    }
+                </MudSelect>
+</FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" Label="Type" @bind-Value="_settings.TicketType" Variant="Variant.Outlined">
+                    @foreach (var type in NinjaOneOptions.TicketTypes)
+                    {
+                        <MudSelectItem T="string" Value="@type">@Title(type)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" Label="Priority" @bind-Value="_settings.Priority" Variant="Variant.Outlined">
+                    @foreach (var priority in NinjaOneOptions.Priorities)
+                    {
+                        <MudSelectItem T="string" Value="@priority">@Title(priority)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" Label="Severity" @bind-Value="_settings.Severity" Variant="Variant.Outlined">
+                    @foreach (var severity in NinjaOneOptions.Severities)
+                    {
+                        <MudSelectItem T="string" Value="@severity">@Title(severity)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+
+        <div class="d-flex justify-end mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Save NinjaOne settings</MudButton>
+        </div>
+    </MudPaper>
+
+    <PsaIntegrationTestPanel Psa="PsaKind.NinjaOne" />
+}
+
+@code {
+    /// <summary>Raised with whether NinjaOne is switched on in the saved settings, after loading and after saving.</summary>
+    [Parameter] public EventCallback<bool> EnabledChanged { get; set; }
+
+    /// <summary>How the last sign-in went, from the ?ninjaone= query the callback redirects back with.</summary>
+    [Parameter] public string? ConnectResult { get; set; }
+
+    private NinjaOneSettings? _settings;
+    private (string? Instance, string? ClientId, bool SecretSaved) _savedSignIn;
+    private string? _newClientSecret;
+    private bool _loading;
+    private List<PsaOption> _forms = [];
+    private List<PsaOption> _statuses = [];
+
+    private string RedirectUri => Navigation.BaseUri.TrimEnd('/') + NinjaOneConnector.CallbackPath;
+
+    /// <summary>Connecting signs in with the saved instance, client ID and secret, so unsaved edits to them block it.</summary>
+    private bool CanConnect => _settings is not null
+        && _savedSignIn.Instance is not null && _savedSignIn.ClientId is not null && _savedSignIn.SecretSaved
+        && _settings.Instance == _savedSignIn.Instance && _settings.ClientId == _savedSignIn.ClientId && string.IsNullOrWhiteSpace(_newClientSecret);
+
+    private Severity ConnectionSeverity => _settings switch
+    {
+        { ConnectionLostUtc: not null } => Severity.Error,
+        { RefreshTokenConfigured: true } => Severity.Success,
+        _ => Severity.Info
+    };
+
+    private string ConnectionText => _settings switch
+    {
+        { ConnectionLostUtc: { } lostUtc } => $"Connection lost on {lostUtc.ToLocalTime():d MMM yyyy HH:mm} ({_settings.ConnectionLostReason}). Reconnect to raise tickets again.",
+        { RefreshTokenConfigured: true } => $"Connected by {_settings.ConnectedBy} on {_settings.ConnectedUtc?.ToLocalTime():d MMM yyyy HH:mm}. Last refreshed {_settings.LastRefreshUtc?.ToLocalTime():d MMM yyyy HH:mm}.",
+        _ => "Not connected."
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        ShowConnectResult();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _settings = await NinjaOneSettingsService.GetAsync(db);
+        _savedSignIn = (_settings.Instance, _settings.ClientId, _settings.ClientSecretConfigured);
+        await EnabledChanged.InvokeAsync(_settings.Enabled);
+    }
+
+    private void ShowConnectResult()
+    {
+        var (message, severity) = ConnectResult switch
+        {
+            "connected" => ("Connected to NinjaOne.", Severity.Success),
+            "cancelled" => ("The NinjaOne sign-in was cancelled.", Severity.Warning),
+            "expired" => ("That sign-in expired or was started by someone else. Try connecting again.", Severity.Error),
+            "not-configured" => ("Save the instance, client ID and client secret before connecting.", Severity.Error),
+            "refused" => ("NinjaOne refused the sign-in. Check the client ID, secret and redirect URI match the client app.", Severity.Error),
+            "no-refresh-token" => ("NinjaOne didn't give dotMARC a refresh token. Tick the Refresh token grant type on the client app, then reconnect.", Severity.Error),
+            "failed" => ("dotMARC couldn't reach NinjaOne to finish signing in. Try again.", Severity.Error),
+            _ => ((string?)null, Severity.Normal)
+        };
+        if (message is not null)
+        {
+            Snackbar.Add(message, severity, config => config.RequireInteraction = severity == Severity.Error);
+        }
+    }
+
+    // A full page load, so the browser follows the redirect to NinjaOne instead of Blazor trying to route it.
+    private void Connect() => Navigation.NavigateTo("/psa/ninjaone/connect", forceLoad: true);
+
+    private async Task DisconnectAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync("Disconnect NinjaOne",
+            "dotMARC will stop raising and resolving NinjaOne tickets until someone connects again.", yesText: "Disconnect", cancelText: "Cancel");
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await NinjaOneSettingsService.DisconnectAsync(db, await AuditActorAccessor.GetAsync(), SecretStoreAccessor);
+        await TokenCache.ClearAsync();
+        Snackbar.Add("Disconnected NinjaOne.", Severity.Success);
+        await ReloadAsync();
+    }
+
+    private static IEnumerable<PsaOption> WithSaved(IReadOnlyList<PsaOption> options, int? savedId, string? savedName) =>
+        savedId is { } id && options.All(option => option.Id != id)
+            ? options.Prepend(new PsaOption(id, savedName ?? id.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            : options;
+
+    private static string Title(string value) => value[..1] + value[1..].ToLowerInvariant();
+
+    private async Task LoadOptionsAsync()
+    {
+        _loading = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var saved = await NinjaOneSettingsService.GetAsync(db);
+            _forms = (await NinjaOneClient.ListTicketFormsAsync(saved)).ToList();
+            var statuses = await NinjaOneClient.ListStatusesAsync(saved);
+            _statuses = statuses.Select(status => new PsaOption(status.StatusId, status.DisplayName ?? status.Name)).ToList();
+            try
+            {
+                await PsaOptionNameCache.RememberNinjaOneAsync(db, _forms, statuses);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                Logger.LogWarning(exception, "Couldn't store the NinjaOne option names");
+            }
+
+            Snackbar.Add("Loaded ticket forms and statuses from NinjaOne.", Severity.Success);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or NinjaOneConnectionLostException or System.Text.Json.JsonException)
+        {
+            Logger.LogWarning(exception, "Loading NinjaOne ticket options failed");
+            ShowError($"Couldn't load options from NinjaOne. {exception.Message}");
+            await ReloadAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            _settings!.TicketFormName = NameOf(_forms, _settings.TicketFormId) ?? _settings.TicketFormName;
+            _settings.NewStatusName = NameOf(_statuses, _settings.NewStatusId) ?? _settings.NewStatusName;
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await NinjaOneSettingsService.SaveAsync(db, await AuditActorAccessor.GetAsync(), SecretStoreAccessor, _settings, string.IsNullOrWhiteSpace(_newClientSecret) ? null : _newClientSecret);
+            _newClientSecret = null;
+            await TokenCache.ClearAsync();
+            Snackbar.Add("NinjaOne settings saved.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (ArgumentException exception)
+        {
+            ShowError(exception.Message);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "Saving NinjaOne settings failed");
+            Snackbar.Add("Failed to save NinjaOne settings. Try again.", Severity.Error);
+        }
+    }
+
+    private static string? NameOf(IReadOnlyList<PsaOption> options, int? id) => options.FirstOrDefault(option => option.Id == id)?.Name;
+
+    // Stays on screen until dismissed: these messages can be long.
+    private void ShowError(string message) => Snackbar.Add(message, Severity.Error, config => config.RequireInteraction = true);
+}

@@ -20,6 +20,9 @@
     <MudTabPanel Text="HaloPSA" Icon="@TabIcon(_haloEnabled)">
         <div class="pt-4"><HaloPsaSettingsTab EnabledChanged="@(enabled => _haloEnabled = enabled)" /></div>
     </MudTabPanel>
+    <MudTabPanel Text="NinjaOne" Icon="@TabIcon(_ninjaOneEnabled)">
+        <div class="pt-4"><NinjaOneSettingsTab EnabledChanged="@(enabled => _ninjaOneEnabled = enabled)" ConnectResult="@NinjaOneResult" /></div>
+    </MudTabPanel>
     <MudTabPanel Text="ConnectWise" Icon="@TabIcon(_connectWiseEnabled)">
         <div class="pt-4"><ConnectWiseSettingsTab EnabledChanged="@(enabled => _connectWiseEnabled = enabled)" /></div>
     </MudTabPanel>
@@ -29,10 +32,25 @@
 </MudTabs>
 
 @code {
+    /// <summary>Which PSA's tab to open, such as "ninjaone" after its sign-in.</summary>
+    [SupplyParameterFromQuery(Name = "psa")] public string? Psa { get; set; }
+
+    [SupplyParameterFromQuery(Name = "ninjaone")] public string? NinjaOneResult { get; set; }
+
     private int _activeTab;
     private bool _haloEnabled;
+    private bool _ninjaOneEnabled;
     private bool _connectWiseEnabled;
     private bool _autotaskEnabled;
+
+    protected override void OnInitialized()
+    {
+        // The tabs are in PsaKind order.
+        if (Enum.GetValues<PsaKind>().ToList().FindIndex(psa => string.Equals(psa.ToString(), Psa, StringComparison.OrdinalIgnoreCase)) is var index and >= 0)
+        {
+            _activeTab = index;
+        }
+    }
 
     /// <summary>A tick on the tab of each PSA that is switched on.</summary>
     private static string? TabIcon(bool enabled) => enabled ? Icons.Material.Filled.CheckCircle : null;
