@@ -1739,6 +1739,87 @@ namespace DotMarc.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DotMarc.Psa.NinjaOne.NinjaOneSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClientId")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("ClientSecretConfigured")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ConnectedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ConnectedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ConnectionLostReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ConnectionLostUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Instance")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastRefreshUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("NewStatusId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NewStatusName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("RefreshTokenConfigured")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("TicketFormId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TicketFormName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TicketType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("NinjaOneSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            ClientSecretConfigured = false,
+                            Enabled = false,
+                            NewStatusId = 1000,
+                            NewStatusName = "New",
+                            Priority = "NONE",
+                            RefreshTokenConfigured = false,
+                            Severity = "NONE",
+                            TicketType = "PROBLEM"
+                        });
+                });
+
             modelBuilder.Entity("DotMarc.Psa.PsaCompanyLink", b =>
                 {
                     b.Property<int>("Id")

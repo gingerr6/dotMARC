@@ -40,6 +40,11 @@ public static class AuditActions
     public const string HaloSettingsSaved = "settings.halo.saved";
     public const string ConnectWiseSettingsSaved = "settings.connectwise.saved";
     public const string AutotaskSettingsSaved = "settings.autotask.saved";
+    public const string NinjaOneSettingsSaved = "settings.ninjaone.saved";
+    public const string NinjaOneConnected = "ninjaone.connected";
+    public const string NinjaOneDisconnected = "ninjaone.disconnected";
+    public const string NinjaOneConnectionLost = "ninjaone.connection_lost";
+    public const string NinjaOneIntegrationTested = "ninjaone.integration_tested";
     public const string BrandingSettingsSaved = "settings.branding.saved";
     public const string EmailSettingsSaved = "settings.email.saved";
     public const string ReportSettingsSaved = "settings.reports.saved";
@@ -103,6 +108,11 @@ public static class AuditActions
         (HaloSettingsSaved, "HaloPSA settings saved"),
         (ConnectWiseSettingsSaved, "ConnectWise settings saved"),
         (AutotaskSettingsSaved, "Autotask settings saved"),
+        (NinjaOneSettingsSaved, "NinjaOne settings saved"),
+        (NinjaOneConnected, "NinjaOne connected"),
+        (NinjaOneDisconnected, "NinjaOne disconnected"),
+        (NinjaOneConnectionLost, "NinjaOne connection lost"),
+        (NinjaOneIntegrationTested, "NinjaOne integration tested"),
         (BrandingSettingsSaved, "Branding saved"),
         (EmailSettingsSaved, "Email settings saved"),
         (ReportSettingsSaved, "Report settings saved"),
