@@ -177,6 +177,8 @@ builder.Services.AddHttpClient<DotMarc.Psa.ConnectWise.IConnectWiseClient, DotMa
 builder.Services.AddSingleton<DotMarc.Psa.NinjaOne.NinjaOneTokenCache>();
 builder.Services.AddSingleton<DotMarc.Psa.NinjaOne.INinjaOneConnectionRecorder, DotMarc.Psa.NinjaOne.NinjaOneConnectionRecorder>();
 builder.Services.AddHttpClient<DotMarc.Psa.NinjaOne.INinjaOneClient, DotMarc.Psa.NinjaOne.NinjaOneClient>();
+builder.Services.AddSingleton<DotMarc.Psa.NinjaOne.NinjaOneStateProtector>();
+builder.Services.AddHttpClient<DotMarc.Psa.NinjaOne.NinjaOneConnector>();
 builder.Services.AddSingleton<DotMarc.Psa.Autotask.AutotaskZoneCache>();
 builder.Services.AddHttpClient<DotMarc.Psa.Autotask.IAutotaskClient, DotMarc.Psa.Autotask.AutotaskClient>();
 // The demo instance gets a pretend PSA so visitors can see tickets raised and closed; a real install talks to the real ones.
@@ -776,6 +778,28 @@ app.MapGet("/dns-push/{provider}/callback", async (
 
     return DnsPushPopupResult.Close(resultFlag);
 });
+
+// Connecting NinjaOne: an admin starts here from the NinjaOne tab, signs in at NinjaOne, and comes back to the
+// callback. Only from dotMARC's own pages, for the same reason as DNS push (see DnsPushStartGuard).
+app.MapGet("/psa/ninjaone/connect", async (HttpContext httpContext, DotMarc.Psa.NinjaOne.NinjaOneConnector connector, DotMarc.Psa.NinjaOne.NinjaOneStateProtector stateProtector, TimeProvider timeProvider) =>
+{
+    if (!DnsPushStartGuard.IsFromThisSite(httpContext.Request))
+    {
+        return Results.BadRequest();
+    }
+
+    var actor = DotMarc.Audit.AuditActor.FromPrincipal(httpContext.User);
+    var state = stateProtector.Protect(DotMarc.Psa.NinjaOne.NinjaOneStateProtector.UserKey(actor), timeProvider.GetUtcNow());
+    var url = await connector.BuildAuthorizationUrlAsync(DotMarc.Psa.NinjaOne.NinjaOneConnector.RedirectUri(httpContext.Request), state, httpContext.RequestAborted);
+    return Results.Redirect(url ?? "/psa/settings?psa=ninjaone&ninjaone=not-configured");
+}).RequireAuthorization(nameof(Permission.AlertsManage));
+
+app.MapGet(DotMarc.Psa.NinjaOne.NinjaOneConnector.CallbackPath, async (string? code, string? state, string? error, HttpContext httpContext, DotMarc.Psa.NinjaOne.NinjaOneConnector connector) =>
+{
+    var outcome = await connector.CompleteAsync(DotMarc.Audit.AuditActor.FromPrincipal(httpContext.User), state, code, error,
+        DotMarc.Psa.NinjaOne.NinjaOneConnector.RedirectUri(httpContext.Request), httpContext.RequestAborted);
+    return Results.Redirect($"/psa/settings?psa=ninjaone&ninjaone={DotMarc.Psa.NinjaOne.NinjaOneConnector.OutcomeKey(outcome)}");
+}).RequireAuthorization(nameof(Permission.AlertsManage));
 
 // Unauthenticated by necessity - HaloPSA's own outbound webhook config isn't confirmed to support
 // custom headers, so the shared secret travels in the path instead. A non-matching secret returns
