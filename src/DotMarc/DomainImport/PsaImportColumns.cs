@@ -11,6 +11,7 @@ public static class PsaImportColumns
     public static IReadOnlyList<PsaImportColumn> All { get; } =
     [
         new(PsaKind.HaloPsa, ImportColumn.HaloClient, ImportNameKind.HaloClient),
+        new(PsaKind.NinjaOne, ImportColumn.NinjaOneOrganisation, ImportNameKind.NinjaOneOrganisation),
         new(PsaKind.ConnectWise, ImportColumn.ConnectWiseCompany, ImportNameKind.ConnectWiseCompany),
         new(PsaKind.Autotask, ImportColumn.AutotaskCompany, ImportNameKind.AutotaskCompany),
     ];

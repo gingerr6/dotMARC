@@ -72,6 +72,27 @@ public sealed class ImportTableTests
     }
 
     [Fact]
+    public void WithoutAHeader_TheNinjaOneColumnComesAfterAutotask()
+    {
+        var row = Table("contoso.com,Client A,primary,Contoso,no,s1,testing,mail.contoso.com,86400,Contoso Ltd,Contoso Limited,Contoso Org").Rows.Single();
+
+        Assert.Equal("Contoso Limited", row.PsaCompanies[PsaKind.Autotask]);
+        Assert.Equal("Contoso Org", row.PsaCompanies[PsaKind.NinjaOne]);
+    }
+
+    [Theory]
+    [InlineData("ninjaone organisation")]
+    [InlineData("NinjaOne organization")]
+    [InlineData("NinjaOne")]
+    [InlineData("ninja")]
+    public void TheNinjaOneOrganisationColumn_IsReadByAnyOfItsHeaderNames(string header)
+    {
+        var row = Table($"domain,{header}\ncontoso.io,Contoso Org").Rows.Single();
+
+        Assert.Equal("Contoso Org", row.PsaCompanies[PsaKind.NinjaOne]);
+    }
+
+    [Fact]
     public void WithoutAHeader_AColumnThatIsBlankOnEveryRow_IsNotPresent()
     {
         // A trailing comma, or a spreadsheet whose used range is wider than its data, must not make Match mode read the

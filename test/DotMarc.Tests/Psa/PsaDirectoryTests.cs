@@ -42,12 +42,14 @@ public sealed class PsaDirectoryTests : IAsyncLifetime
         var connectWise = new FakePsaProvider(PsaKind.ConnectWise) { FailWith = new HttpRequestException("refused") };
         var autotask = new FakePsaProvider(PsaKind.Autotask) { Ready = false };
 
-        var lists = await new PsaDirectory([autotask, connectWise, halo], NullLogger<PsaDirectory>.Instance).LoadAsync(context);
+        var ninjaOne = new FakePsaProvider(PsaKind.NinjaOne) { Companies = { new PsaCompany("3", "Fabrikam") } };
 
-        Assert.Equal([PsaKind.HaloPsa, PsaKind.ConnectWise], lists.Select(list => list.Psa));
+        var lists = await new PsaDirectory([autotask, connectWise, ninjaOne, halo], NullLogger<PsaDirectory>.Instance).LoadAsync(context);
+
+        Assert.Equal([PsaKind.HaloPsa, PsaKind.NinjaOne, PsaKind.ConnectWise], lists.Select(list => list.Psa));
         Assert.Equal("Contoso", Assert.Single(lists[0].Companies!).Name);
-        Assert.Null(lists[1].Companies);
-        Assert.Equal("ConnectWise companies couldn't be loaded: refused", lists[1].FailureReason);
+        Assert.Null(lists[2].Companies);
+        Assert.Equal("ConnectWise companies couldn't be loaded: refused", lists[2].FailureReason);
     }
 
     [Fact]
