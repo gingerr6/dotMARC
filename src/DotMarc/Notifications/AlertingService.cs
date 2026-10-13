@@ -429,7 +429,7 @@ public sealed class AlertingService : IAlertingService
 
         var name = DotMarc.Psa.PsaKindNames.DisplayName(psa);
         await EnsureAlertAsync(db, settings, PsaConnectionAlertSubject(psa), AlertTypes.PsaConnectionLost, "Warning", "PSA connection lost",
-            $"dotMARC can no longer refresh its {name} sign-in ({reason}). New alerts won't raise {name} tickets until someone reconnects under Settings > PSA > {name}.",
+            $"dotMARC can no longer refresh its {name} sign-in ({reason}). New alerts won't raise {name} tickets until someone reconnects under Manage > PSA settings > {name}.",
             cancellationToken).ConfigureAwait(false);
     }
 

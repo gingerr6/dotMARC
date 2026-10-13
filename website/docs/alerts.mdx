@@ -15,6 +15,7 @@ resolves itself automatically once the underlying condition clears, no manual di
 | --- | --- | --- |
 | `MissedReport` | A monitored domain hasn't received a DMARC report within the configured threshold. | A DMARC report is received for that domain. |
 | `TlsrptFailure` | A TLSRPT report for the domain contains one or more failed TLS delivery sessions. See [MTA-STS: TLS reporting](./mta-sts.mdx#tls-reporting). | A later TLSRPT report for the same domain has zero failed sessions. |
+| `PsaConnectionLost` | dotMARC can no longer sign in to a PSA, such as when NinjaOne's sign-in lapses. It doesn't raise tickets by default. See [NinjaOne](./psa/ninjaone.mdx#keeping-the-connection-alive). | Someone reconnects the PSA, or turns it off. |
 
 These alert types are raised at `Warning` severity. The DNS health alerts below have their own severities.
 
@@ -98,7 +99,7 @@ A weaker DMARC policy or new nameservers may be deliberate, so these alerts comp
 these closes the alert and accepts the current policy or nameservers as the new normal:
 
 * **Acknowledge** on the Alerts page (needs `AlertsManage`). It's recorded in the [audit log](./audit-log.mdx).
-* **Closing its PSA ticket** in HaloPSA, ConnectWise or Autotask.
+* **Closing its PSA ticket** in HaloPSA, NinjaOne, ConnectWise or Autotask.
 * **Closing automatically** after the number of days in **Close policy and nameserver alerts after (days)**, if set.
 
 ## Delivery channels

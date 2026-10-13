@@ -1,6 +1,6 @@
 ---
 sidebar_position: 10
-description: Raise PSA tickets from dotMARC alerts in HaloPSA, ConnectWise and Autotask, closed automatically in both directions.
+description: Raise PSA tickets from dotMARC alerts in HaloPSA, NinjaOne, ConnectWise and Autotask, closed automatically in both directions.
 ---
 
 # PSA integration
@@ -8,9 +8,10 @@ description: Raise PSA tickets from dotMARC alerts in HaloPSA, ConnectWise and A
 dotMARC can open a ticket in your PSA when an alert fires, close it when the alert resolves, and resolve the alert when
 a tech closes the ticket in the PSA. See [Alerts](./alerts.mdx) for how alerting itself works.
 
-It works with three PSAs, each set up on its own page:
+It works with four PSAs, each set up on its own page:
 
 - [HaloPSA](./psa/halopsa.mdx)
+- [NinjaOne](./psa/ninjaone.mdx)
 - [ConnectWise](./psa/connectwise.mdx)
 - [Autotask](./psa/autotask.mdx)
 
@@ -20,7 +21,7 @@ down never stops another from getting its ticket.
 
 ## Link Groups to companies
 
-Tickets need to land against the right customer: a client in HaloPSA, a company in ConnectWise or Autotask. On
+Tickets need to land against the right customer: a client in HaloPSA, an organisation in NinjaOne, a company in ConnectWise or Autotask. On
 **Manage > Groups**, each Group has a column for each PSA that's turned on and set up. Set it once per Group (usually
 once per client), and every domain in the Group routes there.
 
