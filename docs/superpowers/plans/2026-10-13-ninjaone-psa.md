@@ -1197,10 +1197,10 @@ public sealed class NinjaOneClientTests
     {
         var (client, handler, _) = Create();
         handler.ResponseBodies.Enqueue(OpenTicketJson);
-        handler.ResponseBodies.Enqueue("""{"resultCode":"version_mismatch"}""");
+        handler.ResponseBodies.Enqueue("""{"resultCode":"ticket_updated_by_another_user","errorMessage":"Ticket 1004 has been updated previously"}""");
         handler.ResponseBodies.Enqueue(OpenTicketJson.Replace("\"version\":1", "\"version\":2"));
         handler.ResponseBodies.Enqueue("{}");
-        foreach (var status in new[] { HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.Conflict, HttpStatusCode.OK, HttpStatusCode.OK })
+        foreach (var status in new[] { HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.Forbidden, HttpStatusCode.OK, HttpStatusCode.OK })
         {
             handler.StatusCodes.Enqueue(status);
         }
@@ -1579,9 +1579,9 @@ public sealed class NinjaOneClient(HttpClient httpClient, NinjaOneTokenCache tok
                 return;
             }
 
+            // NinjaOne answers a stale version with 403 and this result code (checked against a live instance).
             var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            var versionConflict = response.StatusCode == HttpStatusCode.Conflict
-                || response.StatusCode == HttpStatusCode.BadRequest && text.Contains("version", StringComparison.OrdinalIgnoreCase);
+            var versionConflict = text.Contains("ticket_updated_by_another_user", StringComparison.Ordinal);
             if (attempt == 1 && versionConflict)
             {
                 continue;
