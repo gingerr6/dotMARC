@@ -121,9 +121,10 @@ def read_config():
     for name in APP_ENV:
         if "'" in config[name] or "\n" in config[name]:
             fail(f"{name} contains a quote or newline, which the .env file cannot hold")
-    config["region"] = os.environ.get("DO_REGION", "lon1")
-    config["size"] = os.environ.get("DO_SIZE", "s-1vcpu-2gb")
-    config["name"] = os.environ.get("DO_DROPLET_NAME", "dotmarc")
+    # GitHub Actions passes an unset variable as an empty string, so treat empty as unset.
+    config["region"] = os.environ.get("DO_REGION", "").strip() or "lon1"
+    config["size"] = os.environ.get("DO_SIZE", "").strip() or "s-1vcpu-2gb"
+    config["name"] = os.environ.get("DO_DROPLET_NAME", "").strip() or "dotmarc"
     config["project"] = os.environ.get("DO_PROJECT", "").strip()
     return config
 
