@@ -56,3 +56,12 @@ Open the Droplet's **Console** in the DigitalOcean control panel, then:
 
 The database also holds the keys that decrypt stored integration secrets. Keep the Droplet
 backups switched on.
+
+## Run from GitHub Actions instead
+
+The **Deploy to DigitalOcean** workflow runs the same script with the repository's Actions
+settings, so the values only need entering once. In the repository, go to **Settings**, then
+**Secrets and variables**, then **Actions**, and add each setting from the table above. Put the
+token and the two client secrets under **Secrets**. Put everything else under either **Secrets**
+or **Variables**: variables stay readable in the run log. Then open **Actions**, choose **Deploy
+to DigitalOcean**, and click **Run workflow**, with "dry run" ticked the first time.

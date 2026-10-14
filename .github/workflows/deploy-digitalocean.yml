@@ -1,0 +1,46 @@
+name: Deploy to DigitalOcean
+
+# Runs deploy/digitalocean/deploy.py with this repository's Actions secrets and variables. Each
+# setting is read from a secret first, then a variable of the same name, so non-secret values
+# (like the hostname) can be variables and stay readable in the log. Start it from the Actions
+# tab; leave "dry run" ticked the first time.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Dry run (check the token and show the plan, change nothing)
+        type: boolean
+        default: true
+
+concurrency:
+  group: deploy-digitalocean
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Deploy
+        env:
+          PYTHONUNBUFFERED: "1"
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN || vars.DIGITALOCEAN_TOKEN }}
+          DOTMARC_HOSTNAME: ${{ secrets.DOTMARC_HOSTNAME || vars.DOTMARC_HOSTNAME }}
+          INITIAL_ADMIN_EMAILS: ${{ secrets.INITIAL_ADMIN_EMAILS || vars.INITIAL_ADMIN_EMAILS }}
+          GRAPH_CLIENT_ID: ${{ secrets.GRAPH_CLIENT_ID || vars.GRAPH_CLIENT_ID }}
+          GRAPH_TENANT_ID: ${{ secrets.GRAPH_TENANT_ID || vars.GRAPH_TENANT_ID }}
+          GRAPH_CLIENT_SECRET: ${{ secrets.GRAPH_CLIENT_SECRET || vars.GRAPH_CLIENT_SECRET }}
+          GRAPH_MAILBOX_ADDRESS: ${{ secrets.GRAPH_MAILBOX_ADDRESS || vars.GRAPH_MAILBOX_ADDRESS }}
+          GRAPH_TLSRPT_MAILBOX_ADDRESS: ${{ secrets.GRAPH_TLSRPT_MAILBOX_ADDRESS || vars.GRAPH_TLSRPT_MAILBOX_ADDRESS }}
+          ENTRAID_TENANT_ID: ${{ secrets.ENTRAID_TENANT_ID || vars.ENTRAID_TENANT_ID }}
+          ENTRAID_CLIENT_ID: ${{ secrets.ENTRAID_CLIENT_ID || vars.ENTRAID_CLIENT_ID }}
+          ENTRAID_CLIENT_SECRET: ${{ secrets.ENTRAID_CLIENT_SECRET || vars.ENTRAID_CLIENT_SECRET }}
+          DOTMARC_VERSION: ${{ vars.DOTMARC_VERSION }}
+          DO_REGION: ${{ vars.DO_REGION }}
+          DO_SIZE: ${{ vars.DO_SIZE }}
+          DO_DROPLET_NAME: ${{ vars.DO_DROPLET_NAME }}
+        run: python3 deploy/digitalocean/deploy.py ${{ inputs.dry_run && '--dry-run' || '' }}
