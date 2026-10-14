@@ -124,6 +124,7 @@ def read_config():
     config["region"] = os.environ.get("DO_REGION", "lon1")
     config["size"] = os.environ.get("DO_SIZE", "s-1vcpu-2gb")
     config["name"] = os.environ.get("DO_DROPLET_NAME", "dotmarc")
+    config["project"] = os.environ.get("DO_PROJECT", "").strip()
     return config
 
 
@@ -187,6 +188,24 @@ def find_or_create_droplet(do, config, dry_run):
 
 def public_ip(droplet):
     return next((n["ip_address"] for n in droplet["networks"]["v4"] if n["type"] == "public"), None)
+
+
+def find_project(do, name):
+    if not name:
+        return None
+    for project in do.list_all("/projects", "projects"):
+        if project["name"].lower() == name.lower():
+            return project
+    fail(f"no DigitalOcean project named '{name}'; check DO_PROJECT")
+
+
+def assign_to_project(do, project, droplet, dry_run):
+    if project is None:
+        return
+    print(f"Putting the Droplet in project '{project['name']}'.")
+    if dry_run or droplet is None:
+        return
+    do.call("POST", f"/projects/{project['id']}/resources", {"resources": [f"do:droplet:{droplet['id']}"]})
 
 
 def ensure_firewall(do, dry_run):
@@ -260,8 +279,10 @@ def main():
     if args.dry_run:
         print("Dry run: nothing below will be changed.")
 
+    project = find_project(do, config["project"])
     droplet = find_or_create_droplet(do, config, args.dry_run)
     ip = public_ip(droplet) if droplet else None
+    assign_to_project(do, project, droplet, args.dry_run)
     ensure_firewall(do, args.dry_run)
     dns_managed = ensure_dns(do, config["DOTMARC_HOSTNAME"], ip, args.dry_run)
 
