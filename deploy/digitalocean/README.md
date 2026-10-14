@@ -34,6 +34,7 @@ command line.
 | `GRAPH_TLSRPT_MAILBOX_ADDRESS` | no | Separate TLS-RPT mailbox |
 | `DOTMARC_VERSION` | no | Image tag, default `0.9.3` |
 | `DO_REGION`, `DO_SIZE`, `DO_DROPLET_NAME` | no | Defaults `lon1`, `s-1vcpu-2gb`, `dotmarc` |
+| `DO_PROJECT` | no | DigitalOcean project to put the Droplet in; the workflow defaults it to `dotMARC` |
 
 ## Run
 

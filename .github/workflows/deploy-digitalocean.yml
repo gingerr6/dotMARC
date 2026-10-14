@@ -43,4 +43,5 @@ jobs:
           DO_REGION: ${{ vars.DO_REGION }}
           DO_SIZE: ${{ vars.DO_SIZE }}
           DO_DROPLET_NAME: ${{ vars.DO_DROPLET_NAME }}
+          DO_PROJECT: ${{ vars.DO_PROJECT || 'dotMARC' }}
         run: python3 deploy/digitalocean/deploy.py ${{ inputs.dry_run && '--dry-run' || '' }}
