@@ -41,6 +41,7 @@ SECRETS = {"DIGITALOCEAN_TOKEN", "GRAPH_CLIENT_SECRET", "ENTRAID_CLIENT_SECRET"}
 # Written to the Droplet's .env. POSTGRES_PASSWORD is added on the Droplet itself, so it never
 # leaves the box.
 APP_ENV = [
+    "DOTMARC_IMAGE",
     "DOTMARC_VERSION",
     "DOTMARC_HOSTNAME",
     "GRAPH_CLIENT_ID",
@@ -65,12 +66,16 @@ find /var/backups/dotmarc -name 'dotmarc-*.sql.gz' -mtime +14 -delete
 """
 
 UPDATE_SCRIPT = """#!/bin/sh
-# Usage: dotmarc-update 0.9.4   (a tag from ghcr.io/homotechsual/dotmarc)
+# Usage: dotmarc-update <tag> [image]   e.g. dotmarc-update 0.9.4, or a commit's tag from a fork's image
 set -eu
-[ $# -eq 1 ] || { echo "usage: dotmarc-update <version>" >&2; exit 2; }
+[ $# -ge 1 ] && [ $# -le 2 ] || { echo "usage: dotmarc-update <tag> [image]" >&2; exit 2; }
 cd /opt/dotmarc
 /usr/local/bin/dotmarc-backup
 sed -i "s/^DOTMARC_VERSION=.*/DOTMARC_VERSION='$1'/" .env
+if [ $# -eq 2 ]; then
+    sed -i '/^DOTMARC_IMAGE=/d' .env
+    echo "DOTMARC_IMAGE='$2'" >> .env
+fi
 docker compose pull app
 docker compose up -d
 """
@@ -116,6 +121,7 @@ def read_config():
     if missing:
         fail("missing environment variables: " + ", ".join(missing))
     config["ENTRAID_TENANT_ID"] = config["ENTRAID_TENANT_ID"] or config["GRAPH_TENANT_ID"]
+    config["DOTMARC_IMAGE"] = config["DOTMARC_IMAGE"] or "ghcr.io/homotechsual/dotmarc"
     config["DOTMARC_VERSION"] = config["DOTMARC_VERSION"] or "0.9.3"
     config["DOTMARC_HOSTNAME"] = config["DOTMARC_HOSTNAME"].lower().rstrip(".")
     for name in APP_ENV:
