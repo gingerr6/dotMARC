@@ -104,11 +104,7 @@ public static class AlertEndpoints
         };
 
         var visibleDomains = scope.Domains(context.Domains.AsNoTracking());
-        if (scope.IsScoped)
-        {
-            var visibleNames = visibleDomains.Select(domain => domain.Name);
-            query = query.Where(alert => visibleNames.Contains(alert.DomainName));
-        }
+        query = scope.Alerts(query, context.Domains.AsNoTracking());
 
         if (types.Count > 0)
         {

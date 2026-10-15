@@ -9,6 +9,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject AuditActorAccessor AuditActorAccessor
 @inject IPsaTicketService PsaTicketService
 @inject IEnumerable<IPsaProvider> PsaProviders
@@ -164,9 +165,10 @@ else
 
     private async Task LoadAsync()
     {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var scope = DotMarc.Api.ApiScope.From(authState.User);
         await using var db = await DbFactory.CreateDbContextAsync();
-        _alerts = await db.AlertEvents
-            .AsNoTracking()
+        _alerts = await scope.Alerts(db.AlertEvents.AsNoTracking(), db.Domains.AsNoTracking())
             .Include(e => e.Tickets)
             .OrderByDescending(e => e.CreatedUtc)
             .Take(100)
