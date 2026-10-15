@@ -319,7 +319,24 @@ public sealed class GroupManagementServiceTests : IAsyncLifetime
 
         var result = await GroupManagementService.RemoveGroupAsync(context, TestActors.Admin, group.Id);
 
-        Assert.Equal(GroupManagementService.RemoveGroupResult.LastGroupOfClientPortal, result);
+        Assert.Equal(GroupManagementService.RemoveGroupResult.LastGroupOfAGrant, result);
+        await using var verify = CreateContext();
+        Assert.Single(verify.Groups);
+    }
+
+    [Fact]
+    public async Task RemoveGroupAsync_ADashboardGrantsLastGroup_IsRefused()
+    {
+        // Not just portal grants: any grant left with no Groups would see every domain.
+        await using var context = CreateContext();
+        var managerRole = new Role { Name = "Client manager", IsScopable = true, Permissions = [Permission.DomainsView, Permission.DomainsEdit] };
+        var group = new Group { Name = "Aurora Retail" };
+        context.UserAccesses.Add(new UserAccess { Email = "manager@aurora.example", Role = managerRole, ScopedGroups = [group] });
+        await context.SaveChangesAsync();
+
+        var result = await GroupManagementService.RemoveGroupAsync(context, TestActors.Admin, group.Id);
+
+        Assert.Equal(GroupManagementService.RemoveGroupResult.LastGroupOfAGrant, result);
         await using var verify = CreateContext();
         Assert.Single(verify.Groups);
     }

@@ -269,4 +269,100 @@ public sealed class RoleManagementServiceTests : IAsyncLifetime
         await using var verify = CreateContext();
         Assert.Null((await verify.ApiKeys.SingleAsync()).RoleId);
     }
+
+    [Fact]
+    public async Task AddRoleAsync_CanLimitARoleToGroups_WithDomainPermissions()
+    {
+        using var context = CreateContext();
+
+        var result = await RoleManagementService.AddRoleAsync(context, TestActors.Admin, "Client manager", [Permission.DomainsView, Permission.DomainsAdd, Permission.DomainsEdit], CancellationToken.None, limitedToGroups: true);
+
+        Assert.Equal(RoleManagementService.AddRoleResult.Added, result);
+        using var verify = CreateContext();
+        Assert.True(verify.Roles.Single().IsScopable);
+    }
+
+    [Fact]
+    public async Task AddRoleAsync_RefusesATenantWidePermission_OnARoleLimitedToGroups()
+    {
+        using var context = CreateContext();
+
+        var result = await RoleManagementService.AddRoleAsync(context, TestActors.Admin, "Client manager", [Permission.DomainsView, Permission.AccessManage], CancellationToken.None, limitedToGroups: true);
+
+        Assert.Equal(RoleManagementService.AddRoleResult.NotAllowedWhenLimited, result);
+        using var verify = CreateContext();
+        Assert.Empty(verify.Roles);
+    }
+
+    [Fact]
+    public async Task UpdateRoleAsync_RefusesATenantWidePermission_OnARoleLimitedToGroups()
+    {
+        using var context = CreateContext();
+        var role = new Role { Name = "Client manager", IsScopable = true, Permissions = [Permission.DomainsView] };
+        context.Roles.Add(role);
+        await context.SaveChangesAsync();
+
+        var result = await RoleManagementService.UpdateRoleAsync(context, TestActors.Admin, role.Id, role.Name, [Permission.DomainsView, Permission.DnsPushManage], CancellationToken.None);
+
+        Assert.Equal(RoleManagementService.UpdateRoleResult.NotAllowedWhenLimited, result);
+        using var verify = CreateContext();
+        Assert.Equal([Permission.DomainsView], verify.Roles.Single().Permissions);
+    }
+
+    [Fact]
+    public async Task SetLimitedToGroupsAsync_LimitsAnUnusedRole()
+    {
+        using var context = CreateContext();
+        var role = new Role { Name = "Client manager", Permissions = [Permission.DomainsView, Permission.DomainsEdit] };
+        context.Roles.Add(role);
+        await context.SaveChangesAsync();
+
+        var result = await RoleManagementService.SetLimitedToGroupsAsync(context, TestActors.Admin, role.Id, true);
+
+        Assert.Equal(RoleManagementService.SetLimitedToGroupsResult.Updated, result);
+        using var verify = CreateContext();
+        Assert.True(verify.Roles.Single().IsScopable);
+    }
+
+    [Fact]
+    public async Task SetLimitedToGroupsAsync_RefusesARoleSomeoneHolds()
+    {
+        // Limiting it would leave their grant with no Groups, which means every domain.
+        using var context = CreateContext();
+        var role = new Role { Name = "Client manager", Permissions = [Permission.DomainsView] };
+        context.UserAccesses.Add(new UserAccess { Email = "manager@example.com", Role = role });
+        await context.SaveChangesAsync();
+
+        var result = await RoleManagementService.SetLimitedToGroupsAsync(context, TestActors.Admin, role.Id, true);
+
+        Assert.Equal(RoleManagementService.SetLimitedToGroupsResult.InUse, result);
+        using var verify = CreateContext();
+        Assert.False(verify.Roles.Single().IsScopable);
+    }
+
+    [Fact]
+    public async Task SetLimitedToGroupsAsync_RefusesARoleWithATenantWidePermission()
+    {
+        using var context = CreateContext();
+        var role = new Role { Name = "Client manager", Permissions = [Permission.DomainsView, Permission.LogsView] };
+        context.Roles.Add(role);
+        await context.SaveChangesAsync();
+
+        var result = await RoleManagementService.SetLimitedToGroupsAsync(context, TestActors.Admin, role.Id, true);
+
+        Assert.Equal(RoleManagementService.SetLimitedToGroupsResult.NotAllowedWhenLimited, result);
+    }
+
+    [Fact]
+    public async Task SetLimitedToGroupsAsync_RefusesTheLockedAdminRole()
+    {
+        using var context = CreateContext();
+        var role = new Role { Name = "Admin", IsLocked = true, Permissions = [.. Enum.GetValues<Permission>()] };
+        context.Roles.Add(role);
+        await context.SaveChangesAsync();
+
+        var result = await RoleManagementService.SetLimitedToGroupsAsync(context, TestActors.Admin, role.Id, true);
+
+        Assert.Equal(RoleManagementService.SetLimitedToGroupsResult.Locked, result);
+    }
 }

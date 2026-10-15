@@ -18,9 +18,10 @@
 </div>
 <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
     Roles are built from fine-grained permissions and control what someone can see and do. Admin
-    and Viewer come built in; custom roles can cover any subset. A Viewer can optionally be scoped
-    to specific Groups, for external clients who should only see their own domains. API keys get a
-    role the same way, for scripts and other tools.
+    and Viewer come built in; custom roles can cover any subset. A role that's limited to groups,
+    such as Viewer, can be granted with specific Groups, so the person sees and manages only those
+    Groups' domains: for external clients, or for staff who look after particular clients. API keys
+    get a role the same way, for scripts and other tools.
 </MudText>
 
 <MudPaper Class="pa-4" Elevation="1">
@@ -130,9 +131,14 @@
     <MudTabPanel Text="Roles" Icon="@Icons.Material.Filled.Badge">
         <div class="pt-4">
         <MudGrid>
-            <MudItem xs="9">
+            <MudItem xs="6">
                 <MudTextField @bind-Value="_newRoleName" Label="Role name" Placeholder="Domain Manager" Variant="Variant.Outlined"
                               Error="@(_addRoleError is not null)" ErrorText="@_addRoleError" Immediate="true" />
+            </MudItem>
+            <MudItem xs="3" Class="d-flex align-center">
+                <FieldWithHelp Topic="Limit to groups" Help="@LimitToGroupsHelp">
+                    <MudSwitch T="bool" @bind-Value="_newRoleLimitedToGroups" Color="Color.Primary" Label="Limit to groups" />
+                </FieldWithHelp>
             </MudItem>
             <MudItem xs="3" Class="d-flex align-start">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="button-beside-input" StartIcon="@Icons.Material.Filled.Add"
@@ -152,6 +158,7 @@
                     <tr>
                         <MudTh><MudTableSortLabel SortBy="new Func<RoleRow, object>(r => r.Name)">Name</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<RoleRow, object>(r => r.IsLocked ? int.MaxValue : r.Permissions.Count)">Permissions</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<RoleRow, object>(r => r.IsScopable)">Limited to groups</MudTableSortLabel></MudTh>
                         <MudTh></MudTh>
                     </tr>
                     @if (_showRoleFilters)
@@ -166,6 +173,7 @@
                                 }
                             </MudSelect>
                         </MudTh>
+                        <MudTh></MudTh>
                         <MudTh></MudTh>
                     </tr>
                     }
@@ -192,11 +200,22 @@
                                        SelectedValuesChanged="@(p => SetRolePermissionsAsync(context, p))"
                                        MultiSelectionTextFunc="@(selected => selected.Count == 0 ? "None" : $"{selected.Count} permission(s)")"
                                        RelativeWidth="DropdownWidth.Adaptive">
-                                @foreach (var permission in Enum.GetValues<Permission>())
+                                @foreach (var permission in Enum.GetValues<Permission>().Where(permission => !context.IsScopable || GroupLimits.IsAllowed(permission)))
                                 {
                                     <MudSelectItem T="Permission" Value="permission">@permission</MudSelectItem>
                                 }
                             </MudSelect>
+                        }
+                    </MudTd>
+                    <MudTd>
+                        @if (context.IsLocked)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Never</MudText>
+                        }
+                        else
+                        {
+                            <MudSwitch T="bool" Value="context.IsScopable" ValueChanged="@(limited => SetLimitedToGroupsAsync(context, limited))" Color="Color.Primary"
+                                       UserAttributes="@(new Dictionary<string, object> { ["aria-label"] = $"Limit {context.Name} to groups" })" />
                         }
                     </MudTd>
                     <MudTd>
@@ -224,6 +243,11 @@
     private List<Group> _allGroups = [];
     private string _newRoleName = "";
     private string? _addRoleError;
+    private bool _newRoleLimitedToGroups;
+
+    private const string LimitToGroupsHelp = "Someone granted this role with Groups sees and manages only those Groups' domains. "
+        + "It can only hold permissions that act on one domain at a time: viewing, adding, editing and removing domains, MTA-STS, and viewing groups, tags and alerts. "
+        + "It can only be switched on or off while no one holds the role.";
     private string _newGrantEmail = "";
     private int _newGrantRoleId;
     private IReadOnlyCollection<int> _newGrantGroupIds = [];
@@ -326,7 +350,7 @@
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            result = await RoleManagementService.AddRoleAsync(db, await AuditActorAccessor.GetAsync(), _newRoleName, [], CancellationToken.None);
+            result = await RoleManagementService.AddRoleAsync(db, await AuditActorAccessor.GetAsync(), _newRoleName, [], CancellationToken.None, _newRoleLimitedToGroups);
         }
         catch (Exception)
         {
@@ -344,6 +368,7 @@
         if (result == RoleManagementService.AddRoleResult.Added)
         {
             _newRoleName = "";
+            _newRoleLimitedToGroups = false;
             await LoadAsync();
         }
     }
@@ -372,7 +397,11 @@
         {
             await using var db = await DbFactory.CreateDbContextAsync();
             var result = await RoleManagementService.UpdateRoleAsync(db, await AuditActorAccessor.GetAsync(), row.Id, row.Name, permissions.ToList(), CancellationToken.None);
-            if (result != RoleManagementService.UpdateRoleResult.Updated)
+            if (result == RoleManagementService.UpdateRoleResult.NotAllowedWhenLimited)
+            {
+                Snackbar.Add($"{row.Name} is limited to groups, so it can only hold permissions that act on one domain at a time.", Severity.Error);
+            }
+            else if (result != RoleManagementService.UpdateRoleResult.Updated)
             {
                 Snackbar.Add($"Failed to update {row.Name}'s permissions - the role may have been renamed or locked elsewhere. Try again.", Severity.Error);
             }
@@ -380,6 +409,31 @@
         catch (Exception)
         {
             Snackbar.Add($"Failed to update {row.Name}'s permissions. Try again.", Severity.Error);
+        }
+        await LoadAsync();
+    }
+
+    private async Task SetLimitedToGroupsAsync(RoleRow row, bool limitedToGroups)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var result = await RoleManagementService.SetLimitedToGroupsAsync(db, await AuditActorAccessor.GetAsync(), row.Id, limitedToGroups, CancellationToken.None);
+            var error = result switch
+            {
+                RoleManagementService.SetLimitedToGroupsResult.InUse => $"Can't change {row.Name} while it's granted to someone or an API key. Create a new role instead, or revoke those first.",
+                RoleManagementService.SetLimitedToGroupsResult.NotAllowedWhenLimited => $"Can't limit {row.Name} to groups while it holds permissions that reach past one domain. Remove those first.",
+                RoleManagementService.SetLimitedToGroupsResult.Locked => $"{row.Name} can't be changed.",
+                _ => null,
+            };
+            if (error is not null)
+            {
+                Snackbar.Add(error, Severity.Error);
+            }
+        }
+        catch (Exception)
+        {
+            Snackbar.Add($"Failed to update {row.Name}. Try again.", Severity.Error);
         }
         await LoadAsync();
     }
