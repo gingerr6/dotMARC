@@ -32,7 +32,8 @@ command line.
 | `ENTRAID_TENANT_ID` | no | Defaults to `GRAPH_TENANT_ID` |
 | `INITIAL_ADMIN_EMAILS` | yes | Comma-separated; these people become Admins on first start |
 | `GRAPH_TLSRPT_MAILBOX_ADDRESS` | no | Separate TLS-RPT mailbox |
-| `DOTMARC_VERSION` | no | Image tag, default `0.9.3` |
+| `DOTMARC_IMAGE` | no | Image to run, default `ghcr.io/homotechsual/dotmarc`; the workflow defaults it to this fork's `ghcr.io/gingerr6/dotmarc` |
+| `DOTMARC_VERSION` | no | Image tag, default `0.9.3`. For a fork's image, use a commit's full SHA or `edge` |
 | `DO_REGION`, `DO_SIZE`, `DO_DROPLET_NAME` | no | Defaults `lon1`, `s-1vcpu-2gb`, `dotmarc` |
 | `DO_PROJECT` | no | DigitalOcean project to put the Droplet in; the workflow defaults it to `dotMARC` |
 
@@ -51,7 +52,8 @@ dashboard app registration.
 
 Open the Droplet's **Console** in the DigitalOcean control panel, then:
 
-- **Update:** `dotmarc-update 0.9.4` takes a backup, then switches to the new image.
+- **Update:** `dotmarc-update 0.9.4` takes a backup, then switches to the new image. Add an image to
+  switch whose image runs too: `dotmarc-update <commit sha> ghcr.io/gingerr6/dotmarc`.
 - **Logs:** `cd /opt/dotmarc && docker compose logs -f app`
 - **Change a setting:** edit `/opt/dotmarc/.env`, then `cd /opt/dotmarc && docker compose up -d`.
 

@@ -9,16 +9,24 @@ namespace DotMarc.Data;
 /// directly on a caller-supplied DotMarcDbContext.</summary>
 public static class RoleManagementService
 {
-    public enum AddRoleResult { Added, InvalidName, AlreadyExists }
-    public enum UpdateRoleResult { Updated, InvalidName, AlreadyExists, Locked }
+    public enum AddRoleResult { Added, InvalidName, AlreadyExists, NotAllowedWhenLimited }
+    public enum UpdateRoleResult { Updated, InvalidName, AlreadyExists, Locked, NotAllowedWhenLimited }
     public enum RemoveRoleResult { Removed, Locked, InUse }
+    public enum SetLimitedToGroupsResult { Updated, Locked, InUse, NotAllowedWhenLimited }
 
-    public static async Task<AddRoleResult> AddRoleAsync(DotMarcDbContext context, AuditActor actor, string rawName, List<Permission> permissions, CancellationToken cancellationToken = default)
+    /// <summary>A role limited to Groups (IsScopable) can be granted with Groups, and then sees and changes only the
+    /// domains in them. It may only hold the permissions in GroupLimits.</summary>
+    public static async Task<AddRoleResult> AddRoleAsync(DotMarcDbContext context, AuditActor actor, string rawName, List<Permission> permissions, CancellationToken cancellationToken = default, bool limitedToGroups = false)
     {
         var name = rawName.Trim();
         if (string.IsNullOrEmpty(name))
         {
             return AddRoleResult.InvalidName;
+        }
+
+        if (limitedToGroups && !GroupLimits.AllAllowed(permissions))
+        {
+            return AddRoleResult.NotAllowedWhenLimited;
         }
 
         var exists = await context.Roles.AnyAsync(r => r.Name.ToLower() == name.ToLower(), cancellationToken).ConfigureAwait(false);
@@ -27,14 +35,14 @@ public static class RoleManagementService
             return AddRoleResult.AlreadyExists;
         }
 
-        var role = new Role { Name = name, IsLocked = false, IsScopable = false, Permissions = permissions };
+        var role = new Role { Name = name, IsLocked = false, IsScopable = limitedToGroups, Permissions = permissions };
         context.Roles.Add(role);
 
         try
         {
             await AuditLog.SaveAndRecordAsync(context,
                 () => AuditLog.Record(context, actor, AuditActions.RoleAdded, AuditTarget.For(role), $"Added role {role.Name}",
-                    new AuditChanges().Set("Permissions", [], PermissionNames(permissions))),
+                    new AuditChanges().Field("Limited to groups", false, limitedToGroups).Set("Permissions", [], PermissionNames(permissions))),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
@@ -57,6 +65,11 @@ public static class RoleManagementService
         if (string.IsNullOrEmpty(name))
         {
             return UpdateRoleResult.InvalidName;
+        }
+
+        if (role.IsScopable && !GroupLimits.AllAllowed(permissions))
+        {
+            return UpdateRoleResult.NotAllowedWhenLimited;
         }
 
         var exists = await context.Roles.AnyAsync(r => r.Id != roleId && r.Name.ToLower() == name.ToLower(), cancellationToken).ConfigureAwait(false);
@@ -89,6 +102,38 @@ public static class RoleManagementService
         return UpdateRoleResult.Updated;
     }
 
+    /// <summary>Only while no one holds the role: turning the limit on would leave existing grants with no Groups,
+    /// which means every domain, and turning it off would silently widen grants that were limited.</summary>
+    public static async Task<SetLimitedToGroupsResult> SetLimitedToGroupsAsync(DotMarcDbContext context, AuditActor actor, int roleId, bool limitedToGroups, CancellationToken cancellationToken = default)
+    {
+        var role = await context.Roles.SingleAsync(r => r.Id == roleId, cancellationToken).ConfigureAwait(false);
+        if (role.IsLocked)
+        {
+            return SetLimitedToGroupsResult.Locked;
+        }
+
+        var changes = new AuditChanges().Field("Limited to groups", role.IsScopable, limitedToGroups);
+        if (!changes.Any)
+        {
+            return SetLimitedToGroupsResult.Updated;
+        }
+
+        if (limitedToGroups && !GroupLimits.AllAllowed(role.Permissions))
+        {
+            return SetLimitedToGroupsResult.NotAllowedWhenLimited;
+        }
+
+        if (await IsInUseAsync(context, roleId, cancellationToken).ConfigureAwait(false))
+        {
+            return SetLimitedToGroupsResult.InUse;
+        }
+
+        role.IsScopable = limitedToGroups;
+        AuditLog.Record(context, actor, AuditActions.RoleUpdated, AuditTarget.For(role), $"Updated role {role.Name}", changes);
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return SetLimitedToGroupsResult.Updated;
+    }
+
     /// <summary>Unlike Group/Tag deletion (which only ever removes membership rows and is always
     /// safe), deleting a Role that's still granted to someone would leave their UserAccess row
     /// pointing at nothing - an undefined-permissions state. This checks first and refuses rather
@@ -102,9 +147,7 @@ public static class RoleManagementService
             return RemoveRoleResult.Locked;
         }
 
-        var inUse = await context.UserAccesses.AnyAsync(u => u.RoleId == roleId, cancellationToken).ConfigureAwait(false)
-            || await context.ApiKeys.AnyAsync(key => key.RoleId == roleId && key.RevokedUtc == null, cancellationToken).ConfigureAwait(false);
-        if (inUse)
+        if (await IsInUseAsync(context, roleId, cancellationToken).ConfigureAwait(false))
         {
             return RemoveRoleResult.InUse;
         }
@@ -138,6 +181,10 @@ public static class RoleManagementService
 
         return RemoveRoleResult.Removed;
     }
+
+    private static async Task<bool> IsInUseAsync(DotMarcDbContext context, int roleId, CancellationToken cancellationToken) =>
+        await context.UserAccesses.AnyAsync(u => u.RoleId == roleId, cancellationToken).ConfigureAwait(false)
+        || await context.ApiKeys.AnyAsync(key => key.RoleId == roleId && key.RevokedUtc == null, cancellationToken).ConfigureAwait(false);
 
     private static IEnumerable<string> PermissionNames(IEnumerable<Permission> permissions) =>
         permissions.Select(permission => permission.ToString());

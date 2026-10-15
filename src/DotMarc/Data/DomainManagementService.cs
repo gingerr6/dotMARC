@@ -16,8 +16,10 @@ public static class DomainManagementService
 
     /// <summary>Creates a monitored Domain row with no reports yet, so it immediately shows as
     /// "Missing" on the Dashboard (Dashboard.razor's existing IsMonitored &amp;&amp;
-    /// LastReportReceivedUtc-is-null check) until its first real report arrives.</summary>
-    public static async Task<AddDomainResult> AddDomainAsync(DotMarcDbContext context, AuditActor actor, string rawName, CancellationToken cancellationToken = default)
+    /// LastReportReceivedUtc-is-null check) until its first real report arrives. groupIds puts it
+    /// in Groups in the same save, so someone limited to Groups never adds a domain they can't see.</summary>
+    public static async Task<AddDomainResult> AddDomainAsync(DotMarcDbContext context, AuditActor actor, string rawName, CancellationToken cancellationToken = default,
+        IReadOnlyList<int>? groupIds = null)
     {
         if (!DomainNameValidator.TryNormalize(rawName, out var normalized))
         {
@@ -31,13 +33,17 @@ public static class DomainManagementService
         }
 
         var nextSortOrder = (await context.Domains.MaxAsync(d => (int?)d.SortOrder, cancellationToken).ConfigureAwait(false) ?? -1) + 1;
-        var domain = new Domain { Name = normalized, FirstSeenUtc = DateTimeOffset.UtcNow, IsMonitored = true, SortOrder = nextSortOrder };
+        var groups = groupIds is { Count: > 0 }
+            ? await context.Groups.Where(group => groupIds.Contains(group.Id)).ToListAsync(cancellationToken).ConfigureAwait(false)
+            : [];
+        var domain = new Domain { Name = normalized, FirstSeenUtc = DateTimeOffset.UtcNow, IsMonitored = true, SortOrder = nextSortOrder, Groups = groups };
         context.Domains.Add(domain);
 
         try
         {
             await AuditLog.SaveAndRecordAsync(context,
-                () => AuditLog.Record(context, actor, AuditActions.DomainAdded, AuditTarget.For(domain), $"Added domain {domain.Name}"),
+                () => AuditLog.Record(context, actor, AuditActions.DomainAdded, AuditTarget.For(domain), $"Added domain {domain.Name}",
+                    groups.Count > 0 ? new AuditChanges().Set("Groups", [], groups.Select(group => group.Name)) : null),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })

@@ -13,6 +13,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject PsaDirectory PsaDirectory
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>dotMARC - Manage Domains</PageTitle>
 <MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
@@ -24,15 +25,25 @@
 <AuthorizeView Policy="DomainsAdd">
     <MudPaper Class="pa-4 mb-4" Elevation="1">
         <MudGrid>
-            <MudItem xs="9">
+            <MudItem xs="@(_isLimited ? 6 : 9)">
                 <MudTextField @bind-Value="_newDomainName" Label="Domain name" Placeholder="contoso.example" Variant="Variant.Outlined"
                               Error="@(_addError is not null)" ErrorText="@_addError" Immediate="true" />
             </MudItem>
+            @if (_isLimited)
+            {
+                @* Someone limited to Groups only sees domains in their Groups, so a new domain has to go in one. *@
+                <MudItem xs="3">
+                    <SearchableMultiSelect TValue="int" Options="_groupOptions" @bind-SelectedValues="_newDomainGroupIds" Label="Groups" Variant="Variant.Outlined"
+                                           MultiSelectionTextFunc="@(selected => selected.Count == 0 ? "Choose at least one" : $"{selected.Count} group(s)")" />
+                </MudItem>
+            }
             <MudItem xs="3" Class="d-flex align-start" Style="gap:0.5rem">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="button-beside-input" StartIcon="@Icons.Material.Filled.Add"
                            OnClick="AddDomainAsync">Add domain</MudButton>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="button-beside-input" StartIcon="@Icons.Material.Filled.UploadFile"
-                           Href="/domains/import">Import domains</MudButton>
+                <AuthorizeView Policy="DomainsImport" Context="importAuthState">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="button-beside-input" StartIcon="@Icons.Material.Filled.UploadFile"
+                               Href="/domains/import">Import domains</MudButton>
+                </AuthorizeView>
             </MudItem>
         </MudGrid>
     </MudPaper>
@@ -192,7 +203,19 @@ else
     private List<SelectOption<int?>> _tagFilterOptions = [];
     private Dictionary<PsaKind, List<SelectOption<string>>> _companyFilterOptions = [];
     private string _newDomainName = "";
+    private IReadOnlyCollection<int> _newDomainGroupIds = [];
     private string? _addError;
+
+    // Limited to Groups: the page shows and changes only those Groups' domains, offers only those Groups, and hides
+    // the PSA columns, whose company lists cover every client.
+    private bool _isLimited;
+
+    private async Task<DotMarc.Api.ApiScope> ScopeAsync() =>
+        DotMarc.Api.ApiScope.From((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+
+    /// <summary>The page only offers rows it loaded, but a change is checked against the scope again when it's made.</summary>
+    private static Task<bool> MayChangeAsync(DotMarcDbContext db, DotMarc.Api.ApiScope scope, int domainId) =>
+        scope.Domains(db.Domains.AsNoTracking()).AnyAsync(domain => domain.Id == domainId);
 
     private string? _domainFilter;
     private int? _groupFilter;
@@ -247,11 +270,12 @@ else
 
     private async Task LoadAsync()
     {
+        var scope = await ScopeAsync();
+        _isLimited = scope.IsScoped;
         await using var db = await DbFactory.CreateDbContextAsync();
-        _allGroups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync();
+        _allGroups = await scope.Groups(db.Groups.AsNoTracking()).OrderBy(g => g.Name).ToListAsync();
         _allTags = await db.Tags.AsNoTracking().OrderBy(t => t.Name).ToListAsync();
-        _domains = await db.Domains
-            .AsNoTracking()
+        _domains = await scope.Domains(db.Domains.AsNoTracking())
             // Several collections are projected, so without this EF joins them all into one result set.
             .AsSplitQuery()
             .OrderBy(d => d.SortOrder)
@@ -260,8 +284,15 @@ else
                 d.Groups.Select(g => g.Id).ToList(), d.Tags.Select(t => t.Id).ToList(), d.PsaCompanyLinks.ToList()))
             .ToListAsync();
 
-        await using var psaDb = await DbFactory.CreateDbContextAsync();
-        _psaLists = (await PsaDirectory.LoadAsync(psaDb)).ToList();
+        if (_isLimited)
+        {
+            _psaLists = [];
+        }
+        else
+        {
+            await using var psaDb = await DbFactory.CreateDbContextAsync();
+            _psaLists = (await PsaDirectory.LoadAsync(psaDb)).ToList();
+        }
 
         _groupOptions = _allGroups.Select(group => new SelectOption<int>(group.Id, group.Name)).ToList();
         _tagOptions = _allTags.Select(tag => new SelectOption<int>(tag.Id, tag.Name)).ToList();
@@ -275,11 +306,19 @@ else
     private async Task AddDomainAsync()
     {
         _addError = null;
+        var scope = await ScopeAsync();
+        var groupIds = _newDomainGroupIds.Where(scope.Includes).ToList();
+        if (scope.IsScoped && groupIds.Count == 0)
+        {
+            _addError = "Choose at least one of your groups for the domain.";
+            return;
+        }
+
         DomainManagementService.AddDomainResult result;
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            result = await DomainManagementService.AddDomainAsync(db, await AuditActorAccessor.GetAsync(), _newDomainName, CancellationToken.None);
+            result = await DomainManagementService.AddDomainAsync(db, await AuditActorAccessor.GetAsync(), _newDomainName, CancellationToken.None, groupIds);
         }
         catch (Exception)
         {
@@ -297,6 +336,7 @@ else
         if (result == DomainManagementService.AddDomainResult.Added)
         {
             _newDomainName = "";
+            _newDomainGroupIds = [];
             await LoadAsync();
         }
     }
@@ -306,7 +346,10 @@ else
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            await DomainManagementService.SetMonitoredAsync(db, await AuditActorAccessor.GetAsync(), row.Id, isMonitored, CancellationToken.None);
+            if (await MayChangeAsync(db, await ScopeAsync(), row.Id))
+            {
+                await DomainManagementService.SetMonitoredAsync(db, await AuditActorAccessor.GetAsync(), row.Id, isMonitored, CancellationToken.None);
+            }
         }
         catch (Exception)
         {
@@ -320,7 +363,17 @@ else
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            await GroupManagementService.SetDomainGroupsAsync(db, await AuditActorAccessor.GetAsync(), row.Id, groupIds.ToList(), CancellationToken.None);
+            var scope = await ScopeAsync();
+            if (!await MayChangeAsync(db, scope, row.Id))
+            {
+                return;
+            }
+
+            var result = await GroupManagementService.SetDomainGroupsWithinLimitAsync(db, await AuditActorAccessor.GetAsync(), row.Id, groupIds.ToList(), scope.GroupIds, CancellationToken.None);
+            if (result == GroupManagementService.SetDomainGroupsResult.WouldLoseAccess)
+            {
+                Snackbar.Add($"{row.Name} has to stay in at least one of your groups, or you'd lose access to it.", Severity.Warning);
+            }
         }
         catch (Exception)
         {
@@ -334,7 +387,10 @@ else
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            await TagManagementService.SetDomainTagsAsync(db, await AuditActorAccessor.GetAsync(), row.Id, tagIds.ToList(), CancellationToken.None);
+            if (await MayChangeAsync(db, await ScopeAsync(), row.Id))
+            {
+                await TagManagementService.SetDomainTagsAsync(db, await AuditActorAccessor.GetAsync(), row.Id, tagIds.ToList(), CancellationToken.None);
+            }
         }
         catch (Exception)
         {
@@ -358,7 +414,10 @@ else
             try
             {
                 await using var db = await DbFactory.CreateDbContextAsync();
-                await DomainManagementService.RemoveDomainAsync(db, await AuditActorAccessor.GetAsync(), row.Id, CancellationToken.None);
+                if (await MayChangeAsync(db, await ScopeAsync(), row.Id))
+                {
+                    await DomainManagementService.RemoveDomainAsync(db, await AuditActorAccessor.GetAsync(), row.Id, CancellationToken.None);
+                }
                 await LoadAsync();
             }
             catch (Exception)
@@ -413,6 +472,11 @@ else
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
+            if (_isLimited || !await MayChangeAsync(db, await ScopeAsync(), row.Id))
+            {
+                return;
+            }
+
             await DomainManagementService.SetPsaCompanyAsync(db, await AuditActorAccessor.GetAsync(), row.Id, psa, company, CancellationToken.None);
         }
         catch (Exception)

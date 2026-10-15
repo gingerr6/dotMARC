@@ -39,7 +39,8 @@ jobs:
           ENTRAID_TENANT_ID: ${{ secrets.ENTRAID_TENANT_ID || vars.ENTRAID_TENANT_ID }}
           ENTRAID_CLIENT_ID: ${{ secrets.ENTRAID_CLIENT_ID || vars.ENTRAID_CLIENT_ID }}
           ENTRAID_CLIENT_SECRET: ${{ secrets.ENTRAID_CLIENT_SECRET || vars.ENTRAID_CLIENT_SECRET }}
-          DOTMARC_VERSION: ${{ vars.DOTMARC_VERSION }}
+          DOTMARC_IMAGE: ${{ vars.DOTMARC_IMAGE || 'ghcr.io/gingerr6/dotmarc' }}
+          DOTMARC_VERSION: ${{ vars.DOTMARC_VERSION || 'edge' }}
           DO_REGION: ${{ vars.DO_REGION }}
           DO_SIZE: ${{ vars.DO_SIZE }}
           DO_DROPLET_NAME: ${{ vars.DO_DROPLET_NAME }}

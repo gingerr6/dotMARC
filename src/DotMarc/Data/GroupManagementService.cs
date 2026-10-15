@@ -95,7 +95,7 @@ public static class GroupManagementService
         return AddGroupResult.Added;
     }
 
-    public enum RemoveGroupResult { Removed, InUseByApiKey, LastGroupOfClientPortal }
+    public enum RemoveGroupResult { Removed, InUseByApiKey, LastGroupOfAGrant }
 
     /// <summary>Permanently deletes a Group row. DotMarcDbContext.cs's implicit many-to-many
     /// skip navigation between Domain and Group means EF removes the join rows via the join
@@ -113,13 +113,13 @@ public static class GroupManagementService
             return RemoveGroupResult.InUseByApiKey;
         }
 
-        // A client portal grant left with no Groups would see every domain, so its last Group can't be removed.
-        var lastGroupOfAPortalGrant = await context.UserAccesses
-            .AnyAsync(access => access.IsClientPortal && access.ScopedGroups.Count == 1 && access.ScopedGroups.Any(scopedGroup => scopedGroup.Id == groupId), cancellationToken)
+        // A grant left with no Groups would see every domain, so the last Group of a limited grant can't be removed.
+        var lastGroupOfAGrant = await context.UserAccesses
+            .AnyAsync(access => access.ScopedGroups.Count == 1 && access.ScopedGroups.Any(scopedGroup => scopedGroup.Id == groupId), cancellationToken)
             .ConfigureAwait(false);
-        if (lastGroupOfAPortalGrant)
+        if (lastGroupOfAGrant)
         {
-            return RemoveGroupResult.LastGroupOfClientPortal;
+            return RemoveGroupResult.LastGroupOfAGrant;
         }
 
         // Its branding row goes with it by cascade; its logos are released for cleanup below.
@@ -151,6 +151,34 @@ public static class GroupManagementService
         domain.Groups = groups;
         AuditLog.Record(context, actor, AuditActions.DomainGroupsChanged, AuditTarget.For(domain), $"Changed the groups for {domain.Name}", changes);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public enum SetDomainGroupsResult { Updated, WouldLoseAccess }
+
+    /// <summary>Sets a domain's Groups for someone who may be limited to some Groups (limitedTo; null when they aren't).
+    /// They choose among their own Groups only. The domain keeps the Groups they can't see, since they can't see what
+    /// they'd be removing, and it has to stay in at least one of theirs, or it would vanish from their view.</summary>
+    public static async Task<SetDomainGroupsResult> SetDomainGroupsWithinLimitAsync(DotMarcDbContext context, AuditActor actor, int domainId,
+        IReadOnlyCollection<int> chosenGroupIds, IReadOnlyCollection<int>? limitedTo, CancellationToken cancellationToken = default)
+    {
+        if (limitedTo is null)
+        {
+            await SetDomainGroupsAsync(context, actor, domainId, chosenGroupIds.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
+            return SetDomainGroupsResult.Updated;
+        }
+
+        var chosen = chosenGroupIds.Where(limitedTo.Contains).Distinct().ToList();
+        if (chosen.Count == 0)
+        {
+            return SetDomainGroupsResult.WouldLoseAccess;
+        }
+
+        var hidden = await context.Domains.Where(domain => domain.Id == domainId)
+            .SelectMany(domain => domain.Groups.Select(group => group.Id))
+            .Where(groupId => !limitedTo.Contains(groupId))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        await SetDomainGroupsAsync(context, actor, domainId, chosen.Concat(hidden).ToList(), cancellationToken).ConfigureAwait(false);
+        return SetDomainGroupsResult.Updated;
     }
 
     /// <summary>Links (or, with null, unlinks) a Group to a company in one PSA, from that PSA's column on Manage groups.</summary>

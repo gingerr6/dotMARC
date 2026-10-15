@@ -1,12 +1,13 @@
 # dotMARC on a DigitalOcean Droplet: the published image + PostgreSQL + Caddy (automatic HTTPS).
 # deploy.py copies this file, Caddyfile and a generated .env onto the Droplet at /opt/dotmarc via
 # cloud-init and starts it; nothing here needs hand-editing. Same shape as
-# docker-compose.selfhosted.yml at the repo root, but runs the published image instead of
+# docker-compose.selfhosted.yml at the repo root, but runs a published image instead of
 # building from source, which a small Droplet is too short of memory to do comfortably.
+# DOTMARC_IMAGE picks whose image: upstream's by default, or a fork's own.
 
 services:
   app:
-    image: ghcr.io/homotechsual/dotmarc:${DOTMARC_VERSION:?Set DOTMARC_VERSION}
+    image: ${DOTMARC_IMAGE:-ghcr.io/homotechsual/dotmarc}:${DOTMARC_VERSION:?Set DOTMARC_VERSION}
     restart: unless-stopped
     environment:
       ConnectionStrings__DotMarc: "Host=postgres;Database=dotmarc;Username=dotmarc;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}"
