@@ -65,7 +65,7 @@ else
                 <MudText Typo="Typo.caption">missing expected report</MudText>
             </MudPaper>
         </MudItem>
-        <AuthorizeView Policy="DomainsWrite">
+        <AuthorizeView Policy="ParseFailuresView">
             <MudItem xs="12" sm="6" md="2">
                 <MudPaper Height="100%" Class="pa-4 stat-card cursor-pointer" Elevation="1" @onclick="@(() => Navigation.NavigateTo("/parse-failures"))">
                     <MudText Typo="Typo.h5" Class="stat-value" Color="@(!IsFilterActive && _summary.ParseFailureCount > 0 ? Color.Error : Color.Default)">@_summary.ParseFailureCount</MudText>

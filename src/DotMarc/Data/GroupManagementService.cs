@@ -153,6 +153,34 @@ public static class GroupManagementService
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public enum SetDomainGroupsResult { Updated, WouldLoseAccess }
+
+    /// <summary>Sets a domain's Groups for someone who may be limited to some Groups (limitedTo; null when they aren't).
+    /// They choose among their own Groups only. The domain keeps the Groups they can't see, since they can't see what
+    /// they'd be removing, and it has to stay in at least one of theirs, or it would vanish from their view.</summary>
+    public static async Task<SetDomainGroupsResult> SetDomainGroupsWithinLimitAsync(DotMarcDbContext context, AuditActor actor, int domainId,
+        IReadOnlyCollection<int> chosenGroupIds, IReadOnlyCollection<int>? limitedTo, CancellationToken cancellationToken = default)
+    {
+        if (limitedTo is null)
+        {
+            await SetDomainGroupsAsync(context, actor, domainId, chosenGroupIds.Distinct().ToList(), cancellationToken).ConfigureAwait(false);
+            return SetDomainGroupsResult.Updated;
+        }
+
+        var chosen = chosenGroupIds.Where(limitedTo.Contains).Distinct().ToList();
+        if (chosen.Count == 0)
+        {
+            return SetDomainGroupsResult.WouldLoseAccess;
+        }
+
+        var hidden = await context.Domains.Where(domain => domain.Id == domainId)
+            .SelectMany(domain => domain.Groups.Select(group => group.Id))
+            .Where(groupId => !limitedTo.Contains(groupId))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        await SetDomainGroupsAsync(context, actor, domainId, chosen.Concat(hidden).ToList(), cancellationToken).ConfigureAwait(false);
+        return SetDomainGroupsResult.Updated;
+    }
+
     /// <summary>Links (or, with null, unlinks) a Group to a company in one PSA, from that PSA's column on Manage groups.</summary>
     public static async Task SetPsaCompanyAsync(DotMarcDbContext context, AuditActor actor, int groupId, PsaKind psa, PsaCompany? company, CancellationToken cancellationToken = default)
     {

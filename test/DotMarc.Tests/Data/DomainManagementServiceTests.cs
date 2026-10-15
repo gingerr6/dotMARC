@@ -527,4 +527,24 @@ public sealed class DomainManagementServiceTests : IAsyncLifetime
         await using var verify = CreateContext();
         Assert.Equal(["selector1"], await verify.DomainDkimRecords.Select(record => record.Selector).ToListAsync());
     }
+
+    [Fact]
+    public async Task AddDomainAsync_PutsTheDomainInTheGivenGroups()
+    {
+        int groupId;
+        await using (var setup = CreateContext())
+        {
+            var group = new Group { Name = "Aurora Retail" };
+            setup.Groups.Add(group);
+            await setup.SaveChangesAsync();
+            groupId = group.Id;
+        }
+
+        await using var context = CreateContext();
+        var result = await DomainManagementService.AddDomainAsync(context, TestActors.Admin, "aurora.example", CancellationToken.None, [groupId]);
+
+        Assert.Equal(DomainManagementService.AddDomainResult.Added, result);
+        await using var verify = CreateContext();
+        Assert.Equal([groupId], await verify.Domains.Where(domain => domain.Name == "aurora.example").SelectMany(domain => domain.Groups.Select(group => group.Id)).ToListAsync());
+    }
 }

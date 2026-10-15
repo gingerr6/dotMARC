@@ -17,6 +17,9 @@ public sealed class ApiScope
 
     public bool IsScoped => _groupIds is not null;
 
+    /// <summary>The Groups this principal is limited to, or null when it isn't limited.</summary>
+    public IReadOnlyList<int>? GroupIds => _groupIds;
+
     public static ApiScope From(ClaimsPrincipal principal)
     {
         var groupIds = principal.FindAll(UserAccessClaimsTransformation.ScopedGroupClaimType)

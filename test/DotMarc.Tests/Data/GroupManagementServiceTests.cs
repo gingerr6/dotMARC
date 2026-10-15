@@ -437,4 +437,71 @@ public sealed class GroupManagementServiceTests : IAsyncLifetime
 
         Assert.StartsWith("Dark secondary colour must be a hex colour such as #1A73E8.", exception.Message);
     }
+
+    private async Task<(int DomainId, int Mine, int Theirs, int OtherOfMine)> AddDomainInTwoClientsGroupsAsync()
+    {
+        await using var context = CreateContext();
+        var mine = new Group { Name = "Aurora Retail" };
+        var otherOfMine = new Group { Name = "Aurora Wholesale" };
+        var theirs = new Group { Name = "Borealis Bank" };
+        var domain = new Domain { Name = "shared.example", FirstSeenUtc = DateTimeOffset.UtcNow, Groups = [mine, theirs] };
+        context.AddRange(otherOfMine, domain);
+        await context.SaveChangesAsync();
+        return (domain.Id, mine.Id, theirs.Id, otherOfMine.Id);
+    }
+
+    private async Task<List<int>> GroupIdsOfAsync(int domainId)
+    {
+        await using var verify = CreateContext();
+        return await verify.Domains.Where(domain => domain.Id == domainId).SelectMany(domain => domain.Groups.Select(group => group.Id)).OrderBy(id => id).ToListAsync();
+    }
+
+    [Fact]
+    public async Task SetDomainGroupsWithinLimitAsync_KeepsTheGroupsTheyCantSee()
+    {
+        var (domainId, mine, theirs, otherOfMine) = await AddDomainInTwoClientsGroupsAsync();
+        await using var context = CreateContext();
+
+        var result = await GroupManagementService.SetDomainGroupsWithinLimitAsync(context, TestActors.Admin, domainId, [otherOfMine], [mine, otherOfMine]);
+
+        Assert.Equal(GroupManagementService.SetDomainGroupsResult.Updated, result);
+        Assert.Equal(new[] { theirs, otherOfMine }.Order(), await GroupIdsOfAsync(domainId));
+    }
+
+    [Fact]
+    public async Task SetDomainGroupsWithinLimitAsync_IgnoresGroupsOutsideTheLimit()
+    {
+        var (domainId, mine, theirs, otherOfMine) = await AddDomainInTwoClientsGroupsAsync();
+        await using var context = CreateContext();
+        var stranger = new Group { Name = "Cygnus Labs" };
+        context.Groups.Add(stranger);
+        await context.SaveChangesAsync();
+
+        await GroupManagementService.SetDomainGroupsWithinLimitAsync(context, TestActors.Admin, domainId, [mine, stranger.Id], [mine, otherOfMine]);
+
+        Assert.Equal(new[] { mine, theirs }.Order(), await GroupIdsOfAsync(domainId));
+    }
+
+    [Fact]
+    public async Task SetDomainGroupsWithinLimitAsync_RefusesTakingTheDomainOutOfAllTheirGroups()
+    {
+        var (domainId, mine, theirs, otherOfMine) = await AddDomainInTwoClientsGroupsAsync();
+        await using var context = CreateContext();
+
+        var result = await GroupManagementService.SetDomainGroupsWithinLimitAsync(context, TestActors.Admin, domainId, [], [mine, otherOfMine]);
+
+        Assert.Equal(GroupManagementService.SetDomainGroupsResult.WouldLoseAccess, result);
+        Assert.Equal(new[] { mine, theirs }.Order(), await GroupIdsOfAsync(domainId));
+    }
+
+    [Fact]
+    public async Task SetDomainGroupsWithinLimitAsync_WithNoLimit_SetsExactlyTheChosenGroups()
+    {
+        var (domainId, _, _, otherOfMine) = await AddDomainInTwoClientsGroupsAsync();
+        await using var context = CreateContext();
+
+        await GroupManagementService.SetDomainGroupsWithinLimitAsync(context, TestActors.Admin, domainId, [otherOfMine], limitedTo: null);
+
+        Assert.Equal([otherOfMine], await GroupIdsOfAsync(domainId));
+    }
 }

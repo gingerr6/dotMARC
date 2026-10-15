@@ -408,6 +408,16 @@ builder.Services.AddAuthorization(options =>
         DotMarc.Security.UserAccessClaimsTransformation.PermissionClaimType,
         nameof(Permission.DomainsAdd), nameof(Permission.DomainsEdit), nameof(Permission.DomainsReorder), nameof(Permission.DomainsDelete)));
 
+    // Bulk import works with Group names and can create Groups, and parse failures belong to no domain, so neither is
+    // offered to someone limited to Groups. They add domains one at a time, into their own Groups.
+    options.AddPolicy("DomainsImport", policy => policy
+        .RequireClaim(DotMarc.Security.UserAccessClaimsTransformation.PermissionClaimType, nameof(Permission.DomainsAdd))
+        .RequireAssertion(context => !DotMarc.Api.ApiScope.From(context.User).IsScoped));
+    options.AddPolicy("ParseFailuresView", policy => policy
+        .RequireClaim(DotMarc.Security.UserAccessClaimsTransformation.PermissionClaimType,
+            nameof(Permission.DomainsAdd), nameof(Permission.DomainsEdit), nameof(Permission.DomainsReorder), nameof(Permission.DomainsDelete))
+        .RequireAssertion(context => !DotMarc.Api.ApiScope.From(context.User).IsScoped));
+
     options.AddPolicy("GroupsOrTagsWrite", policy => policy.RequireClaim(
         DotMarc.Security.UserAccessClaimsTransformation.PermissionClaimType,
         nameof(Permission.GroupsAdd), nameof(Permission.GroupsRename), nameof(Permission.GroupsDelete),
@@ -607,10 +617,10 @@ app.MapGet("/.well-known/mta-sts.txt", async (HttpContext httpContext, IDbContex
 // The Import domains page's sample files, built from the same rows so the CSV and Excel versions always match.
 app.MapGet("/domains/import/sample.csv", () =>
         Results.File(System.Text.Encoding.UTF8.GetBytes(DotMarc.DomainImport.DomainImportSamples.Csv), "text/csv", "dotmarc-domain-import-sample.csv"))
-    .RequireAuthorization(nameof(Permission.DomainsAdd));
+    .RequireAuthorization("DomainsImport");
 app.MapGet("/domains/import/sample.xlsx", () =>
         Results.File(DotMarc.DomainImport.DomainImportSamples.Xlsx(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "dotmarc-domain-import-sample.xlsx"))
-    .RequireAuthorization(nameof(Permission.DomainsAdd));
+    .RequireAuthorization("DomainsImport");
 // Streams the rows the Audit log page's filters match. The filter travels in the query string, and the export is
 // itself recorded, so who took a copy of the log is part of the log.
 app.MapGet("/audit/export", async (HttpContext httpContext, IDbContextFactory<DotMarcDbContext> dbContextFactory, DotMarc.Audit.AuditRecorder auditRecorder) =>
@@ -636,7 +646,7 @@ app.MapGet("/audit/export", async (HttpContext httpContext, IDbContextFactory<Do
 app.MapGet("/dns-push/{provider}/start", async (
     string provider, int domainId, string target, string? payload, HttpContext httpContext,
     IEnumerable<IDnsPushProvider> pushProviders, IEnumerable<IDnsChangeBuilder> changeBuilders, DnsPushStateProtector stateProtector,
-    IAuthorizationService authorizationService) =>
+    IAuthorizationService authorizationService, IDbContextFactory<DotMarcDbContext> dbContextFactory) =>
 {
     // An edited SPF record is a few hundred characters; a payload far longer than that isn't one.
     var changeBuilder = changeBuilders.Find(target);
@@ -655,6 +665,15 @@ app.MapGet("/dns-push/{provider}/start", async (
     if (!authResult.Succeeded)
     {
         return Results.Forbid();
+    }
+
+    // Someone limited to Groups can only push records for their own Groups' domains.
+    await using (var context = await dbContextFactory.CreateDbContextAsync())
+    {
+        if (!await DotMarc.Api.ApiScope.From(httpContext.User).Domains(context.Domains.AsNoTracking()).AnyAsync(domain => domain.Id == domainId))
+        {
+            return Results.Forbid();
+        }
     }
 
     var pushProvider = await pushProviders.FindConfiguredAsync(provider);
@@ -699,7 +718,8 @@ app.MapGet("/dns-push/{provider}/callback", async (
     }
 
     await using var context = await dbContextFactory.CreateDbContextAsync();
-    var domain = await context.Domains.AsNoTracking().Include(d => d.DkimRecords).SingleOrDefaultAsync(d => d.Id == decodedState.DomainId);
+    var domain = await DotMarc.Api.ApiScope.From(httpContext.User).Domains(context.Domains.AsNoTracking())
+        .Include(d => d.DkimRecords).SingleOrDefaultAsync(d => d.Id == decodedState.DomainId);
     if (domain is null)
     {
         return DnsPushPopupResult.Close("invalid");
