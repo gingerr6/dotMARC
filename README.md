@@ -11,8 +11,9 @@ dotMARC needs **two separate** Entra app registrations: do not reuse one for bot
 ### 1. Mailbox access (app-only)
 
 1. **App registrations** → **New registration**, name it e.g. `dotmarc-mailbox`.
-2. **API permissions** → add Microsoft Graph **Application** permission `Mail.Read`, then grant
-   admin consent.
+2. **API permissions** → add Microsoft Graph **Application** permission `Mail.ReadWrite`, then grant
+   admin consent. dotMARC marks each report email as read once it has stored the report, which
+   `Mail.Read` doesn't allow.
 3. **Certificates & secrets** → create a client secret.
 4. Restrict this app's mailbox access via an Exchange **Application Access Policy**. Exchange
    requires the policy scope to be a **security principal** (for example a mail-enabled security
