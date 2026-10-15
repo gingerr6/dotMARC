@@ -42,7 +42,7 @@
             <AuthorizeView Policy="DnsPushManage">
                 <MudMenuItem Href="/dns-push/settings" Icon="@Icons.Material.Filled.CloudSync">DNS push settings</MudMenuItem>
             </AuthorizeView>
-            <AuthorizeView Policy="AlertsManage">
+            <AuthorizeView Policy="UnlimitedAlertsManage">
                 <MudMenuItem Href="/alerts/settings" Icon="@Icons.Material.Filled.NotificationsActive">Alert settings</MudMenuItem>
                 <MudMenuItem Href="/psa/settings" Icon="@Icons.Material.Filled.ConfirmationNumber">PSA settings</MudMenuItem>
             </AuthorizeView>
@@ -53,10 +53,10 @@
             <AuthorizeView Policy="LogsView">
                 <MudMenuItem Href="/logs" Icon="@Icons.Material.Filled.Article">Server logs</MudMenuItem>
             </AuthorizeView>
-            <AuthorizeView Policy="AuditView">
+            <AuthorizeView Policy="UnlimitedAuditView">
                 <MudMenuItem Href="/audit" Icon="@Icons.Material.Filled.History">Audit log</MudMenuItem>
             </AuthorizeView>
-            <AuthorizeView Policy="ReportsManage">
+            <AuthorizeView Policy="UnlimitedReportsManage">
                 <MudMenuItem Href="/reports/settings" Icon="@Icons.Material.Filled.Email">Email &amp; reports</MudMenuItem>
             </AuthorizeView>
         </MudMenu>

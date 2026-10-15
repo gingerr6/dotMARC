@@ -68,7 +68,8 @@ public sealed class GroupLimitedScreensTests : IAsyncLifetime
             {
                 Name = "Client manager",
                 IsScopable = true,
-                Permissions = [Permission.DomainsView, Permission.DomainsAdd, Permission.DomainsEdit, Permission.DomainsDelete, Permission.AlertsView],
+                Permissions = [Permission.DomainsView, Permission.DomainsAdd, Permission.DomainsEdit, Permission.DomainsDelete, Permission.AlertsView,
+                    Permission.AlertsManage, Permission.AuditView, Permission.ReportsManage],
             };
             var grant = await context.UserAccesses.SingleAsync(access => access.Email == DotMarc.Demo.DemoDataSeeder.ViewerEmail);
             grant.Role = role;
@@ -116,6 +117,11 @@ public sealed class GroupLimitedScreensTests : IAsyncLifetime
     [InlineData("/domains/import")]
     [InlineData("/domains/import/sample.csv")]
     [InlineData("/parse-failures")]
+    [InlineData("/audit")]
+    [InlineData("/audit/export")]
+    [InlineData("/alerts/settings")]
+    [InlineData("/psa/settings")]
+    [InlineData("/reports/settings")]
     public async Task AClientManager_CantOpenTenantWidePages(string path)
     {
         var (client, _, _) = await SignInAsAClientManagerAsync();

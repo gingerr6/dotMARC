@@ -35,11 +35,17 @@ like Viewer. Someone with that grant sees and manages only those Groups' domains
 particular clients, or a client who manages their own domains. A role's limit can only be switched on
 or off while no one holds it.
 
-A limited role can only hold permissions that act on one domain at a time: `DomainsView`,
-`DomainsAdd`, `DomainsEdit`, `DomainsDelete`, `MtaStsView`, `MtaStsManage`, `GroupsView`, `TagsView`
-and `AlertsView`. Everything else changes something every client shares, such as other clients'
-Groups, tags, alert and PSA settings, DNS provider credentials, or who has access. Even if a limited
-grant's role somehow holds such a permission, dotMARC drops it at sign-in.
+A limited role can only hold permissions that stay within its Groups: `DomainsView`, `DomainsAdd`,
+`DomainsEdit`, `DomainsDelete`, `MtaStsView`, `MtaStsManage`, `GroupsView`, `TagsView`, `AlertsView`,
+`AlertsManage`, `AuditView` and `ReportsManage`. Everything else changes something every client
+shares, such as other clients' Groups, tags, DNS provider credentials, or who has access. Even if a
+limited grant's role somehow holds such a permission, dotMARC drops it at sign-in.
+
+`AlertsManage`, `AuditView` and `ReportsManage` work within the Groups: a limited person can acknowledge
+their own Groups' alerts and send their own Groups' client reports, and a limited API key reads only
+its own domains' audit entries. The pages those permissions open that cover every client (the audit
+log, **Email & reports**, **Alert settings** and **PSA settings**) stay closed to anyone limited to
+Groups.
 
 For someone limited to Groups:
 

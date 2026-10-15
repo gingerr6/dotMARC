@@ -246,7 +246,8 @@
     private bool _newRoleLimitedToGroups;
 
     private const string LimitToGroupsHelp = "Someone granted this role with Groups sees and manages only those Groups' domains. "
-        + "It can only hold permissions that act on one domain at a time: viewing, adding, editing and removing domains, MTA-STS, and viewing groups, tags and alerts. "
+        + "It can only hold permissions that stay within their Groups: viewing, adding, editing and removing domains, MTA-STS, viewing groups and tags, alerts, client reports and the audit log. "
+        + "Settings pages that cover every client stay closed to them. "
         + "It can only be switched on or off while no one holds the role.";
     private string _newGrantEmail = "";
     private int _newGrantRoleId;
@@ -399,7 +400,7 @@
             var result = await RoleManagementService.UpdateRoleAsync(db, await AuditActorAccessor.GetAsync(), row.Id, row.Name, permissions.ToList(), CancellationToken.None);
             if (result == RoleManagementService.UpdateRoleResult.NotAllowedWhenLimited)
             {
-                Snackbar.Add($"{row.Name} is limited to groups, so it can only hold permissions that act on one domain at a time.", Severity.Error);
+                Snackbar.Add($"{row.Name} is limited to groups, so it can only hold permissions that stay within its Groups.", Severity.Error);
             }
             else if (result != RoleManagementService.UpdateRoleResult.Updated)
             {
@@ -422,7 +423,7 @@
             var error = result switch
             {
                 RoleManagementService.SetLimitedToGroupsResult.InUse => $"Can't change {row.Name} while it's granted to someone or an API key. Create a new role instead, or revoke those first.",
-                RoleManagementService.SetLimitedToGroupsResult.NotAllowedWhenLimited => $"Can't limit {row.Name} to groups while it holds permissions that reach past one domain. Remove those first.",
+                RoleManagementService.SetLimitedToGroupsResult.NotAllowedWhenLimited => $"Can't limit {row.Name} to groups while it holds permissions that reach past its Groups. Remove those first.",
                 RoleManagementService.SetLimitedToGroupsResult.Locked => $"{row.Name} can't be changed.",
                 _ => null,
             };

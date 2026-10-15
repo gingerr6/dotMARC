@@ -413,6 +413,20 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("DomainsImport", policy => policy
         .RequireClaim(DotMarc.Security.UserAccessClaimsTransformation.PermissionClaimType, nameof(Permission.DomainsAdd))
         .RequireAssertion(context => !DotMarc.Api.ApiScope.From(context.User).IsScoped));
+    // These permissions are limited to the API key's Groups in the API, but here they open pages that cover the whole
+    // tenant, so those pages need someone who isn't limited to Groups.
+    foreach (var (name, permission) in new[]
+    {
+        ("UnlimitedAuditView", Permission.AuditView),
+        ("UnlimitedReportsManage", Permission.ReportsManage),
+        ("UnlimitedAlertsManage", Permission.AlertsManage),
+    })
+    {
+        options.AddPolicy(name, policy => policy
+            .RequireClaim(DotMarc.Security.UserAccessClaimsTransformation.PermissionClaimType, permission.ToString())
+            .RequireAssertion(context => !DotMarc.Api.ApiScope.From(context.User).IsScoped));
+    }
+
     options.AddPolicy("ParseFailuresView", policy => policy
         .RequireClaim(DotMarc.Security.UserAccessClaimsTransformation.PermissionClaimType,
             nameof(Permission.DomainsAdd), nameof(Permission.DomainsEdit), nameof(Permission.DomainsReorder), nameof(Permission.DomainsDelete))
@@ -641,7 +655,7 @@ app.MapGet("/audit/export", async (HttpContext httpContext, IDbContextFactory<Do
     // A byte order mark so Excel reads the UTF-8 correctly.
     await using var writer = new StreamWriter(httpContext.Response.Body, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
     await DotMarc.Audit.AuditCsv.WriteAsync(writer, entries, httpContext.RequestAborted);
-}).RequireAuthorization(nameof(Permission.AuditView));
+}).RequireAuthorization("UnlimitedAuditView");
 
 app.MapGet("/dns-push/{provider}/start", async (
     string provider, int domainId, string target, string? payload, HttpContext httpContext,
@@ -812,14 +826,14 @@ app.MapGet("/psa/ninjaone/connect", async (HttpContext httpContext, DotMarc.Psa.
     var state = stateProtector.Protect(DotMarc.Psa.NinjaOne.NinjaOneStateProtector.UserKey(actor), timeProvider.GetUtcNow());
     var url = await connector.BuildAuthorizationUrlAsync(DotMarc.Psa.NinjaOne.NinjaOneConnector.RedirectUri(httpContext.Request), state, httpContext.RequestAborted);
     return Results.Redirect(url ?? "/psa/settings?psa=ninjaone&ninjaone=not-configured");
-}).RequireAuthorization(nameof(Permission.AlertsManage));
+}).RequireAuthorization("UnlimitedAlertsManage");
 
 app.MapGet(DotMarc.Psa.NinjaOne.NinjaOneConnector.CallbackPath, async (string? code, string? state, string? error, HttpContext httpContext, DotMarc.Psa.NinjaOne.NinjaOneConnector connector) =>
 {
     var outcome = await connector.CompleteAsync(DotMarc.Audit.AuditActor.FromPrincipal(httpContext.User), state, code, error,
         DotMarc.Psa.NinjaOne.NinjaOneConnector.RedirectUri(httpContext.Request), httpContext.RequestAborted);
     return Results.Redirect($"/psa/settings?psa=ninjaone&ninjaone={DotMarc.Psa.NinjaOne.NinjaOneConnector.OutcomeKey(outcome)}");
-}).RequireAuthorization(nameof(Permission.AlertsManage));
+}).RequireAuthorization("UnlimitedAlertsManage");
 
 // Unauthenticated by necessity - HaloPSA's own outbound webhook config isn't confirmed to support
 // custom headers, so the shared secret travels in the path instead. A non-matching secret returns
