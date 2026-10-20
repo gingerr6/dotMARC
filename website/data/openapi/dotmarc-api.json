@@ -2222,6 +2222,7 @@
                   "access.granted",
                   "access.updated",
                   "access.revoked",
+                  "access.guest_invited",
                   "api_key.created",
                   "api_key.revoked",
                   "ticket_rule.global_changed",

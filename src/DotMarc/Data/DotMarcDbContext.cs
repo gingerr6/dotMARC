@@ -32,6 +32,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<IpInfo> IpInfos => Set<IpInfo>();
     public DbSet<IpRange> IpRanges => Set<IpRange>();
+    public DbSet<IpHostName> IpHostNames => Set<IpHostName>();
     public DbSet<AlertEvent> AlertEvents => Set<AlertEvent>();
     public DbSet<AlertTicketRule> AlertTicketRules => Set<AlertTicketRule>();
     public DbSet<DotMarc.Psa.PsaCompanyLink> PsaCompanyLinks => Set<DotMarc.Psa.PsaCompanyLink>();
@@ -287,6 +288,13 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.HasKey(i => i.Ip);
             entity.Property(i => i.Ip).HasMaxLength(45); // enough for a full IPv6 address
             entity.Property(i => i.Status).HasConversion<string>();
+        });
+
+        modelBuilder.Entity<IpHostName>(entity =>
+        {
+            entity.HasKey(h => h.Ip);
+            entity.Property(h => h.Ip).HasMaxLength(45);
+            entity.Property(h => h.HostName).HasMaxLength(253); // the longest a DNS name can be
         });
 
         modelBuilder.Entity<IpRange>(entity =>

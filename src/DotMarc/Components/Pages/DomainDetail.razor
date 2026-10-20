@@ -18,6 +18,7 @@
 @inject AuditActorAccessor AuditActorAccessor
 @inject IDbContextFactory<DotMarcDbContext> DbFactory
 @inject IIpInfoLookup IpLookup
+@inject IReverseDnsLookup ReverseDnsLookup
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
 @inject ILogger<DomainDetail> Logger
@@ -371,7 +372,7 @@ else
                 </ToolBarContent>
                 <HeaderContent>
                     <tr>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.SourceIp)">Source IP</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)">Source</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)">Volume</MudTableSortLabel></MudTh>
                         <MudTh>7d trend</MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.FirstSeenUtc ?? DateTimeOffset.MinValue)">First seen</MudTableSortLabel></MudTh>
@@ -428,7 +429,22 @@ else
                     }
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.SourceIp</MudTd>
+                    <MudTd>
+                        @* The name first, since it says who sent the mail; the IP stays beneath it, as SPF needs it. *@
+                        @if (context.HostName is { } hostName)
+                        {
+                            <div>@hostName</div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.SourceIp</MudText>
+                        }
+                        else
+                        {
+                            <div>@context.SourceIp</div>
+                            @if (context.IsHostNamePending)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">Looking up name…</MudText>
+                            }
+                        }
+                    </MudTd>
                     <MudTd>@context.Volume</MudTd>
                     <MudTd>
                         @if (context.DailyVolumes.Length > 0)
@@ -582,7 +598,7 @@ else
 
     private bool SourceMatchesFilters(SourceRow source)
     {
-        if (!ContainsIgnoreCase(source.SourceIp, _sourceIpFilter)
+        if ((!ContainsIgnoreCase(source.SourceIp, _sourceIpFilter) && !ContainsIgnoreCase(source.HostName ?? "", _sourceIpFilter))
             || !ContainsIgnoreCase(source.ReasonSummary, _sourceReasonFilter)
             || !ContainsIgnoreCase(source.Organization, _sourceOwnerFilter))
         {
@@ -752,7 +768,19 @@ else
             var ips = _sources.Select(s => s.SourceIp).Distinct().ToList();
             var cachedInfo = await IpInfoService.GetCachedAsync(db, ips, CancellationToken.None);
             var cachedRanges = await IpInfoService.GetCachedRangesAsync(db, CancellationToken.None);
+            var cachedHostNames = await IpHostNameService.GetCachedAsync(db, ips, CancellationToken.None);
             var nowUtc = DateTimeOffset.UtcNow;
+
+            foreach (var source in _sources)
+            {
+                cachedHostNames.TryGetValue(source.SourceIp, out var cachedHostName);
+                source.HostName = cachedHostName?.HostName;
+                if (IpHostNameService.NeedsLookup(cachedHostName, nowUtc))
+                {
+                    source.IsHostNamePending = true;
+                    _ = LookUpHostNameInBackgroundAsync(source);
+                }
+            }
 
             foreach (var source in _sources)
             {
@@ -838,6 +866,28 @@ else
         {
             EnrichmentThrottle.Release();
             source.IsEnrichmentPending = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>Reverse DNS for one source, off the render path and through the same throttle as the owner lookups.
+    /// A source with no name, or one the lookup couldn't find, just keeps showing its IP.</summary>
+    private async Task LookUpHostNameInBackgroundAsync(SourceRow source)
+    {
+        await EnrichmentThrottle.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var cached = await IpHostNameService.EnrichAsync(DbFactory, ReverseDnsLookup, source.SourceIp, CancellationToken.None).ConfigureAwait(false);
+            source.HostName = cached.HostName;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Reverse DNS lookup for source IP {SourceIp} failed.", source.SourceIp);
+        }
+        finally
+        {
+            EnrichmentThrottle.Release();
+            source.IsHostNamePending = false;
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -1470,6 +1520,8 @@ else
         public string? Organization { get; set; }
         public string? Country { get; set; }
         public bool IsEnrichmentPending { get; set; } = true;
+        public string? HostName { get; set; }
+        public bool IsHostNamePending { get; set; }
         public DateTimeOffset? FirstSeenUtc { get; set; }
         public int[] DailyVolumes { get; set; } = [];
 

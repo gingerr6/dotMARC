@@ -54,7 +54,10 @@ dotMARC needs **two separate** Entra app registrations: do not reuse one for bot
 3. **Certificates & secrets** → create a client secret. Microsoft.Identity.Web wires this app up
    via the standard confidential-client authorization-code flow, so the token exchange after
    sign-in needs this secret even though the app itself is only used for interactive sign-in.
-4. No API permissions needed beyond the default `User.Read`.
+4. No API permissions needed beyond the default `User.Read`. Optionally, to have dotMARC invite people
+   from outside your organisation into Entra as guests when you grant them access (see
+   [Permissions & Access](./permissions-and-access.mdx#inviting-people-as-entra-guests)), add the
+   Microsoft Graph **Application** permission `User.Invite.All` and grant admin consent.
 
 <Checklist id="getting-started-dashboard-app" items={[
   "Registered the dotmarc-dashboard app registration",
