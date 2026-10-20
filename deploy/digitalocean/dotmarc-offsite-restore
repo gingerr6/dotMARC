@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Restores an encrypted offsite backup (from dotmarc-offsite-backup) onto THIS server.
+#
+# Rebuilding on a fresh Droplet:
+#   1. Deploy a new Droplet the usual way (the Deploy to DigitalOcean workflow), and wait for dotMARC to start.
+#   2. Recreate /opt/dotmarc/.backup.conf with the SAME bucket, keys and passphrase as the old server.
+#   3. sudo dotmarc-offsite-restore              # the newest backup
+#      sudo dotmarc-offsite-restore <s3-key>     # or a particular one (dotmarc-offsite-backup list shows them)
+#
+# It OVERWRITES this server's database and .env, so it asks first. The current database is dumped locally first
+# (to /var/backups/dotmarc), in case the wrong backup gets picked.
+set -euo pipefail
+
+APP=${DOTMARC_DIR:-/opt/dotmarc}
+CONF=$APP/.backup.conf
+[ -f "$CONF" ] || { echo "ERROR: $CONF is missing; create it first (see the top of dotmarc-offsite-backup)"; exit 1; }
+set -a
+# shellcheck disable=SC1090
+source "$CONF"
+set +a
+: "${S3_BUCKET:?}" "${S3_REGION:?}" "${AWS_ACCESS_KEY_ID:?}" "${AWS_SECRET_ACCESS_KEY:?}" "${BACKUP_PASSPHRASE:?}"
+PREFIX="${S3_PREFIX:-dotmarc-backups}"
+PREFIX="${PREFIX%/}"
+export PREFIX
+
+WORK=$(mktemp -d /tmp/dotmarc-offsite-restore.XXXXXX)
+trap 'rm -rf "$WORK"' EXIT
+
+KEY=${1:-}
+if [ -z "$KEY" ]; then
+  KEY=$(python3 - <<'PY'
+import boto3, os
+s3 = boto3.client("s3", region_name=os.environ["S3_REGION"], endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None)
+newest = None
+for page in s3.get_paginator("list_objects_v2").paginate(Bucket=os.environ["S3_BUCKET"], Prefix=os.environ["PREFIX"] + "/"):
+    for obj in page.get("Contents", []):
+        if obj["Key"].rsplit("/", 1)[-1].startswith("dotmarc-backup-") and (newest is None or obj["LastModified"] > newest["LastModified"]):
+            newest = obj
+print(newest["Key"] if newest else "")
+PY
+)
+  [ -n "$KEY" ] || { echo "ERROR: no dotMARC backup found in s3://$S3_BUCKET/$PREFIX/"; exit 1; }
+fi
+echo "Restoring s3://$S3_BUCKET/$KEY"
+
+export KEY WORK
+python3 - <<'PY'
+import boto3, os
+s3 = boto3.client("s3", region_name=os.environ["S3_REGION"], endpoint_url=os.environ.get("S3_ENDPOINT_URL") or None)
+s3.download_file(os.environ["S3_BUCKET"], os.environ["KEY"], os.environ["WORK"] + "/payload.enc")
+PY
+
+openssl enc -d -aes-256-cbc -md sha256 -pbkdf2 -iter 200000 -pass env:BACKUP_PASSPHRASE < "$WORK/payload.enc" |
+  tar -xzf - -C "$WORK" || true
+[ -f "$WORK/backup/dotmarc.dump" ] || { echo "ERROR: couldn't decrypt or unpack it (wrong passphrase?)"; exit 1; }
+echo "Decrypted OK"
+
+if [ "${DOTMARC_RESTORE_CONFIRM:-}" != "restore" ]; then
+  read -r -p "This OVERWRITES this server's database and .env. Type 'restore' to continue: " ANSWER
+  [ "$ANSWER" = "restore" ] || { echo "Aborted."; exit 1; }
+fi
+
+cd "$APP"
+mkdir -p /var/backups/dotmarc
+docker compose exec -T postgres pg_dump -U dotmarc -d dotmarc -Fc > "/var/backups/dotmarc/before-restore-$(date -u +%Y-%m-%d_%H%M%S).dump" || true
+
+docker compose stop app
+cp "$WORK/backup/env" .env
+chmod 600 .env
+docker compose exec -T postgres pg_restore -U dotmarc -d dotmarc --clean --if-exists --no-owner < "$WORK/backup/dotmarc.dump"
+# A fresh Droplet's database was created with its own new password; set the restored one, which .env now holds.
+# Inside the container the local socket needs no password.
+set -a
+# shellcheck disable=SC1091
+source .env
+set +a
+# psql only fills in :'pw' (quoted safely) in commands read from input, not from -c.
+echo "ALTER USER dotmarc PASSWORD :'pw';" |
+  docker compose exec -T postgres psql -U dotmarc -d dotmarc -v ON_ERROR_STOP=1 -v pw="$POSTGRES_PASSWORD" > /dev/null
+docker compose up -d
+echo "Restored. dotMARC is starting on the restored data; check it in a browser."

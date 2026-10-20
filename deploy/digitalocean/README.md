@@ -56,6 +56,28 @@ does nothing. With the workflow's default tag, `edge`, every change merged into 
 within about 15 minutes of its image being published. Pin `DOTMARC_VERSION` to a commit SHA or a release
 to stop that. What it did is in `/var/log/dotmarc-autoupdate.log`.
 
+## Offsite backups
+
+Every night at about 03:15 (server time), `dotmarc-offsite-backup` dumps the database and `.env`, encrypts them with
+AES-256 and a passphrase, and uploads them to S3, as voip-ai-agent does. Dailies are kept 30 days; the backup taken on
+the 1st of each month is kept forever. It does nothing until `/opt/dotmarc/.backup.conf` exists (root, mode 600):
+
+```sh
+S3_BUCKET='your-bucket'
+S3_REGION='eu-west-2'
+AWS_ACCESS_KEY_ID='...'
+AWS_SECRET_ACCESS_KEY='...'
+BACKUP_PASSPHRASE='...'
+S3_PREFIX='dotmarc-backups'   # optional
+S3_ENDPOINT_URL='...'         # optional, for DigitalOcean Spaces or another S3-compatible service
+```
+
+Quote every value. Keep the passphrase somewhere offline as well: without it no backup can be restored, and it's
+deliberately not in the backup. Run `dotmarc-offsite-backup` to back up now, `dotmarc-offsite-backup list` to see
+what's stored, and `journalctl -u dotmarc-offsite-backup` for the nightly run. To rebuild on a new Droplet, deploy it,
+recreate `.backup.conf` with the same values, and run `dotmarc-offsite-restore` (newest backup) or
+`dotmarc-offsite-restore <key>`.
+
 ## Later
 
 Open the Droplet's **Console** in the DigitalOcean control panel, then:
