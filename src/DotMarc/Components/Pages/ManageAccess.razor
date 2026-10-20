@@ -392,20 +392,25 @@
         await LoadAsync();
     }
 
+    /// <summary>A saved change updates the row in place rather than reloading the table: reloading replaces every row,
+    /// which rebuilds the permission picker and closes it after each tick.</summary>
     private async Task SetRolePermissionsAsync(RoleRow row, IEnumerable<Permission> permissions)
     {
+        var chosen = permissions.ToList();
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            var result = await RoleManagementService.UpdateRoleAsync(db, await AuditActorAccessor.GetAsync(), row.Id, row.Name, permissions.ToList(), CancellationToken.None);
-            if (result == RoleManagementService.UpdateRoleResult.NotAllowedWhenLimited)
+            var result = await RoleManagementService.UpdateRoleAsync(db, await AuditActorAccessor.GetAsync(), row.Id, row.Name, chosen, CancellationToken.None);
+            if (result == RoleManagementService.UpdateRoleResult.Updated)
             {
-                Snackbar.Add($"{row.Name} is limited to groups, so it can only hold permissions that stay within its Groups.", Severity.Error);
+                row.Permissions.Clear();
+                row.Permissions.AddRange(chosen);
+                return;
             }
-            else if (result != RoleManagementService.UpdateRoleResult.Updated)
-            {
-                Snackbar.Add($"Failed to update {row.Name}'s permissions - the role may have been renamed or locked elsewhere. Try again.", Severity.Error);
-            }
+
+            Snackbar.Add(result == RoleManagementService.UpdateRoleResult.NotAllowedWhenLimited
+                ? $"{row.Name} is limited to groups, so it can only hold permissions that stay within its Groups."
+                : $"Failed to update {row.Name}'s permissions - the role may have been renamed or locked elsewhere. Try again.", Severity.Error);
         }
         catch (Exception)
         {
