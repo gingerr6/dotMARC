@@ -1,0 +1,22 @@
+<MudDialog>
+    <TitleContent>Restore a backup</TitleContent>
+    <DialogContent>
+        <MudText Class="mb-2">This replaces <b>everything</b> in dotMARC (domains, reports, people, settings) with <b>@FileName</b>.</MudText>
+        <MudText Class="mb-4">The current data is backed up first, so this can be undone by restoring that. dotMARC restarts when it's done, which signs everyone out for a minute.</MudText>
+        <MudTextField @bind-Value="_typed" Label="Type restore to continue" Immediate="true" Variant="Variant.Outlined" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(_typed?.Trim() != "restore")" OnClick="Confirm">Restore</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string FileName { get; set; } = "";
+
+    private string? _typed;
+
+    private void Confirm() => MudDialog.Close(DialogResult.Ok(true));
+    private void Cancel() => MudDialog.Cancel();
+}

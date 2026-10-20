@@ -28,4 +28,19 @@ internal sealed class RecordingAlerts : IAlertingService
 
     public Task RaisePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, string reason, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task ResolvePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public List<string> BackupFailures { get; } = [];
+    public int BackupResolves { get; private set; }
+
+    public Task RaiseBackupFailedAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        BackupFailures.Add(reason);
+        return Task.CompletedTask;
+    }
+
+    public Task ResolveBackupFailedAsync(CancellationToken cancellationToken = default)
+    {
+        BackupResolves++;
+        return Task.CompletedTask;
+    }
 }

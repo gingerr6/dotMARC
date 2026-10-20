@@ -1,0 +1,358 @@
+@* The Backups tab of the control panel (ControlPanel.razor), which checks the ServerManage permission. *@
+@using DotMarc.Backups
+@using DotMarc.Components.Dialogs
+@using DotMarc.Components.Shared
+@using DotMarc.Data
+@using DotMarc.Notifications
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject AuditActorAccessor AuditActorAccessor
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject ISecretStore SecretStore
+@inject OffsiteBackupService Backups
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_settings is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    @if (Backups.WhyNot(_settings) is { } whyNot && _settings.IsComplete)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">@whyNot</MudAlert>
+    }
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h5" Class="mb-2">Status</MudText>
+        @if (!_settings.Enabled)
+        {
+            <MudText Class="mb-2">Nightly backups are <b>off</b>. Fill in the settings below, test them, then switch them on.</MudText>
+        }
+        else
+        {
+            <MudText Class="mb-2">Nightly backups are <b>on</b>, at @($"{_settings.RunHourUtc:00}:00") UTC (@LocalTime(_settings.RunHourUtc) UK time).</MudText>
+        }
+
+        @if (_settings.LastSuccessUtc is { } lastSuccess)
+        {
+            <MudText>Last good backup: <b>@Ago(lastSuccess)</b> (@lastSuccess.ToString("yyyy-MM-dd HH:mm") UTC), @OffsiteBackupService.FormatSize(_settings.LastBackupSize ?? 0).</MudText>
+        }
+        else
+        {
+            <MudText>No backup has been taken yet.</MudText>
+        }
+
+        @if (_settings.LastRunSucceeded == false)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-2">The last try, @Ago(_settings.LastRunUtc!.Value), failed: @_settings.LastRunMessage</MudAlert>
+        }
+
+        <div class="d-flex mt-4" style="gap:8px; flex-wrap:wrap;">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Backup" Disabled="@(_busy || Backups.WhyNot(_settings) is not null)" OnClick="BackUpNowAsync">Back up now</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NetworkCheck" Disabled="@(_busy || Backups.WhyNot(_settings) is not null)" OnClick="TestAsync">Test connection</MudButton>
+            @if (_busy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="ml-2 mt-2" />
+                <MudText Class="mt-2">@_busyText</MudText>
+            }
+        </div>
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h5" Class="mb-1">Settings</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">Each backup holds the whole database and the settings dotMARC runs with. It's encrypted with your passphrase before it leaves the server, then uploaded to an S3 bucket.</MudText>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudSwitch T="bool" @bind-Value="_settings.Enabled" Color="Color.Primary" Label="Back up every night" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Bucket" Help="The S3 bucket's name. Make it private, and turn on versioning if you can.">
+                    <MudTextField Label="Bucket" @bind-Value="_settings.Bucket" Variant="Variant.Outlined" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Region" Help="The bucket's AWS region, such as eu-west-2 for London.">
+                    <MudTextField Label="Region" @bind-Value="_settings.Region" Variant="Variant.Outlined" Placeholder="eu-west-2" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Folder" Help="The folder (key prefix) in the bucket that backups go in. The access key only needs rights to this folder.">
+                    <MudTextField Label="Folder" @bind-Value="_settings.Prefix" Variant="Variant.Outlined" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Endpoint" Help="Leave blank for AWS. For another S3-compatible service, its endpoint, such as https://lon1.digitaloceanspaces.com.">
+                    <MudTextField Label="Endpoint (not AWS only)" @bind-Value="_settings.EndpointUrl" Variant="Variant.Outlined" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Access key ID" Help="From an IAM user made just for dotMARC's backups, with the policy shown below.">
+                    <MudTextField Label="Access key ID" @bind-Value="_settings.AccessKeyId" Variant="Variant.Outlined" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Secret access key" Help="Stored encrypted and never shown again, so leave this blank to keep the saved one.">
+                    <MudTextField Label="Secret access key" @bind-Value="_newSecretAccessKey" InputType="InputType.Password" Variant="Variant.Outlined"
+                                  HelperText="@(_settings.SecretAccessKeyConfigured ? "Saved - leave blank to keep it." : "Not saved yet.")" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Passphrase" Help="Encrypts every backup. Without it no backup can be restored, so keep a copy somewhere outside dotMARC, such as your password manager. Changing it only affects new backups.">
+                    <MudTextField Label="Encryption passphrase" @bind-Value="_newPassphrase" InputType="InputType.Password" Variant="Variant.Outlined"
+                                  HelperText="@(_settings.PassphraseConfigured ? "Saved - leave blank to keep it." : "Not saved yet. At least 12 characters.")" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField Label="Passphrase again" @bind-Value="_newPassphraseAgain" InputType="InputType.Password" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudSelect T="int" Label="Hour (UTC)" @bind-Value="_settings.RunHourUtc" Variant="Variant.Outlined">
+                    @for (var hour = 0; hour < 24; hour++)
+                    {
+                        var value = hour;
+                        <MudSelectItem T="int" Value="value">@($"{value:00}:00")</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <FieldWithHelp Topic="Days kept" Help="Daily backups older than this are deleted. The one taken on the 1st of each month is kept until you delete it from the bucket.">
+                    <MudNumericField T="int" Label="Days kept" @bind-Value="_settings.RetentionDays" Min="1" Max="3650" Variant="Variant.Outlined" />
+                </FieldWithHelp>
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Disabled="_busy" OnClick="SaveAsync">Save</MudButton>
+
+        <MudExpansionPanels Class="mt-4" Elevation="0">
+            <MudExpansionPanel Text="Setting up the bucket in AWS">
+                <MudText Typo="Typo.body2" Class="mb-2">
+                    1. In S3, create a private bucket (Block all public access on; versioning on is a good idea).<br />
+                    2. In IAM, create a user such as <b>dotmarc-backups</b> with no console access, and give it this policy, so it can only touch the backups folder.<br />
+                    3. Create an access key for it (type: Application running outside AWS), and paste the two keys above.
+                </MudText>
+                <pre style="font-size:12px; white-space:pre-wrap; background:var(--mud-palette-background-gray); padding:8px; border-radius:4px;">@PolicyJson</pre>
+                <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyPolicyAsync">Copy policy</MudButton>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    </MudPaper>
+
+    <MudPaper Class="pa-4">
+        <div class="d-flex align-center mb-2">
+            <MudText Typo="Typo.h5">Backups in the bucket</MudText>
+            <MudSpacer />
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh" Disabled="@(_busy || Backups.WhyNot(_settings) is not null)" OnClick="LoadListAsync">Refresh</MudButton>
+        </div>
+        @if (_listError is not null)
+        {
+            <MudAlert Severity="Severity.Warning">@_listError</MudAlert>
+        }
+        else if (_stored is null)
+        {
+            <MudText Class="mud-text-secondary">Save working settings to see the backups here.</MudText>
+        }
+        else if (_stored.Count == 0)
+        {
+            <MudText Class="mud-text-secondary">None yet.</MudText>
+        }
+        else
+        {
+            <MudTable Items="_stored" Dense="true" Hover="true" T="StoredBackup">
+                <HeaderContent>
+                    <MudTh>Taken (UTC)</MudTh>
+                    <MudTh>Size</MudTh>
+                    <MudTh>File</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.LastModifiedUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+                    <MudTd>@OffsiteBackupService.FormatSize(context.Size)</MudTd>
+                    <MudTd><span style="font-family:monospace; font-size:12px;">@context.FileName</span></MudTd>
+                    <MudTd Style="text-align:right">
+                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => RestoreAsync(context))">Restore</MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+}
+
+@code {
+    private BackupSettings? _settings;
+    private string? _newSecretAccessKey;
+    private string? _newPassphrase;
+    private string? _newPassphraseAgain;
+    private IReadOnlyList<StoredBackup>? _stored;
+    private string? _listError;
+    private bool _busy;
+    private string? _busyText;
+
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadSettingsAsync();
+        if (RendererInfo.IsInteractive)
+        {
+            await LoadListAsync();
+        }
+    }
+
+    private async Task ReloadSettingsAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _settings = await BackupSettingsService.GetAsync(db);
+    }
+
+    private async Task LoadListAsync()
+    {
+        if (_settings is null || Backups.WhyNot(_settings) is not null)
+        {
+            _stored = null;
+            return;
+        }
+
+        try
+        {
+            _stored = await Backups.ListAsync();
+            _listError = null;
+        }
+        catch (Exception ex)
+        {
+            _stored = null;
+            _listError = $"Couldn't list the bucket: {ex.Message}";
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!string.IsNullOrEmpty(_newPassphrase))
+        {
+            if (_newPassphrase.Length < 12)
+            {
+                Snackbar.Add("Use a passphrase of at least 12 characters.", Severity.Warning);
+                return;
+            }
+
+            if (_newPassphrase != _newPassphraseAgain)
+            {
+                Snackbar.Add("The two passphrases don't match.", Severity.Warning);
+                return;
+            }
+        }
+
+        var wantsEnabled = _settings!.Enabled;
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            await BackupSettingsService.SaveAsync(db, await AuditActorAccessor.GetAsync(), SecretStore, _settings, _newSecretAccessKey, _newPassphrase);
+        }
+
+        _newSecretAccessKey = _newPassphrase = _newPassphraseAgain = null;
+        await ReloadSettingsAsync();
+        Snackbar.Add(wantsEnabled && !_settings.IsComplete ? "Saved, but backups won't run until every setting is filled in." : "Backup settings saved.",
+            wantsEnabled && !_settings.IsComplete ? Severity.Warning : Severity.Success);
+        await LoadListAsync();
+    }
+
+    private async Task TestAsync()
+    {
+        await RunBusyAsync("Testing the bucket…", async () =>
+        {
+            var outcome = await Backups.TestAsync();
+            Snackbar.Add(outcome.Message, outcome.Succeeded ? Severity.Success : Severity.Error);
+        });
+    }
+
+    private async Task BackUpNowAsync()
+    {
+        await RunBusyAsync("Backing up… this takes a minute or so.", async () =>
+        {
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            {
+                AuditLog.Record(db, await AuditActorAccessor.GetAsync(), AuditActions.BackupRunManually, AuditTarget.Settings("Backups"), "Started a backup by hand");
+                await db.SaveChangesAsync();
+            }
+
+            var outcome = await Backups.BackUpAsync();
+            Snackbar.Add(outcome.Succeeded ? $"{outcome.Message} Saved as {Path.GetFileName(outcome.Key)}." : $"Backup failed: {outcome.Message}",
+                outcome.Succeeded ? Severity.Success : Severity.Error);
+            await ReloadSettingsAsync();
+            await LoadListAsync();
+        });
+    }
+
+    private async Task RestoreAsync(StoredBackup backup)
+    {
+        var dialog = await DialogService.ShowAsync<ConfirmRestoreDialog>("Restore a backup",
+            new DialogParameters<ConfirmRestoreDialog> { { x => x.FileName, backup.FileName } });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled)
+        {
+            return;
+        }
+
+        await RunBusyAsync("Restoring… don't close this page.", async () =>
+        {
+            var outcome = await Backups.RestoreAsync(backup.Key, await AuditActorAccessor.GetAsync());
+            Snackbar.Add(outcome.Message, outcome.Succeeded ? Severity.Success : Severity.Error, config => config.RequireInteraction = true);
+        });
+    }
+
+    private async Task RunBusyAsync(string text, Func<Task> work)
+    {
+        _busy = true;
+        _busyText = text;
+        StateHasChanged();
+        try
+        {
+            await work();
+        }
+        finally
+        {
+            _busy = false;
+            _busyText = null;
+        }
+    }
+
+    private async Task CopyPolicyAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", PolicyJson);
+        Snackbar.Add("Policy copied.", Severity.Success);
+    }
+
+    private string PolicyJson
+    {
+        get
+        {
+            var bucket = string.IsNullOrWhiteSpace(_settings?.Bucket) ? "YOUR-BUCKET" : _settings.Bucket.Trim();
+            var prefix = string.IsNullOrWhiteSpace(_settings?.Prefix) ? "dotmarc-backups" : _settings.Prefix.Trim('/');
+            return $$"""
+                {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    { "Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": "arn:aws:s3:::{{bucket}}",
+                      "Condition": { "StringLike": { "s3:prefix": ["{{prefix}}/*"] } } },
+                    { "Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+                      "Resource": "arn:aws:s3:::{{bucket}}/{{prefix}}/*" }
+                  ]
+                }
+                """;
+        }
+    }
+
+    private static string LocalTime(int hourUtc)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/London");
+        var today = DateTime.UtcNow.Date.AddHours(hourUtc);
+        return TimeZoneInfo.ConvertTimeFromUtc(today, zone).ToString("HH:mm");
+    }
+
+    private static string Ago(DateTimeOffset whenUtc)
+    {
+        var span = DateTimeOffset.UtcNow - whenUtc;
+        return span.TotalMinutes < 2 ? "just now"
+            : span.TotalHours < 2 ? $"{(int)span.TotalMinutes} minutes ago"
+            : span.TotalDays < 2 ? $"{(int)span.TotalHours} hours ago"
+            : $"{(int)span.TotalDays} days ago";
+    }
+}

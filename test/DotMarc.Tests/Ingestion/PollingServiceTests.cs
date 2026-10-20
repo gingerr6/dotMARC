@@ -192,6 +192,25 @@ public class PollingServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PollOnceAsync_StoresATlsReportSentToTheDmarcMailbox()
+    {
+        var graphClient = new FakeGraphMailboxClient();
+        graphClient.UnreadMessages.Add(new MailboxMessage("tls-in-dmarc", "Report Domain: contoso.io Submitter: google.com", true));
+        graphClient.Attachments["tls-in-dmarc"] = [new MailboxAttachment("google.com!contoso.io!1.json.gz", "application/tlsrpt+gzip", GzipOf(ValidTlsrptReportJson))];
+
+        using (var context = CreateContext())
+        {
+            await new PollingService(graphClient, context, NullLogger<PollingService>.Instance).PollOnceAsync(CancellationToken.None);
+        }
+
+        using var verify = CreateContext();
+        Assert.Equal("contoso.io", verify.TlsrptReports.Include(item => item.Domain).Single().Domain.Name);
+        Assert.Empty(verify.Reports);
+        Assert.Empty(verify.ParseFailures);
+        Assert.Contains("tls-in-dmarc", graphClient.MarkedAsRead);
+    }
+
+    [Fact]
     public async Task RunTlsrptPollCycleAsync_ParsesCompressedReportAndStoresPolicyFailures()
     {
         var graphClient = new FakeGraphMailboxClient();
@@ -235,6 +254,33 @@ public class PollingServiceTests : IAsyncLifetime
         }
 
         Assert.DoesNotContain("msg-2", graphClient.MarkedAsRead);
+    }
+
+    [Fact]
+    public async Task PollOnceAsync_GivesUpOnAnUnparseableEmail_AfterMaxAttempts_MarkingItRead()
+    {
+        var graphClient = new FakeGraphMailboxClient();
+        graphClient.UnreadMessages.Add(new MailboxMessage("msg-2", "Fwd: holiday photos", true));
+        graphClient.Attachments["msg-2"] = [new MailboxAttachment("photo.png", "image/png", [0x89, 0x50, 0x4E, 0x47])];
+
+        for (var attempt = 1; attempt < PollingService.MaxParseAttempts; attempt++)
+        {
+            using var context = CreateContext();
+            await new PollingService(graphClient, context, NullLogger<PollingService>.Instance).PollOnceAsync(CancellationToken.None);
+        }
+
+        Assert.DoesNotContain("msg-2", graphClient.MarkedAsRead);
+        using (var context = CreateContext())
+        {
+            await new PollingService(graphClient, context, NullLogger<PollingService>.Instance).PollOnceAsync(CancellationToken.None);
+        }
+
+        Assert.Contains("msg-2", graphClient.MarkedAsRead);
+        using var verify = CreateContext();
+        var failure = verify.ParseFailures.Single();
+        Assert.Equal(PollingService.MaxParseAttempts, failure.AttemptCount);
+        Assert.Equal("Fwd: holiday photos", failure.Subject);
+        Assert.NotNull(failure.GaveUpUtc);
     }
 
     [Fact]

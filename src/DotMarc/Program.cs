@@ -148,6 +148,17 @@ builder.Services.AddHttpClient<DotMarc.IpEnrichment.IReverseDnsLookup, DotMarc.I
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
+// The control panel's list of updates reads the public GitHub API, as GitHub asks, with a User-Agent.
+builder.Services.AddHttpClient("GitHub", client =>
+{
+    client.BaseAddress = new Uri("https://api.github.com/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("dotMARC");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+});
+builder.Services.AddSingleton(services => new DotMarc.Updates.UpdateStatusService(
+    services.GetRequiredService<IHttpClientFactory>().CreateClient("GitHub"), builder.Configuration, services.GetService<TimeProvider>() ?? TimeProvider.System));
+
 // MTA-STS hosting is opt-in per deployment (see MtaStsOptions), so this section is intentionally
 // not validated at startup the way GraphOptions is above - a deployment that never sets
 // MtaSts:HostingHostname simply never enables MtaStsEnabled on any domain, and the background
@@ -209,6 +220,13 @@ builder.Services.AddScoped<DotMarc.Psa.PsaDirectory>();
 // polled reports.
 builder.Services.AddHostedService<PinnedDomainHealthMonitor>();
 builder.Services.AddHostedService<DotMarc.Audit.AuditRetentionService>();
+builder.Services.AddSingleton<DotMarc.Backups.IBackupStoreFactory, DotMarc.Backups.S3BackupStoreFactory>();
+// The public demo mustn't send its database anywhere, so backups are off there.
+builder.Services.AddSingleton<DotMarc.Backups.IDatabaseDumper>(demoOptions.Enabled
+    ? new DotMarc.Backups.DisabledDatabaseDumper("Backups are turned off in the demo.")
+    : new DotMarc.Backups.PgDatabaseDumper(builder.Configuration.GetConnectionString("DotMarc") ?? ""));
+builder.Services.AddSingleton<DotMarc.Backups.OffsiteBackupService>();
+builder.Services.AddHostedService<DotMarc.Backups.OffsiteBackupScheduler>();
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddHostedService<DotMarc.Psa.PsaTicketPoller>();
 builder.Services.AddHostedService<DotMarc.Psa.NinjaOne.NinjaOneKeepAliveService>();

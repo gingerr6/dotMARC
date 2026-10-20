@@ -1,0 +1,149 @@
+@page "/sources"
+@attribute [Authorize(Policy = "DomainsView")]
+@using DotMarc.Data
+@using DotMarc.IpEnrichment
+@using DotMarc.Reporting
+@using DotMarc.Senders
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>dotMARC - Sources</PageTitle>
+<MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
+<MudText Typo="Typo.h4">Sources</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Every server and service that sent mail as @(_filterLabel ?? "your domains") in the last 30 days, busiest first. Recognised services
+    (Microsoft 365, Google, Mailchimp and so on) are grouped together. Open a domain to approve its senders.
+</MudText>
+
+@if (_rows is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <MudTable Items="_rows" Hover="true" Dense="true" T="SourceRow" Filter="Matches">
+        <ToolBarContent>
+            <MudTextField T="string" @bind-Value="_search" Placeholder="Search sender or domain" Immediate="true" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Style="max-width:360px" />
+            <MudSpacer />
+            <MudSwitch T="bool" @bind-Value="_failingOnly" Color="Color.Error" Label="Failing DMARC only" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.Label)">Sender</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.Volume)" InitialDirection="SortDirection.Descending">Messages</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.PassRate)">Passing DMARC</MudTableSortLabel></MudTh>
+            <MudTh>Domains</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <div>@(context.IsService ? (MarkupString)$"<b>{System.Net.WebUtility.HtmlEncode(context.Label)}</b>" : (MarkupString)System.Net.WebUtility.HtmlEncode(context.Label))</div>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Detail</MudText>
+            </MudTd>
+            <MudTd>@context.Volume.ToString("N0")</MudTd>
+            <MudTd>
+                <MudText Typo="Typo.body2" Color="@(context.PassRate >= 0.98 ? Color.Success : context.PassRate >= 0.5 ? Color.Warning : Color.Error)">@context.PassRate.ToString("P0")</MudText>
+            </MudTd>
+            <MudTd>
+                <div class="d-flex flex-wrap" style="gap:4px">
+                    @foreach (var domain in context.Domains.OrderByDescending(d => d.Value).Take(8))
+                    {
+                        <MudChip T="string" Size="Size.Small" Href="@($"/domains/{domain.Key}/sources")" Variant="Variant.Outlined">@domain.Key (@domain.Value.ToString("N0"))</MudChip>
+                    }
+                    @if (context.Domains.Count > 8)
+                    {
+                        <MudText Typo="Typo.caption" Class="mt-1">and @(context.Domains.Count - 8) more</MudText>
+                    }
+                </div>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "group")] public int? GroupId { get; set; }
+    [SupplyParameterFromQuery(Name = "tag")] public int? TagId { get; set; }
+
+    private List<SourceRow>? _rows;
+    private string? _search;
+    private bool _failingOnly;
+    private string? _filterLabel;
+
+    private sealed record SourceRow(string Label, string Detail, bool IsService, int Volume, double PassRate, Dictionary<string, int> Domains);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var scopedGroupIds = authState.User.FindAll(DotMarc.Security.UserAccessClaimsTransformation.ScopedGroupClaimType).Select(c => int.Parse(c.Value)).ToList();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var cutoff = DomainStatistics.GetWindowCutoffUtc();
+        var records = db.ReportRecords.AsNoTracking().Where(record => record.Report.ReceivedUtc >= cutoff);
+        if (scopedGroupIds.Count > 0)
+        {
+            records = records.Where(record => record.Report.Domain.Groups.Any(group => scopedGroupIds.Contains(group.Id)));
+        }
+        if (GroupId is { } groupId)
+        {
+            records = records.Where(record => record.Report.Domain.Groups.Any(group => group.Id == groupId));
+            _filterLabel = $"the {await db.Groups.Where(group => group.Id == groupId).Select(group => group.Name).SingleOrDefaultAsync()} group's domains";
+        }
+        if (TagId is { } tagId)
+        {
+            records = records.Where(record => record.Report.Domain.Tags.Any(tag => tag.Id == tagId));
+            _filterLabel = $"domains tagged {await db.Tags.Where(tag => tag.Id == tagId).Select(tag => tag.Name).SingleOrDefaultAsync()}";
+        }
+
+        var perIpAndDomain = await records
+            .GroupBy(record => new { record.SourceIp, Domain = record.Report.Domain.Name })
+            .Select(group => new
+            {
+                group.Key.SourceIp,
+                group.Key.Domain,
+                Volume = group.Sum(record => record.MessageCount),
+                Passing = group.Where(record => record.SpfResult == AuthResult.Pass || record.DkimResult == AuthResult.Pass).Sum(record => record.MessageCount),
+            })
+            .ToListAsync();
+
+        var ips = perIpAndDomain.Select(row => row.SourceIp).Distinct().ToList();
+        var hostNames = await IpHostNameService.GetCachedAsync(db, ips, CancellationToken.None);
+        var owners = await IpInfoService.GetCachedAsync(db, ips, CancellationToken.None);
+        var ranges = await IpInfoService.GetCachedRangesAsync(db, CancellationToken.None);
+
+        _rows = perIpAndDomain
+            .Select(row =>
+            {
+                var hostName = hostNames.GetValueOrDefault(row.SourceIp)?.HostName;
+                var owner = owners.GetValueOrDefault(row.SourceIp)?.Organization ?? IpRangeMatcher.FindContaining(ranges, row.SourceIp)?.Organization;
+                return (Row: row, HostName: hostName, Owner: owner, Identity: SenderIdentity.For(row.SourceIp, hostName, owner));
+            })
+            .GroupBy(item => item.Identity.Key)
+            .Select(group =>
+            {
+                var first = group.First();
+                var ipCount = group.Select(item => item.Row.SourceIp).Distinct().Count();
+                var detail = first.Identity.IsService
+                    ? $"{ipCount} IP{(ipCount == 1 ? "" : "s")}"
+                    : string.Join(" · ", new[] { first.HostName, first.Owner }.Where(part => !string.IsNullOrWhiteSpace(part)));
+                var label = !first.Identity.IsService && first.HostName is { } host ? $"{host} ({first.Row.SourceIp})" : first.Identity.Label;
+                var volume = group.Sum(item => item.Row.Volume);
+                return new SourceRow(label, detail, first.Identity.IsService, volume,
+                    volume == 0 ? 0 : (double)group.Sum(item => item.Row.Passing) / volume,
+                    group.GroupBy(item => item.Row.Domain).ToDictionary(domain => domain.Key, domain => domain.Sum(item => item.Row.Volume)));
+            })
+            .OrderByDescending(row => row.Volume)
+            .ToList();
+    }
+
+    private bool Matches(SourceRow row) =>
+        (!_failingOnly || row.PassRate < 0.98)
+        && (string.IsNullOrWhiteSpace(_search)
+            || row.Label.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || row.Detail.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || row.Domains.Keys.Any(domain => domain.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+}

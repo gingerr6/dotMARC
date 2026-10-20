@@ -1,0 +1,89 @@
+@* The Updates tab of the control panel (ControlPanel.razor): which merged changes this server runs, and which it doesn't yet. *@
+@using DotMarc.Updates
+@inject UpdateStatusService Updates
+
+<MudPaper Class="pa-4 mb-4">
+    <div class="d-flex align-center mb-2" style="gap:8px; flex-wrap:wrap;">
+        <MudText Typo="Typo.h5">Updates</MudText>
+        <MudSpacer />
+        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh" Disabled="_loading" OnClick="@(() => LoadAsync(refresh: true))">Check now</MudButton>
+    </div>
+    @if (_status is null)
+    {
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Running
+            @if (_status.RunningCommit is { } commit && _status.Repository is { } repository)
+            {
+                <MudLink Href="@($"https://github.com/{repository}/commit/{commit}")" Target="_blank"><code>@commit[..Math.Min(7, commit.Length)]</code></MudLink>
+                <span> from </span><MudLink Href="@($"https://github.com/{repository}")" Target="_blank">@repository</MudLink>
+            }
+            else
+            {
+                <span>a build that doesn't say which commit it is</span>
+            }
+            . Checked @_status.CheckedUtc.ToString("HH:mm") UTC.
+        </MudText>
+        @if (_status.Problem is { } problem)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-2">@problem</MudAlert>
+        }
+    }
+</MudPaper>
+
+@if (_status is not null && _status.RunningCommit is null)
+{
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6">Merged recently (@_status.Waiting.Count)</MudText>
+        <ChangeList Changes="_status.Waiting" Empty="None found." Label="Merged" />
+    </MudPaper>
+}
+else if (_status is not null)
+{
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6">Waiting to be installed (@_status.Waiting.Count)</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Merged, but not on this server yet. After a merge the new version takes about 10 minutes to build, then the server installs it within 15 minutes, taking a backup first.</MudText>
+        <ChangeList Changes="_status.Waiting" Empty="Nothing waiting: this server is up to date." Color="Color.Warning" Label="Waiting" />
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6">Not merged yet (@_status.Open.Count)</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Changes still being worked on or tested. They reach the server once merged.</MudText>
+        <ChangeList Changes="_status.Open" Empty="None." Color="Color.Info" Label="Open" />
+    </MudPaper>
+
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6">Installed (@_status.Installed.Count)</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">The most recent changes this server is running.</MudText>
+        <ChangeList Changes="_status.Installed" Empty="None found." Color="Color.Success" Label="Installed" />
+    </MudPaper>
+}
+
+@code {
+    private UpdateStatus? _status;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (RendererInfo.IsInteractive)
+        {
+            await LoadAsync(refresh: false);
+        }
+    }
+
+    private async Task LoadAsync(bool refresh)
+    {
+        _loading = true;
+        try
+        {
+            _status = await Updates.GetAsync(refresh);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

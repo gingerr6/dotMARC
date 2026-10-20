@@ -25,6 +25,7 @@ public static class AlertTypes
     public const string ClientReportFailed = "ClientReportFailed";
     public const string PsaConnectionLost = "PsaConnectionLost";
     public const string UnapprovedSender = "UnapprovedSender";
+    public const string BackupFailed = "BackupFailed";
 
     public static IReadOnlyList<AlertTypeInfo> All { get; } =
     [
@@ -44,6 +45,7 @@ public static class AlertTypes
         new(ApiKeyExpiring, "API key expiring", "An API key expires within 14 days. Make a replacement before whatever uses it stops working.", CreatesTicketByDefault: false),
         new(ClientReportFailed, "Client report failed", "A scheduled client report couldn't be sent for 24 hours.", CreatesTicketByDefault: false),
         new(PsaConnectionLost, "PSA connection lost", "dotMARC can no longer sign in to a PSA, so it isn't raising tickets there until someone reconnects.", CreatesTicketByDefault: false),
+        new(BackupFailed, "Backup failed", "The nightly offsite backup failed. It's retried hourly; until one works, there's no fresh copy of dotMARC's data offsite.", CreatesTicketByDefault: false),
         new(UnapprovedSender, "Unapproved sender", "Mail passing DMARC came from a sender nobody approved on a domain whose senders have been reviewed.", CreatesTicketByDefault: false),
     ];
 

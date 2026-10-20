@@ -74,7 +74,7 @@ else
             </MudItem>
         </AuthorizeView>
         <MudItem xs="12" sm="6" md="2">
-            <MudPaper Height="100%" Class="pa-4 stat-card cursor-pointer" Elevation="1">
+            <MudPaper Height="100%" Class="pa-4 stat-card cursor-pointer" Elevation="1" @onclick="OpenSources" title="See every source">
                 <MudText Typo="Typo.h5" Class="stat-value">@_summary.SourceCount</MudText>
                 <MudText Typo="Typo.caption">sources provided reports</MudText>
             </MudPaper>
@@ -249,6 +249,22 @@ else
     private bool _showFilters;
 
     private bool IsFilterActive => _selectedGroupId is not null || _selectedTagId is not null;
+
+    /// <summary>The Sources page, with the same Group or Tag filter as the dashboard.</summary>
+    private void OpenSources()
+    {
+        var query = new List<string>();
+        if (_selectedGroupId is { } groupId)
+        {
+            query.Add($"group={groupId}");
+        }
+        if (_selectedTagId is { } tagId)
+        {
+            query.Add($"tag={tagId}");
+        }
+
+        Navigation.NavigateTo(query.Count == 0 ? "/sources" : $"/sources?{string.Join('&', query)}");
+    }
 
     private bool RowMatchesFilters(DashboardDomainRow row)
     {

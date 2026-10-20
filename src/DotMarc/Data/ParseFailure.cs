@@ -2,7 +2,8 @@ namespace DotMarc.Data;
 
 /// <summary>Recorded whenever an inbox message could not be turned into a Report - corrupt
 /// attachment, unexpected format, or not a DMARC report at all. The corresponding mailbox message
-/// is deliberately left unread (see PollingService) so a fixed parser retries it automatically.
+/// is left unread (see PollingService) so a fixed problem is retried automatically, until PollingService.MaxParseAttempts,
+/// when it's marked read and GaveUpUtc set.
 /// One row per <see cref="GraphMessageId"/> (enforced by a unique index) - a permanently
 /// unparseable message would otherwise grow a new row every poll cycle forever; repeat failures
 /// update the existing row's <see cref="AttemptCount"/>/<see cref="Reason"/>/<see cref="LastAttemptedUtc"/>
@@ -14,4 +15,10 @@ public sealed class ParseFailure
     public required string Reason { get; set; }
     public int AttemptCount { get; set; } = 1;
     public DateTimeOffset LastAttemptedUtc { get; set; }
+
+    /// <summary>The email's subject, so someone can find it in the mailbox.</summary>
+    public string? Subject { get; set; }
+
+    /// <summary>When dotMARC stopped retrying it and marked it read; null while it's still retried.</summary>
+    public DateTimeOffset? GaveUpUtc { get; set; }
 }

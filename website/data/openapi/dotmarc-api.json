@@ -1892,6 +1892,7 @@
                   "ApiKeyExpiring",
                   "ClientReportFailed",
                   "PsaConnectionLost",
+                  "BackupFailed",
                   "UnapprovedSender"
                 ],
                 "type": "string"
@@ -2252,6 +2253,9 @@
                   "settings.google_cloud_dns.saved",
                   "settings.dns_records.saved",
                   "settings.audit.saved",
+                  "settings.backups.saved",
+                  "backup.run_manually",
+                  "backup.restored",
                   "dns.pushed",
                   "dns.push_failed",
                   "halo.integration_tested",
