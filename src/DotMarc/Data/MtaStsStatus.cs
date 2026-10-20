@@ -15,5 +15,9 @@ public enum MtaStsStatus
     PendingDns,
     PendingCertificate,
     Active,
-    Failed
+    Failed,
+
+    /// <summary>The policy is hosted and served, but the domain has no valid _mta-sts TXT record, so senders don't know
+    /// to fetch it.</summary>
+    PendingPolicyRecord
 }

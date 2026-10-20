@@ -1,10 +1,12 @@
+using DotMarc.Dns;
 using DotMarc.MtaSts;
 using Microsoft.Extensions.Options;
 
 namespace DotMarc.DnsPush;
 
 public sealed class MtaStsChangeBuilder(
-    IOptions<MtaStsOptions> mtaStsOptions, IMtaStsCnameLookup mtaStsCnameLookup, IMtaStsHostProvisioner mtaStsHostProvisioner) : IDnsChangeBuilder
+    IOptions<MtaStsOptions> mtaStsOptions, IMtaStsCnameLookup mtaStsCnameLookup, IMtaStsHostProvisioner mtaStsHostProvisioner, ITxtRecordLookup txtRecordLookup)
+    : IDnsChangeBuilder
 {
     public string Target => "mta-sts";
     public string RequiredPolicy => "MtaStsManage";
@@ -25,6 +27,20 @@ public sealed class MtaStsChangeBuilder(
             ? new DnsRecordChange(DnsRecordChangeKind.Create, "CNAME", $"mta-sts.{domainName}", hostingHostname, null, domainZone)
             : new DnsRecordChange(DnsRecordChangeKind.Merge, "CNAME", $"mta-sts.{domainName}", hostingHostname, existingCname, domainZone);
         var changes = new List<DnsRecordChange> { cnameChange };
+
+        // The _mta-sts TXT record that tells senders there's a policy to fetch, with an id that changes with the policy.
+        var domain = request.Domain;
+        var policyRecord = MtaStsPolicyRenderer.PolicyRecord(MtaStsPolicyRenderer.PolicyId(domain.MtaStsMode, domain.MtaStsMxHosts, domain.MtaStsMaxAgeSeconds));
+        var existingRecord = (await txtRecordLookup.GetTxtValuesAsync($"_mta-sts.{domainName}", cancellationToken).ConfigureAwait(false))
+            .FirstOrDefault(value => value.TrimStart().StartsWith("v=STSv1", StringComparison.Ordinal));
+        if (existingRecord is null)
+        {
+            changes.Add(new DnsRecordChange(DnsRecordChangeKind.Create, "TXT", $"_mta-sts.{domainName}", policyRecord, null, domainZone));
+        }
+        else if (existingRecord.Trim() != policyRecord)
+        {
+            changes.Add(new DnsRecordChange(DnsRecordChangeKind.Merge, "TXT", $"_mta-sts.{domainName}", policyRecord, existingRecord, domainZone));
+        }
 
         // Azure Container Apps also needs a domain-ownership TXT record before it will bind the
         // custom domain - see AzureMtaStsHostProvisioner and the design spec's "Fetching the

@@ -634,7 +634,8 @@ app.MapGet("/.well-known/mta-sts-ask", async (string domain, IDbContextFactory<D
     var isProvisionable = await context.Domains.AsNoTracking().AnyAsync(d =>
         d.Name == domainName &&
         d.MtaStsEnabled &&
-        (d.MtaStsStatus == MtaStsStatus.PendingCertificate || d.MtaStsStatus == MtaStsStatus.Active || d.MtaStsStatus == MtaStsStatus.Failed));
+        (d.MtaStsStatus == MtaStsStatus.PendingCertificate || d.MtaStsStatus == MtaStsStatus.Active || d.MtaStsStatus == MtaStsStatus.Failed
+            || d.MtaStsStatus == MtaStsStatus.PendingPolicyRecord));
 
     return isProvisionable ? Results.Ok() : Results.NotFound();
 }).AllowAnonymous();

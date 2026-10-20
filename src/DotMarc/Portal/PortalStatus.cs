@@ -50,7 +50,7 @@ public static class PortalStatus
             yield return $"DKIM: {DkimStatusPresentation.GetLabel(domain.DkimCheckStatus)}";
         if (domain.TlsrptCheckStatus is TlsrptCheckStatus.MissingOwnRecord or TlsrptCheckStatus.Misconfigured)
             yield return $"TLS reporting: {TlsrptStatusPresentation.GetLabel(domain.TlsrptCheckStatus)}";
-        if (domain.MtaStsStatus == MtaStsStatus.Failed)
+        if (domain.MtaStsStatus is MtaStsStatus.Failed or MtaStsStatus.PendingPolicyRecord)
             yield return $"MTA-STS: {MtaStsStatusPresentation.GetLabel(domain.MtaStsStatus)}";
     }
 

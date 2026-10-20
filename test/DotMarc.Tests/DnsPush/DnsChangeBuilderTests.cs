@@ -97,18 +97,20 @@ public sealed class DnsChangeBuilderTests
     [Fact]
     public async Task MtaSts_CreatesTheCname()
     {
-        var builder = new MtaStsChangeBuilder(Options.Create(new MtaStsOptions { HostingHostname = "mta-sts.dotmarc.example" }), new FakeMtaStsCnameLookup(), new FakeMtaStsHostProvisioner());
+        var builder = new MtaStsChangeBuilder(Options.Create(new MtaStsOptions { HostingHostname = "mta-sts.dotmarc.example" }), new FakeMtaStsCnameLookup(), new FakeMtaStsHostProvisioner(), new FakeTxtRecordLookup());
 
-        var change = Assert.Single((await builder.BuildAsync(Request(), CancellationToken.None)).Changes);
+        var changes = (await builder.BuildAsync(Request(), CancellationToken.None)).Changes;
 
-        Assert.Equal((DnsRecordChangeKind.Create, "CNAME", "mta-sts.contoso.com", "mta-sts.dotmarc.example"), (change.Kind, change.RecordType, change.Name, change.DesiredValue));
+        Assert.Equal((DnsRecordChangeKind.Create, "CNAME", "mta-sts.contoso.com", "mta-sts.dotmarc.example"), (changes[0].Kind, changes[0].RecordType, changes[0].Name, changes[0].DesiredValue));
+        Assert.Equal((DnsRecordChangeKind.Create, "TXT", "_mta-sts.contoso.com"), (changes[1].Kind, changes[1].RecordType, changes[1].Name));
+        Assert.StartsWith("v=STSv1; id=", changes[1].DesiredValue);
         Assert.Equal("MtaStsManage", builder.RequiredPolicy);
     }
 
     [Fact]
     public async Task MtaSts_RefusesWithoutAHostingHostname()
     {
-        var builder = new MtaStsChangeBuilder(Options.Create(new MtaStsOptions()), new FakeMtaStsCnameLookup(), new FakeMtaStsHostProvisioner());
+        var builder = new MtaStsChangeBuilder(Options.Create(new MtaStsOptions()), new FakeMtaStsCnameLookup(), new FakeMtaStsHostProvisioner(), new FakeTxtRecordLookup());
 
         Assert.Equal("error", (await builder.BuildAsync(Request(), CancellationToken.None)).Refusal);
     }

@@ -117,6 +117,61 @@ public sealed class MtaStsCheckCycleTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RunMtaStsCheckCycleAsync_WaitsForTheTxtRecord_WhenThePolicyIsServedButNotAnnounced()
+    {
+        using var context = CreateContext();
+        context.Domains.Add(new Domain { Name = "contoso.io", FirstSeenUtc = DateTimeOffset.UtcNow, MtaStsEnabled = true, MtaStsStatus = MtaStsStatus.PendingCertificate });
+        await context.SaveChangesAsync();
+
+        var dnsVerifier = new FakeMtaStsDnsVerifier { PolicyRecord = new MtaStsPolicyRecordCheck(MtaStsPolicyRecordState.Missing) };
+        await CreateService(context).RunMtaStsCheckCycleAsync(context, dnsVerifier, new FakeMtaStsServingVerifier { IsServing = true }, new FakeMtaStsHostProvisioner(), HostingHostname, CancellationToken.None);
+
+        var domain = context.Domains.Single();
+        Assert.Equal(MtaStsStatus.PendingPolicyRecord, domain.MtaStsStatus);
+        Assert.Contains($"_mta-sts.contoso.io with the value \"v=STSv1; id={MtaStsPolicyRenderer.PolicyId(domain.MtaStsMode, domain.MtaStsMxHosts, domain.MtaStsMaxAgeSeconds)}\"", domain.MtaStsCheckDetail);
+    }
+
+    [Fact]
+    public async Task RunMtaStsCheckCycleAsync_FailsAnActiveDomain_WhenItsTxtRecordGoes()
+    {
+        using var context = CreateContext();
+        context.Domains.Add(new Domain { Name = "contoso.io", FirstSeenUtc = DateTimeOffset.UtcNow, MtaStsEnabled = true, MtaStsStatus = MtaStsStatus.Active });
+        await context.SaveChangesAsync();
+
+        var dnsVerifier = new FakeMtaStsDnsVerifier { PolicyRecord = new MtaStsPolicyRecordCheck(MtaStsPolicyRecordState.Missing) };
+        await CreateService(context).RunMtaStsCheckCycleAsync(context, dnsVerifier, new FakeMtaStsServingVerifier { IsServing = true }, new FakeMtaStsHostProvisioner(), HostingHostname, CancellationToken.None);
+
+        Assert.Equal(MtaStsStatus.Failed, context.Domains.Single().MtaStsStatus);
+    }
+
+    [Fact]
+    public async Task RunMtaStsCheckCycleAsync_IsActive_ButAsksForANewId_WhenTheRecordsIdIsStale()
+    {
+        using var context = CreateContext();
+        context.Domains.Add(new Domain { Name = "contoso.io", FirstSeenUtc = DateTimeOffset.UtcNow, MtaStsEnabled = true, MtaStsStatus = MtaStsStatus.PendingCertificate });
+        await context.SaveChangesAsync();
+
+        var dnsVerifier = new FakeMtaStsDnsVerifier { PolicyRecord = new MtaStsPolicyRecordCheck(MtaStsPolicyRecordState.Present, "20261020T2040") };
+        await CreateService(context).RunMtaStsCheckCycleAsync(context, dnsVerifier, new FakeMtaStsServingVerifier { IsServing = true }, new FakeMtaStsHostProvisioner(), HostingHostname, CancellationToken.None);
+
+        var domain = context.Domains.Single();
+        Assert.Equal(MtaStsStatus.Active, domain.MtaStsStatus);
+        Assert.Contains("older policy", domain.MtaStsCheckDetail);
+    }
+
+    [Theory]
+    [InlineData("v=STSv1; id=20161212T000000;", MtaStsPolicyRecordState.Present)]
+    [InlineData("v=STSv1;id=abc123", MtaStsPolicyRecordState.Present)]
+    [InlineData("v=STSv1;", MtaStsPolicyRecordState.Invalid)]
+    [InlineData("v=STSv1; id=has-dash", MtaStsPolicyRecordState.Invalid)]
+    public void ParsePolicyRecord_FollowsRfc8461(string value, MtaStsPolicyRecordState expected)
+    {
+        Assert.Equal(expected, MtaStsDnsVerifier.Parse([value]).State);
+        Assert.Equal(MtaStsPolicyRecordState.Missing, MtaStsDnsVerifier.Parse([]).State);
+        Assert.Equal(MtaStsPolicyRecordState.Multiple, MtaStsDnsVerifier.Parse([value, value]).State);
+    }
+
+    [Fact]
     public async Task RunMtaStsCheckCycleAsync_MovesActiveToFailed_WhenServingCheckRegresses()
     {
         using var context = CreateContext();

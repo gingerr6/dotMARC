@@ -2625,7 +2625,8 @@
                   "PendingDns",
                   "PendingCertificate",
                   "Active",
-                  "Failed"
+                  "Failed",
+                  "PendingPolicyRecord"
                 ],
                 "type": "string"
               },

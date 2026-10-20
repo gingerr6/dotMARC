@@ -11,6 +11,7 @@ public static class MtaStsStatusPresentation
     {
         MtaStsStatus.Active => Color.Success,
         MtaStsStatus.PendingDns or MtaStsStatus.PendingCertificate => Color.Info,
+        MtaStsStatus.PendingPolicyRecord => Color.Warning,
         MtaStsStatus.Failed => Color.Error,
         _ => Color.Default
     };
@@ -21,6 +22,7 @@ public static class MtaStsStatusPresentation
         MtaStsStatus.PendingCertificate => "Provisioning certificate",
         MtaStsStatus.Active => "Active",
         MtaStsStatus.Failed => "Failed",
+        MtaStsStatus.PendingPolicyRecord => "Waiting for TXT record",
         _ => "Not configured"
     };
 }

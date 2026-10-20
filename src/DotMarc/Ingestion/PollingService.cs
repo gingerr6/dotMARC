@@ -1237,8 +1237,36 @@ public sealed class PollingService : BackgroundService
 
         if (isServing)
         {
-            domain.MtaStsStatus = MtaStsStatus.Active;
-            domain.MtaStsCheckDetail = null;
+            // Hosted and served; senders only look for it if the _mta-sts TXT record says there's a policy.
+            var expectedId = MtaStsPolicyRenderer.PolicyId(domain.MtaStsMode, domain.MtaStsMxHosts, domain.MtaStsMaxAgeSeconds);
+            var record = await dnsVerifier.CheckPolicyRecordAsync(domain.Name, cancellationToken).ConfigureAwait(false);
+            var addRecord = $"Add a TXT record _mta-sts.{domain.Name} with the value \"{MtaStsPolicyRenderer.PolicyRecord(expectedId)}\"";
+            var problem = record.State switch
+            {
+                MtaStsPolicyRecordState.Missing => $"The policy is served, but senders won't look for it: there's no _mta-sts.{domain.Name} TXT record. {addRecord}.",
+                MtaStsPolicyRecordState.Multiple => $"_mta-sts.{domain.Name} has more than one v=STSv1 TXT record, so senders ignore the policy. Keep only one: \"{MtaStsPolicyRenderer.PolicyRecord(expectedId)}\".",
+                MtaStsPolicyRecordState.Invalid => $"The _mta-sts.{domain.Name} TXT record has no valid id, so senders ignore the policy. Change it to \"{MtaStsPolicyRenderer.PolicyRecord(expectedId)}\".",
+                _ => null
+            };
+
+            if (problem is null)
+            {
+                domain.MtaStsStatus = MtaStsStatus.Active;
+                domain.MtaStsCheckDetail = record.Id == expectedId
+                    ? null
+                    : $"Senders may keep using a copy of an older policy until the TXT record's id changes. Change _mta-sts.{domain.Name} to \"{MtaStsPolicyRenderer.PolicyRecord(expectedId)}\".";
+            }
+            else if (domain.MtaStsStatus is MtaStsStatus.Active or MtaStsStatus.Failed)
+            {
+                // Was working, isn't now: a regression, which the MTA-STS health alert reports.
+                domain.MtaStsStatus = MtaStsStatus.Failed;
+                domain.MtaStsCheckDetail = problem;
+            }
+            else
+            {
+                domain.MtaStsStatus = MtaStsStatus.PendingPolicyRecord;
+                domain.MtaStsCheckDetail = problem;
+            }
         }
         else if (domain.MtaStsStatus == MtaStsStatus.Active)
         {

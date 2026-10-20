@@ -40,6 +40,45 @@ public sealed class MtaStsDnsVerifier : IMtaStsDnsVerifier
         return pointsHere ? MtaStsDnsVerificationResult.Resolved : MtaStsDnsVerificationResult.PointsElsewhere;
     }
 
+    public async Task<MtaStsPolicyRecordCheck> CheckPolicyRecordAsync(string domainName, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"dns-query?name={Uri.EscapeDataString($"_mta-sts.{domainName}")}&type=TXT");
+        request.Headers.Accept.ParseAdd("application/dns-json");
+        var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var parsed = JsonSerializer.Deserialize<DnsOverHttpsResponse>(body, JsonOptions)!;
+
+        // A TXT answer's data is its quoted strings, which a long record splits; joined, they're the value.
+        var values = parsed.Answer?.Where(answer => answer.Type == 16)
+            .Select(answer => string.Concat(System.Text.RegularExpressions.Regex.Matches(answer.Data, "\"((?:[^\"\\\\]|\\\\.)*)\"").Select(match => match.Groups[1].Value)) is { Length: > 0 } joined ? joined : answer.Data)
+            .Where(value => value.TrimStart().StartsWith("v=STSv1", StringComparison.Ordinal))
+            .ToList() ?? [];
+        return Parse(values);
+    }
+
+    /// <summary>RFC 8461 §3.1: exactly one record starting v=STSv1, with an id of 1 to 32 letters and digits.</summary>
+    internal static MtaStsPolicyRecordCheck Parse(IReadOnlyList<string> stsValues)
+    {
+        if (stsValues.Count == 0)
+        {
+            return new MtaStsPolicyRecordCheck(MtaStsPolicyRecordState.Missing);
+        }
+
+        if (stsValues.Count > 1)
+        {
+            return new MtaStsPolicyRecordCheck(MtaStsPolicyRecordState.Multiple);
+        }
+
+        var id = stsValues[0].Split(';').Select(part => part.Trim())
+            .Where(part => part.StartsWith("id=", StringComparison.Ordinal))
+            .Select(part => part[3..].Trim())
+            .FirstOrDefault();
+        return id is { Length: >= 1 and <= 32 } && id.All(char.IsAsciiLetterOrDigit)
+            ? new MtaStsPolicyRecordCheck(MtaStsPolicyRecordState.Present, id)
+            : new MtaStsPolicyRecordCheck(MtaStsPolicyRecordState.Invalid);
+    }
+
     private sealed record DnsOverHttpsResponse(
         [property: JsonPropertyName("Status")] int Status,
         [property: JsonPropertyName("Answer")] List<DnsAnswer>? Answer);
