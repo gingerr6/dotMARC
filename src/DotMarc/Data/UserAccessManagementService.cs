@@ -11,7 +11,7 @@ namespace DotMarc.Data;
 public static class UserAccessManagementService
 {
     public enum GrantAccessResult { Granted, InvalidEmail, AlreadyExists, RoleNotFound }
-    public enum UpdateAccessResult { Updated, RoleNotFound, ClientPortalNeedsGroups }
+    public enum UpdateAccessResult { Updated, RoleNotFound, ClientPortalNeedsGroups, LastAdminGuard }
     public enum SetClientPortalResult { Updated, NeedsScopedGroups }
     public enum RevokeAccessResult { Revoked, LastAdminGuard }
 
@@ -59,10 +59,9 @@ public static class UserAccessManagementService
         return GrantAccessResult.Granted;
     }
 
-    /// <summary>Not yet called from any UI - ManageAccess.razor's page spec deliberately only
-    /// covers Grant + Revoke, not editing an existing grant's role/scope. Reserved here for a
-    /// future edit-grant feature; kept rather than removed so that feature doesn't have to
-    /// re-derive this logic.</summary>
+    /// <summary>Changes an existing grant's role and Groups, from the People tab on Manage access. Groups only count on a
+    /// role limited to groups, so they're cleared for any other. Like revoking, it refuses to take access management
+    /// away from the last grant that has it, which would leave no one able to manage access.</summary>
     public static async Task<UpdateAccessResult> UpdateAccessAsync(DotMarcDbContext context, AuditActor actor, int userAccessId, int roleId, IReadOnlyList<int> groupIds, CancellationToken cancellationToken = default)
     {
         var role = await context.Roles.SingleOrDefaultAsync(r => r.Id == roleId, cancellationToken).ConfigureAwait(false);
@@ -79,6 +78,12 @@ public static class UserAccessManagementService
         if (access.IsClientPortal && groups.Count == 0)
         {
             return UpdateAccessResult.ClientPortalNeedsGroups;
+        }
+
+        if (ManagesAccess(access.Role, access.ScopedGroups.Count) && !ManagesAccess(role, groups.Count)
+            && !await AnotherGrantManagesAccessAsync(context, userAccessId, cancellationToken).ConfigureAwait(false))
+        {
+            return UpdateAccessResult.LastAdminGuard;
         }
 
         var changes = new AuditChanges()
@@ -126,28 +131,13 @@ public static class UserAccessManagementService
     /// since a custom role could also carry AccessManage.</summary>
     public static async Task<RevokeAccessResult> RevokeAccessAsync(DotMarcDbContext context, AuditActor actor, int userAccessId, CancellationToken cancellationToken = default)
     {
-        var access = await context.UserAccesses.Include(u => u.Role).SingleAsync(u => u.Id == userAccessId, cancellationToken).ConfigureAwait(false);
+        var access = await context.UserAccesses.Include(u => u.Role).Include(u => u.ScopedGroups).AsSplitQuery()
+            .SingleAsync(u => u.Id == userAccessId, cancellationToken).ConfigureAwait(false);
 
-        if (access.Role.Permissions.Contains(Permission.AccessManage))
+        if (ManagesAccess(access.Role, access.ScopedGroups.Count)
+            && !await AnotherGrantManagesAccessAsync(context, userAccessId, cancellationToken).ConfigureAwait(false))
         {
-            // Role.Permissions is a List<Permission> behind an EF Core value converter (see
-            // DotMarcDbContext's ValueComparer comment) rather than a translatable primitive
-            // collection, so a server-side .Contains() predicate on it isn't reliable. The access
-            // grants table is small (staff plus a handful of external client contacts), so
-            // pulling every other grant's role into memory for this one-off guard check is cheap
-            // and avoids depending on unsupported LINQ translation.
-            var otherGrants = await context.UserAccesses
-                .Where(u => u.Id != userAccessId)
-                .Include(u => u.Role)
-                .AsNoTracking()
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            var anotherAdminExists = otherGrants.Any(u => u.Role.Permissions.Contains(Permission.AccessManage));
-            if (!anotherAdminExists)
-            {
-                return RevokeAccessResult.LastAdminGuard;
-            }
+            return RevokeAccessResult.LastAdminGuard;
         }
 
         AuditLog.Record(context, actor, AuditActions.AccessRevoked, AuditTarget.For(access), $"Revoked access for {access.Email}");
@@ -155,6 +145,28 @@ public static class UserAccessManagementService
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return RevokeAccessResult.Revoked;
     }
+
+    /// <summary>Role.Permissions is a List&lt;Permission&gt; behind an EF Core value converter (see DotMarcDbContext's
+    /// ValueComparer comment) rather than a translatable primitive collection, so a server-side .Contains() predicate on
+    /// it isn't reliable. The grants table is small (staff plus a handful of external client contacts), so the other
+    /// grants' roles are checked in memory instead.</summary>
+    private static async Task<bool> AnotherGrantManagesAccessAsync(DotMarcDbContext context, int userAccessId, CancellationToken cancellationToken)
+    {
+        var otherGrants = await context.UserAccesses
+            .Where(u => u.Id != userAccessId)
+            .Include(u => u.Role)
+            .Include(u => u.ScopedGroups)
+            .AsSplitQuery()
+            .AsNoTracking()
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return otherGrants.Any(u => ManagesAccess(u.Role, u.ScopedGroups.Count));
+    }
+
+    /// <summary>Whether a grant can really manage access: AccessClaims drops AccessManage from a grant limited to
+    /// Groups, whatever its role holds.</summary>
+    private static bool ManagesAccess(Role role, int scopedGroupCount) =>
+        role.Permissions.Contains(Permission.AccessManage) && !(role.IsScopable && scopedGroupCount > 0);
 
     /// <summary>Looks up the caller's access grant by Entra object ID first (the stable,
     /// already-bound case). Falling back to a case-insensitive email match only when no

@@ -45,6 +45,7 @@ public sealed class StaticPagesTests : IAsyncLifetime
     [Theory]
     [InlineData("/demo")]
     [InlineData("/AccessDenied")]
+    [InlineData("/signed-out")]
     public async Task APageForSignedOutVisitors_DoesntStartACircuit(string path)
     {
         using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -63,5 +64,17 @@ public sealed class StaticPagesTests : IAsyncLifetime
         var html = await client.GetStringAsync("/dashboard");
 
         Assert.Contains(InteractiveServerMarker, html);
+    }
+
+    [Fact]
+    public async Task TheSignedOutPage_NeedsNoSignIn()
+    {
+        // A page that needed sign-in would start a fresh sign-in straight after signing out.
+        using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/signed-out");
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("You&#x27;ve signed out", await response.Content.ReadAsStringAsync());
     }
 }
