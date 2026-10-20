@@ -59,6 +59,7 @@ public sealed class Domain
     public List<Group> Groups { get; set; } = [];
     public List<Tag> Tags { get; set; } = [];
     public List<DomainAlertState> AlertStates { get; set; } = [];
+    public List<SenderApproval> SenderApprovals { get; set; } = [];
     public List<DomainDkimRecord> DkimRecords { get; set; } = [];
     public List<DotMarc.Psa.PsaCompanyLink> PsaCompanyLinks { get; set; } = [];
 }

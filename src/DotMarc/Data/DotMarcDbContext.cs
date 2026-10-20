@@ -39,6 +39,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DotMarc.Psa.AlertTicket> AlertTickets => Set<DotMarc.Psa.AlertTicket>();
     public DbSet<DomainAlertState> DomainAlertStates => Set<DomainAlertState>();
     public DbSet<DomainDkimRecord> DomainDkimRecords => Set<DomainDkimRecord>();
+    public DbSet<SenderApproval> SenderApprovals => Set<SenderApproval>();
     public DbSet<DnsRecordSettings> DnsRecordSettings => Set<DnsRecordSettings>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<HaloPsaSettings> HaloPsaSettings => Set<HaloPsaSettings>();
@@ -357,6 +358,15 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(state => state.Baseline).HasMaxLength(2000);
             entity.HasIndex(state => new { state.DomainId, state.Item }).IsUnique();
             entity.HasOne<Domain>().WithMany(domain => domain.AlertStates).HasForeignKey(state => state.DomainId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SenderApproval>(entity =>
+        {
+            entity.Property(approval => approval.SenderKey).HasMaxLength(64);
+            entity.Property(approval => approval.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(approval => approval.DecidedBy).HasMaxLength(320);
+            entity.HasIndex(approval => new { approval.DomainId, approval.SenderKey }).IsUnique();
+            entity.HasOne<Domain>().WithMany(domain => domain.SenderApprovals).HasForeignKey(approval => approval.DomainId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<DomainDkimRecord>(entity =>

@@ -1,7 +1,9 @@
 using System.Globalization;
 using DotMarc.Audit;
 using DotMarc.Data;
+using DotMarc.IpEnrichment;
 using DotMarc.Reporting;
+using DotMarc.Senders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -25,14 +27,24 @@ public sealed class AlertingService : IAlertingService
     private readonly IAlertWebhookClient _alertWebhookClient;
     private readonly IPsaTicketService _psaTicketService;
     private readonly ILogger<AlertingService> _logger;
+    private readonly IReverseDnsLookup? _reverseDnsLookup;
 
-    public AlertingService(IDbContextFactory<DotMarcDbContext> dbFactory, IAlertWebhookClient alertWebhookClient, IPsaTicketService psaTicketService, ILogger<AlertingService> logger)
+    public AlertingService(IDbContextFactory<DotMarcDbContext> dbFactory, IAlertWebhookClient alertWebhookClient, IPsaTicketService psaTicketService, ILogger<AlertingService> logger,
+        IReverseDnsLookup? reverseDnsLookup = null)
     {
         _dbFactory = dbFactory;
         _alertWebhookClient = alertWebhookClient;
         _psaTicketService = psaTicketService;
         _logger = logger;
+        _reverseDnsLookup = reverseDnsLookup;
     }
+
+    /// <summary>How recent mail must be to count for UnapprovedSender, so approving a sender, or a sender going quiet,
+    /// closes the alert within a week.</summary>
+    public static readonly TimeSpan UnapprovedSenderWindow = TimeSpan.FromDays(7);
+
+    /// <summary>Reverse DNS lookups one cycle may make to recognise senders; later cycles pick up the rest.</summary>
+    private const int MaxSenderLookupsPerCycle = 50;
 
     public async Task CheckPinnedDomainsAsync(CancellationToken cancellationToken = default)
     {
@@ -103,6 +115,8 @@ public sealed class AlertingService : IAlertingService
             // AND have a reject mix worth flagging, so this always runs.
             await CheckSuspiciousRejectActivityAsync(db, settings, domain, cancellationToken).ConfigureAwait(false);
         }
+
+        await CheckUnapprovedSendersAsync(db, settings, domains, cancellationToken).ConfigureAwait(false);
 
         await CheckDnsHealthAsync(db, settings, domains, cancellationToken).ConfigureAwait(false);
         await CheckApiKeyExpiryAsync(db, settings, cancellationToken).ConfigureAwait(false);
@@ -183,6 +197,78 @@ public sealed class AlertingService : IAlertingService
         else
         {
             await ResolveAlertAsync(domain.Name, AlertTypes.SuspiciousRejectActivity, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Raises UnapprovedSender for a domain with at least one approved sender (so someone has reviewed its
+    /// senders) when, in the last week, mail passing DMARC came from a sender not approved: one nobody reviewed, or one
+    /// marked not ours, which shouldn't be able to pass at all. Mail failing DMARC is left out: that's spoofing DMARC is
+    /// already dealing with, and it stays visible, unreviewed, on the Sources tab.</summary>
+    private async Task CheckUnapprovedSendersAsync(DotMarcDbContext db, NotificationSettings settings, List<Domain> domains, CancellationToken cancellationToken)
+    {
+        var domainIds = domains.Select(domain => domain.Id).ToList();
+        var approvals = await db.SenderApprovals
+            .AsNoTracking()
+            .Where(approval => domainIds.Contains(approval.DomainId))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var approvalsByDomain = approvals.ToLookup(approval => approval.DomainId);
+        var windowStartUtc = DateTimeOffset.UtcNow - UnapprovedSenderWindow;
+
+        var lookupsLeft = MaxSenderLookupsPerCycle;
+        foreach (var domain in domains)
+        {
+            var decisions = approvalsByDomain[domain.Id].ToDictionary(approval => approval.SenderKey, approval => approval.Status);
+            var volumeByIp = domain.Reports
+                .Where(report => report.ReceivedUtc >= windowStartUtc)
+                .SelectMany(report => report.Records)
+                .Where(DomainStatistics.IsPassing)
+                .GroupBy(record => record.SourceIp)
+                .ToDictionary(group => group.Key, group => group.Sum(record => record.MessageCount));
+            if (!decisions.ContainsValue(SenderApprovalStatus.Approved) || volumeByIp.Count == 0)
+            {
+                await ResolveAlertAsync(domain.Name, AlertTypes.UnapprovedSender, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            var ips = volumeByIp.Keys.ToList();
+            var hostNames = await IpHostNameService.GetCachedAsync(db, ips, cancellationToken).ConfigureAwait(false);
+            var owners = await IpInfoService.GetCachedAsync(db, ips, cancellationToken).ConfigureAwait(false);
+            var unapproved = new Dictionary<string, (string Label, int Volume, bool MarkedNotOurs)>();
+            foreach (var (ip, volume) in volumeByIp)
+            {
+                hostNames.TryGetValue(ip, out var cachedName);
+                var hostName = cachedName?.HostName;
+                if (_reverseDnsLookup is not null && lookupsLeft > 0 && IpHostNameService.NeedsLookup(cachedName, DateTimeOffset.UtcNow))
+                {
+                    lookupsLeft--;
+                    hostName = (await IpHostNameService.EnrichAsync(_dbFactory, _reverseDnsLookup, ip, cancellationToken).ConfigureAwait(false)).HostName;
+                }
+
+                owners.TryGetValue(ip, out var owner);
+                var identity = SenderIdentity.For(ip, hostName, owner?.Organization);
+                if (decisions.TryGetValue(identity.Key, out var status) && status == SenderApprovalStatus.Approved)
+                {
+                    continue;
+                }
+
+                var previous = unapproved.GetValueOrDefault(identity.Key, (Label: identity.Label, Volume: 0, MarkedNotOurs: status == SenderApprovalStatus.NotOurs));
+                unapproved[identity.Key] = (previous.Label, previous.Volume + volume, previous.MarkedNotOurs);
+            }
+
+            if (unapproved.Count == 0)
+            {
+                await ResolveAlertAsync(domain.Name, AlertTypes.UnapprovedSender, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            var listed = unapproved.Values.OrderByDescending(sender => sender.Volume).ToList();
+            var described = string.Join(", ", listed.Take(5).Select(sender =>
+                $"{sender.Label} ({sender.Volume} message{(sender.Volume == 1 ? "" : "s")}{(sender.MarkedNotOurs ? ", marked not ours" : "")})"));
+            var more = listed.Count > 5 ? $" and {listed.Count - 5} more" : "";
+            var message = $"In the last 7 days, mail from '{domain.Name}' passed DMARC from {listed.Count} sender(s) nobody approved: {described}{more}. " +
+                "Approve them on the domain's Sources tab if they're the domain's own mail; otherwise find out who added them to its SPF or DKIM.";
+            await EnsureAlertAsync(db, settings, domain.Name, AlertTypes.UnapprovedSender, "Warning", "Mail passing DMARC from an unapproved sender", message, cancellationToken).ConfigureAwait(false);
         }
     }
 

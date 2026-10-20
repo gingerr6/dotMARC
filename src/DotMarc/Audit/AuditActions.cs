@@ -15,6 +15,7 @@ public static class AuditActions
     public const string DomainsImported = "domains.imported";
     public const string DomainGroupsChanged = "domain.groups_changed";
     public const string DomainTagsChanged = "domain.tags_changed";
+    public const string DomainSenderReviewed = "domain.sender_reviewed";
     public const string GroupAdded = "group.added";
     public const string GroupRenamed = "group.renamed";
     public const string GroupRemoved = "group.removed";
@@ -84,6 +85,7 @@ public static class AuditActions
         (DomainsImported, "Domains imported"),
         (DomainGroupsChanged, "Domain groups changed"),
         (DomainTagsChanged, "Domain tags changed"),
+        (DomainSenderReviewed, "Domain sender reviewed"),
         (GroupAdded, "Group added"),
         (GroupRenamed, "Group renamed"),
         (GroupRemoved, "Group removed"),

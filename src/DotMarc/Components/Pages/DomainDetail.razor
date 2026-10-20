@@ -15,11 +15,13 @@
 @using DotMarc.Components.Dialogs
 @using DotMarc.Components.Shared
 @using DotMarc.Notifications
+@using DotMarc.Senders
 @inject AuditActorAccessor AuditActorAccessor
 @inject IDbContextFactory<DotMarcDbContext> DbFactory
 @inject IIpInfoLookup IpLookup
 @inject IReverseDnsLookup ReverseDnsLookup
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
 @inject NavigationManager Navigation
 @inject ILogger<DomainDetail> Logger
 @inject IDnsProviderDetector DnsProviderDetector
@@ -366,6 +368,15 @@ else
         <MudTabPanel Text="Sources">
             <MudTable Items="_sources" Hover="true" T="SourceRow" CustomHeader="true" Filter="SourceMatchesFilters">
                 <ToolBarContent>
+                    @{ var unreviewed = _sources.Select(s => s.Identity).DistinctBy(identity => identity.Key).Count(identity => !_senderApprovals.ContainsKey(identity.Key)); }
+                    @if (_senderApprovals.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Approve the services and servers that send this domain's mail, and dotMARC alerts you when anything else starts passing DMARC.</MudText>
+                    }
+                    else if (unreviewed > 0)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" OnClick="@(() => { _showSourceFilters = true; _sourceApprovalFilter = UnreviewedFilter; })">@unreviewed unreviewed sender@(unreviewed == 1 ? "" : "s")</MudChip>
+                    }
                     <MudSpacer />
                     <MudButton Variant="@(_showSourceFilters ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterList"
                                OnClick="@(() => _showSourceFilters = !_showSourceFilters)">@(_showSourceFilters ? "Hide filters" : "Filters")</MudButton>
@@ -373,6 +384,7 @@ else
                 <HeaderContent>
                     <tr>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)">Source</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => ApprovalLabel(s))">Approval</MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)">Volume</MudTableSortLabel></MudTh>
                         <MudTh>7d trend</MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.FirstSeenUtc ?? DateTimeOffset.MinValue)">First seen</MudTableSortLabel></MudTh>
@@ -387,6 +399,13 @@ else
                     {
                     <tr>
                         <MudTh><MudTextField T="string" @bind-Value="_sourceIpFilter" Placeholder="Search" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" /></MudTh>
+                        <MudTh>
+                            <MudSelect T="string" Value="_sourceApprovalFilter" ValueChanged="@(v => _sourceApprovalFilter = v)" Clearable="true" Placeholder="Any" Margin="Margin.Dense">
+                                <MudSelectItem T="string" Value="@("Approved")">Approved</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("Not ours")">Not ours</MudSelectItem>
+                                <MudSelectItem T="string" Value="@UnreviewedFilter">Unreviewed</MudSelectItem>
+                            </MudSelect>
+                        </MudTh>
                         <MudTh><MudNumericField T="int?" @bind-Value="_sourceMinVolumeFilter" Placeholder="Min" Margin="Margin.Dense" Min="0" /></MudTh>
                         <MudTh></MudTh>
                         <MudTh>
@@ -431,7 +450,12 @@ else
                 <RowTemplate>
                     <MudTd>
                         @* The name first, since it says who sent the mail; the IP stays beneath it, as SPF needs it. *@
-                        @if (context.HostName is { } hostName)
+                        @if (context.Identity.IsService)
+                        {
+                            <div><b>@context.Identity.Label</b></div>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@(context.HostName ?? context.Organization) · @context.SourceIp</MudText>
+                        }
+                        else if (context.HostName is { } hostName)
                         {
                             <div>@hostName</div>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.SourceIp</MudText>
@@ -444,6 +468,25 @@ else
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Looking up name…</MudText>
                             }
                         }
+                    </MudTd>
+                    <MudTd>
+                        @{ var identity = context.Identity; var status = ApprovalStatus(context); }
+                        <div class="d-flex align-center" style="gap:4px;">
+                            <MudTooltip Text="@ApprovalTooltip(identity)" Arrow="true">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                         Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => Color.Default })">@SenderApprovalService.Describe(status)</MudChip>
+                            </MudTooltip>
+                            <AuthorizeView Policy="DomainsEdit" Context="senderAuthState">
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@($"Review {identity.Label}")">
+                                    <MudMenuItem OnClick="@(() => ReviewSenderAsync(identity, SenderApprovalStatus.Approved))">Approve @(identity.IsService ? $"all {identity.Label}" : "this IP")</MudMenuItem>
+                                    <MudMenuItem OnClick="@(() => ReviewSenderAsync(identity, SenderApprovalStatus.NotOurs))">Not ours</MudMenuItem>
+                                    @if (status is not null)
+                                    {
+                                        <MudMenuItem OnClick="@(() => ReviewSenderAsync(identity, null))">Clear</MudMenuItem>
+                                    }
+                                </MudMenu>
+                            </AuthorizeView>
+                        </div>
                     </MudTd>
                     <MudTd>@context.Volume</MudTd>
                     <MudTd>
@@ -551,6 +594,9 @@ else
     private string? _sourceReasonFilter;
     private string? _sourceOwnerFilter;
     private string? _sourceCountryFilter;
+    private string? _sourceApprovalFilter;
+    private const string UnreviewedFilter = "Unreviewed";
+    private Dictionary<string, SenderApproval> _senderApprovals = [];
     private bool _showSourceFilters;
 
     private string? _tlsrptFromFilter;
@@ -601,6 +647,10 @@ else
         if ((!ContainsIgnoreCase(source.SourceIp, _sourceIpFilter) && !ContainsIgnoreCase(source.HostName ?? "", _sourceIpFilter))
             || !ContainsIgnoreCase(source.ReasonSummary, _sourceReasonFilter)
             || !ContainsIgnoreCase(source.Organization, _sourceOwnerFilter))
+        {
+            return false;
+        }
+        if (_sourceApprovalFilter is not null && ApprovalLabel(source) != _sourceApprovalFilter)
         {
             return false;
         }
@@ -716,6 +766,7 @@ else
             }
         }
 
+        _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
         _reports = _domain.Reports.OrderByDescending(r => r.ReceivedUtc).ToList();
         _tlsrptReports = _domain.TlsrptReports.OrderByDescending(report => report.ReceivedUtc).ToList();
 
@@ -834,6 +885,35 @@ else
 
         _reasonBreakdown = DomainStatistics.GetReasonBreakdown(_domain.Reports);
         _reasonData = [_reasonBreakdown.BenignOverride, _reasonBreakdown.LocalPolicy, _reasonBreakdown.Other, _reasonBreakdown.InferredSpfFailure, _reasonBreakdown.InferredDkimFailure, _reasonBreakdown.InferredBothFailure, _reasonBreakdown.NoReasonGiven];
+    }
+
+    private SenderApprovalStatus? ApprovalStatus(SourceRow source) =>
+        _senderApprovals.TryGetValue(source.Identity.Key, out var approval) ? approval.Status : null;
+
+    private string ApprovalLabel(SourceRow source) => SenderApprovalService.Describe(ApprovalStatus(source));
+
+    private string ApprovalTooltip(SenderIdentity identity)
+    {
+        var scope = identity.IsService ? $"Covers every {identity.Label} server sending this domain's mail." : "Covers this IP only.";
+        return _senderApprovals.TryGetValue(identity.Key, out var approval)
+            ? $"{SenderApprovalService.Describe(approval.Status)} by {approval.DecidedBy} on {approval.DecidedUtc:yyyy-MM-dd}. {scope}"
+            : $"Nobody has reviewed this sender yet. {scope}";
+    }
+
+    /// <summary>Approves a sender, marks it not ours, or clears that (null). The menu only shows for DomainsEdit, but a
+    /// Blazor event can be raised without it, so the permission is checked again here.</summary>
+    private async Task ReviewSenderAsync(SenderIdentity identity, SenderApprovalStatus? status)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (!(await AuthorizationService.AuthorizeAsync(authState.User, "DomainsEdit")).Succeeded)
+        {
+            Snackbar.Add("You don't have permission to review senders.", Severity.Warning);
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await SenderApprovalService.SetAsync(db, await AuditActorAccessor.GetAsync(), _domain!.Id, identity.Key, status);
+        _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
     }
 
     private async Task EnrichSourceInBackgroundAsync(SourceRow source)
@@ -1524,6 +1604,9 @@ else
         public bool IsHostNamePending { get; set; }
         public DateTimeOffset? FirstSeenUtc { get; set; }
         public int[] DailyVolumes { get; set; } = [];
+
+        // Recomputed as the host name and owner arrive, so a source joins its service once it's recognised.
+        public SenderIdentity Identity => SenderIdentity.For(SourceIp, HostName, Organization);
 
         // A source whose earliest-ever report (across all history, not just this 30-day window)
         // is itself within the last week is brand new to this domain - the single highest-signal
