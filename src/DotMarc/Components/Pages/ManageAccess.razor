@@ -9,6 +9,8 @@
 @inject IDbContextFactory<DotMarcDbContext> DbFactory
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject DotMarc.Graph.IEntraGuestInviter GuestInviter
+@inject DotMarc.Audit.AuditRecorder AuditRecorder
 
 <PageTitle>dotMARC - Manage Access</PageTitle>
 <MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
@@ -49,7 +51,13 @@
                                            MultiSelectionTextFunc="@(selected => selected.Count == 0 ? "All (unrestricted)" : $"{selected.Count} group(s)")" />
                 </MudItem>
             }
-            <MudItem xs="12" Class="d-flex justify-end">
+            <MudItem xs="12" Class="d-flex justify-end align-center" Style="gap:1rem">
+                @if (GuestInviter.IsAvailable)
+                {
+                    <FieldWithHelp Topic="Invite to Entra as a guest" Help="@InviteAsGuestHelp">
+                        <MudCheckBox T="bool" @bind-Value="_inviteAsGuest" Label="Invite to Entra as a guest" Color="Color.Primary" Dense="true" />
+                    </FieldWithHelp>
+                }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                            OnClick="GrantAccessAsync">Grant access</MudButton>
             </MudItem>
@@ -253,6 +261,11 @@
     private int _newGrantRoleId;
     private IReadOnlyCollection<int> _newGrantGroupIds = [];
     private string? _addGrantError;
+    private bool _inviteAsGuest = true;
+
+    private const string InviteAsGuestHelp = "Someone from outside your organisation can only sign in once they're a guest in your Entra tenant. "
+        + "With this ticked, dotMARC invites them for you and Microsoft emails them an invitation to accept. "
+        + "Untick it for people already in your tenant. Needs the dashboard app registration to hold the User.Invite.All application permission.";
 
     private string? _roleNameFilter;
     private Permission? _rolePermissionFilter;
@@ -487,9 +500,37 @@
 
         if (result == UserAccessManagementService.GrantAccessResult.Granted)
         {
+            var email = _newGrantEmail.Trim();
             _newGrantEmail = "";
             _newGrantGroupIds = [];
             await LoadAsync();
+            if (_inviteAsGuest && GuestInviter.IsAvailable)
+            {
+                await InviteAsGuestAsync(email);
+            }
+        }
+    }
+
+    /// <summary>Access is already granted by now, so however the invite goes, it only adds a message.</summary>
+    private async Task InviteAsGuestAsync(string email)
+    {
+        var invite = await GuestInviter.InviteAsync(email, Navigation.BaseUri, CancellationToken.None);
+        switch (invite.Outcome)
+        {
+            case DotMarc.Graph.GuestInviteOutcome.Invited:
+                await AuditRecorder.RecordAsync(DotMarc.Audit.AuditLog.Create(await AuditActorAccessor.GetAsync(), DotMarc.Audit.AuditEntryKind.Change,
+                    DotMarc.Audit.AuditActions.GuestInvited, null, $"Invited {email} to Entra as a guest"));
+                Snackbar.Add($"Invited {email} to Entra as a guest. Microsoft will email them an invitation to accept.", Severity.Success);
+                break;
+            case DotMarc.Graph.GuestInviteOutcome.Refused:
+                Snackbar.Add($"Access granted, but Entra didn't invite {email}: {invite.Detail ?? "no reason given"}. If they're already in your tenant, that's fine.", Severity.Warning);
+                break;
+            case DotMarc.Graph.GuestInviteOutcome.NotPermitted:
+                Snackbar.Add($"Access granted, but dotMARC isn't allowed to invite guests yet. In Entra, give the dashboard app registration the Microsoft Graph application permission User.Invite.All and grant admin consent, then invite {email} by hand or revoke and grant again.", Severity.Warning);
+                break;
+            default:
+                Snackbar.Add($"Access granted, but inviting {email} to Entra failed{(invite.Detail is null ? "" : $": {invite.Detail}")}. Invite them in Entra by hand.", Severity.Warning);
+                break;
         }
     }
 

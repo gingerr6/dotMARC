@@ -343,6 +343,17 @@ else
     builder.Services.AddHostedService<PollingService>(sp => ActivatorUtilities.CreateInstance<PollingService>(sp));
 }
 
+// Inviting people into Entra as guests, from the Access page, as the dashboard sign-in app.
+builder.Services.AddHttpClient(DotMarc.Graph.EntraGuestInviter.HttpClientName, client => client.BaseAddress = new Uri("https://graph.microsoft.com/v1.0/"));
+if (demoOptions.Enabled)
+{
+    builder.Services.AddSingleton<DotMarc.Graph.IEntraGuestInviter, DotMarc.Graph.UnavailableEntraGuestInviter>();
+}
+else
+{
+    builder.Services.AddSingleton<DotMarc.Graph.IEntraGuestInviter, DotMarc.Graph.EntraGuestInviter>();
+}
+
 if (demoOptions.Enabled)
 {
     builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme)

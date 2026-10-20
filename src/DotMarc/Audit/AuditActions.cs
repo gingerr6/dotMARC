@@ -29,6 +29,7 @@ public static class AuditActions
     public const string AccessGranted = "access.granted";
     public const string AccessUpdated = "access.updated";
     public const string AccessRevoked = "access.revoked";
+    public const string GuestInvited = "access.guest_invited";
     public const string ApiKeyCreated = "api_key.created";
     public const string ApiKeyRevoked = "api_key.revoked";
     public const string TicketRuleGlobalChanged = "ticket_rule.global_changed";
@@ -97,6 +98,7 @@ public static class AuditActions
         (AccessGranted, "Access granted"),
         (AccessUpdated, "Access updated"),
         (AccessRevoked, "Access revoked"),
+        (GuestInvited, "Invited to Entra as a guest"),
         (ApiKeyCreated, "API key created"),
         (ApiKeyRevoked, "API key revoked"),
         (TicketRuleGlobalChanged, "Ticket rule changed"),
