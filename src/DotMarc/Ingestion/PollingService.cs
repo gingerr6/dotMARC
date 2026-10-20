@@ -1435,6 +1435,43 @@ public sealed class PollingService : BackgroundService
             }
         }
 
+        // A TLS report (RFC 8460) sent here rather than to a separate TLSRPT mailbox, as happens when a domain's
+        // _smtp._tls record names the DMARC mailbox: stored like one from the TLSRPT mailbox.
+        foreach (var attachment in attachments)
+        {
+            ParsedTlsrptReport tlsReport;
+            try
+            {
+                tlsReport = TlsrptReportParser.Parse(ReportDecompressor.Decompress(attachment.ContentBytes));
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            await StoreTlsrptReportAsync(context, tlsReport, cancellationToken).ConfigureAwait(false);
+            await RecordProcessedMessageAsync(context, message.Id, cancellationToken).ConfigureAwait(false);
+            if (_alertingService is not null)
+            {
+                await _alertingService.HandleTlsrptReportAsync(
+                    tlsReport.Domain,
+                    tlsReport.Policies.Sum(policy => policy.FailedSessionCount),
+                    tlsReport.Policies.SelectMany(policy => policy.FailureDetails).Select(detail => detail.ResultType).ToList(),
+                    cancellationToken).ConfigureAwait(false);
+            }
+
+            try
+            {
+                await graphClient.MarkAsReadAsync(message.Id, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception markReadEx)
+            {
+                _logger.LogWarning(markReadEx, "TLS report in message {MessageId} was stored, but marking it read failed. It will be retried next poll without re-parsing.", message.Id);
+            }
+
+            return;
+        }
+
         throw lastError ?? new InvalidDataException("No attachment could be parsed as a DMARC report.");
     }
 

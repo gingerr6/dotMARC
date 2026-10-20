@@ -192,6 +192,25 @@ public class PollingServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PollOnceAsync_StoresATlsReportSentToTheDmarcMailbox()
+    {
+        var graphClient = new FakeGraphMailboxClient();
+        graphClient.UnreadMessages.Add(new MailboxMessage("tls-in-dmarc", "Report Domain: contoso.io Submitter: google.com", true));
+        graphClient.Attachments["tls-in-dmarc"] = [new MailboxAttachment("google.com!contoso.io!1.json.gz", "application/tlsrpt+gzip", GzipOf(ValidTlsrptReportJson))];
+
+        using (var context = CreateContext())
+        {
+            await new PollingService(graphClient, context, NullLogger<PollingService>.Instance).PollOnceAsync(CancellationToken.None);
+        }
+
+        using var verify = CreateContext();
+        Assert.Equal("contoso.io", verify.TlsrptReports.Include(item => item.Domain).Single().Domain.Name);
+        Assert.Empty(verify.Reports);
+        Assert.Empty(verify.ParseFailures);
+        Assert.Contains("tls-in-dmarc", graphClient.MarkedAsRead);
+    }
+
+    [Fact]
     public async Task RunTlsrptPollCycleAsync_ParsesCompressedReportAndStoresPolicyFailures()
     {
         var graphClient = new FakeGraphMailboxClient();
