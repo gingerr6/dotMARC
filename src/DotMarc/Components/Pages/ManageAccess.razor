@@ -111,8 +111,27 @@
                 <RowTemplate>
                     <MudTd>@context.Email</MudTd>
                     <MudTd>@(context.IsBound ? "Active" : "Pending first sign-in")</MudTd>
-                    <MudTd>@context.RoleName</MudTd>
-                    <MudTd>@context.ScopedGroupsDisplay</MudTd>
+                    <MudTd>
+                        <MudSelect T="int" Value="context.RoleId" ValueChanged="@(roleId => ChangeRoleAsync(context, roleId))" Dense="true" Margin="Margin.Dense"
+                                   UserAttributes="@(new Dictionary<string, object> { ["aria-label"] = $"Role for {context.Email}" })">
+                            @foreach (var role in _roles ?? [])
+                            {
+                                <MudSelectItem T="int" Value="role.Id">@role.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudTd>
+                    <MudTd>
+                        @if (context.RoleIsScopable)
+                        {
+                            <SearchableMultiSelect TValue="int" Options="_groupOptions" SelectedValues="context.ScopedGroupIds"
+                                                   SelectedValuesChanged="@(ids => ChangeGroupsAsync(context, ids))"
+                                                   MultiSelectionTextFunc="@(selected => selected.Count == 0 ? "All (unrestricted)" : string.Join(", ", selected))" />
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">All (role isn't limited to groups)</MudText>
+                        }
+                    </MudTd>
                     <MudTd>
                         @if (context.RoleIsScopable)
                         {
@@ -249,6 +268,7 @@
     private List<RoleRow>? _roles;
     private List<GrantRow>? _grants;
     private List<Group> _allGroups = [];
+    private List<SelectOption<int>> _groupOptions = [];
     private string _newRoleName = "";
     private string? _addRoleError;
     private bool _newRoleLimitedToGroups;
@@ -340,6 +360,7 @@
     {
         await using var db = await DbFactory.CreateDbContextAsync();
         _allGroups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync();
+        _groupOptions = _allGroups.Select(group => new SelectOption<int>(group.Id, group.Name)).ToList();
         _roles = await db.Roles
             .AsNoTracking()
             .OrderBy(r => r.Name)
@@ -347,8 +368,11 @@
             .ToListAsync();
         _grants = await db.UserAccesses
             .AsNoTracking()
+            // Two collections are projected (the Groups' ids and names), so without this EF joins them into one result set.
+            .AsSplitQuery()
             .OrderBy(u => u.Email)
-            .Select(u => new GrantRow(u.Id, u.Email, u.EntraObjectId != null, u.Role.Name, u.ScopedGroups.Select(g => g.Name).ToList(), u.Role.IsScopable, u.IsClientPortal))
+            .Select(u => new GrantRow(u.Id, u.Email, u.EntraObjectId != null, u.RoleId, u.Role.Name, u.ScopedGroups.Select(g => g.Id).ToList(),
+                u.ScopedGroups.Select(g => g.Name).ToList(), u.Role.IsScopable, u.IsClientPortal))
             .ToListAsync();
 
         if (_newGrantRoleId == 0 && _roles.Count > 0)
@@ -534,6 +558,48 @@
         }
     }
 
+    private async Task ChangeRoleAsync(GrantRow row, int roleId)
+    {
+        var newRoleIsLimited = _roles?.SingleOrDefault(role => role.Id == roleId)?.IsScopable == true;
+        // A grant's Groups only count on a role limited to groups, so they carry over only from one such role to another.
+        var groupIds = row.RoleIsScopable && newRoleIsLimited ? row.ScopedGroupIds : [];
+        if (await UpdateAccessAsync(row, roleId, groupIds) && newRoleIsLimited && groupIds.Count == 0)
+        {
+            Snackbar.Add($"Now choose {row.Email}'s Groups. Until you do, they see every domain.", Severity.Info);
+        }
+    }
+
+    private Task ChangeGroupsAsync(GrantRow row, IEnumerable<int> groupIds) => UpdateAccessAsync(row, row.RoleId, groupIds.ToList());
+
+    private async Task<bool> UpdateAccessAsync(GrantRow row, int roleId, IReadOnlyList<int> groupIds)
+    {
+        var updated = false;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var result = await UserAccessManagementService.UpdateAccessAsync(db, await AuditActorAccessor.GetAsync(), row.Id, roleId, groupIds, CancellationToken.None);
+            updated = result == UserAccessManagementService.UpdateAccessResult.Updated;
+            var error = result switch
+            {
+                UserAccessManagementService.UpdateAccessResult.LastAdminGuard => $"Can't change {row.Email}'s access: no one else could manage access. Give someone else that first.",
+                UserAccessManagementService.UpdateAccessResult.ClientPortalNeedsGroups => $"{row.Email} uses the client portal, which needs a role limited to groups and at least one Group. Turn the portal off first.",
+                UserAccessManagementService.UpdateAccessResult.RoleNotFound => "That role no longer exists.",
+                _ => null,
+            };
+            if (error is not null)
+            {
+                Snackbar.Add(error, Severity.Error);
+            }
+        }
+        catch (Exception)
+        {
+            Snackbar.Add($"Failed to change access for {row.Email}. Try again.", Severity.Error);
+        }
+
+        await LoadAsync();
+        return updated;
+    }
+
     private async Task SetClientPortalAsync(GrantRow row, bool isClientPortal)
     {
         try
@@ -578,7 +644,7 @@
 
     private sealed record RoleRow(int Id, string Name, bool IsLocked, bool IsScopable, List<Permission> Permissions);
 
-    private sealed record GrantRow(int Id, string Email, bool IsBound, string RoleName, List<string> ScopedGroupNames, bool RoleIsScopable, bool IsClientPortal)
+    private sealed record GrantRow(int Id, string Email, bool IsBound, int RoleId, string RoleName, List<int> ScopedGroupIds, List<string> ScopedGroupNames, bool RoleIsScopable, bool IsClientPortal)
     {
         public string ScopedGroupsDisplay => ScopedGroupNames.Count == 0 ? "All" : string.Join(", ", ScopedGroupNames);
     }
