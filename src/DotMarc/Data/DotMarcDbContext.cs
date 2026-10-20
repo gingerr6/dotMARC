@@ -40,6 +40,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DomainAlertState> DomainAlertStates => Set<DomainAlertState>();
     public DbSet<DomainDkimRecord> DomainDkimRecords => Set<DomainDkimRecord>();
     public DbSet<SenderApproval> SenderApprovals => Set<SenderApproval>();
+    public DbSet<DotMarc.Backups.BackupSettings> BackupSettings => Set<DotMarc.Backups.BackupSettings>();
     public DbSet<DnsRecordSettings> DnsRecordSettings => Set<DnsRecordSettings>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<HaloPsaSettings> HaloPsaSettings => Set<HaloPsaSettings>();
@@ -434,6 +435,17 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<DotMarc.Psa.ConnectWise.ConnectWiseSettings>().HasData(new DotMarc.Psa.ConnectWise.ConnectWiseSettings { Id = 1 });
         modelBuilder.Entity<DotMarc.Psa.Autotask.AutotaskSettings>().HasData(new DotMarc.Psa.Autotask.AutotaskSettings { Id = 1 });
         modelBuilder.Entity<DotMarc.Psa.NinjaOne.NinjaOneSettings>().HasData(new DotMarc.Psa.NinjaOne.NinjaOneSettings { Id = 1, NewStatusId = DotMarc.Psa.NinjaOne.NinjaOneOptions.NewStatusId, NewStatusName = "New" });
+        modelBuilder.Entity<DotMarc.Backups.BackupSettings>(entity =>
+        {
+            entity.Property(settings => settings.Bucket).HasMaxLength(255);
+            entity.Property(settings => settings.Region).HasMaxLength(64);
+            entity.Property(settings => settings.Prefix).HasMaxLength(255);
+            entity.Property(settings => settings.EndpointUrl).HasMaxLength(500);
+            entity.Property(settings => settings.AccessKeyId).HasMaxLength(128);
+            entity.Property(settings => settings.LastRunMessage).HasMaxLength(1000);
+            entity.Property(settings => settings.LastBackupKey).HasMaxLength(1024);
+            entity.HasData(new DotMarc.Backups.BackupSettings { Id = 1 });
+        });
         modelBuilder.Entity<CloudflareDnsSettings>().HasData(new CloudflareDnsSettings { Id = 1 });
         modelBuilder.Entity<AzureDnsSettings>().HasData(new AzureDnsSettings { Id = 1 });
         modelBuilder.Entity<GoogleCloudDnsSettings>().HasData(new GoogleCloudDnsSettings { Id = 1 });

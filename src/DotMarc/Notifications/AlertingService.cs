@@ -19,6 +19,8 @@ public interface IAlertingService
     Task ResolveClientReportFailedAsync(int groupId, CancellationToken cancellationToken = default);
     Task RaisePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, string reason, CancellationToken cancellationToken = default);
     Task ResolvePsaConnectionLostAsync(DotMarc.Psa.PsaKind psa, CancellationToken cancellationToken = default);
+    Task RaiseBackupFailedAsync(string reason, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task ResolveBackupFailedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
 public sealed class AlertingService : IAlertingService
@@ -532,6 +534,35 @@ public sealed class AlertingService : IAlertingService
         }
 
         await ResolveAllCopiesAsync(subject, AlertTypes.PsaConnectionLost, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>What a failed backup's alert is about, stored where a domain alert stores its domain name.</summary>
+    public const string BackupAlertSubject = "Offsite backups";
+
+    public async Task RaiseBackupFailedAsync(string reason, CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+        var settings = await NotificationSettingsService.GetAsync(db, cancellationToken).ConfigureAwait(false);
+        if (!settings.Enabled)
+        {
+            return;
+        }
+
+        await EnsureAlertAsync(db, settings, BackupAlertSubject, AlertTypes.BackupFailed, "Warning", "Offsite backup failed",
+            $"dotMARC's offsite backup failed: {reason} It's retried hourly. See Manage > Backups.", cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ResolveBackupFailedAsync(CancellationToken cancellationToken = default)
+    {
+        await using (var db = await _dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!await db.AlertEvents.AnyAsync(alert => alert.AlertType == AlertTypes.BackupFailed && alert.DomainName == BackupAlertSubject && !alert.IsResolved, cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+        }
+
+        await ResolveAllCopiesAsync(BackupAlertSubject, AlertTypes.BackupFailed, cancellationToken).ConfigureAwait(false);
     }
 
     public static readonly TimeSpan ApiKeyExpiryWarning = TimeSpan.FromDays(14);

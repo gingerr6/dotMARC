@@ -150,11 +150,6 @@ def user_data(config):
             {"path": "/usr/local/bin/dotmarc-autoupdate", "content": (HERE / "dotmarc-autoupdate").read_text(), "permissions": "0755"},
             {"path": "/etc/cron.d/dotmarc-autoupdate",
              "content": "*/15 * * * * root /usr/local/bin/dotmarc-autoupdate >> /var/log/dotmarc-autoupdate.log 2>&1\n"},
-            # Offsite backups to S3: inert until /opt/dotmarc/.backup.conf is created (see README.md).
-            {"path": "/usr/local/bin/dotmarc-offsite-backup", "content": (HERE / "dotmarc-offsite-backup").read_text(), "permissions": "0755"},
-            {"path": "/usr/local/bin/dotmarc-offsite-restore", "content": (HERE / "dotmarc-offsite-restore").read_text(), "permissions": "0755"},
-            {"path": "/etc/systemd/system/dotmarc-offsite-backup.service", "content": (HERE / "dotmarc-offsite-backup.service").read_text()},
-            {"path": "/etc/systemd/system/dotmarc-offsite-backup.timer", "content": (HERE / "dotmarc-offsite-backup.timer").read_text()},
         ],
         "runcmd": [
             "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile",
@@ -162,8 +157,6 @@ def user_data(config):
             "curl -fsSL https://get.docker.com | sh",
             "echo \"POSTGRES_PASSWORD='$(openssl rand -hex 24)'\" >> /opt/dotmarc/.env",
             "cd /opt/dotmarc && docker compose up -d",
-            "apt-get install -y -qq python3-boto3",
-            "systemctl daemon-reload && systemctl enable --now dotmarc-offsite-backup.timer",
         ],
     }
     return "#cloud-config\n" + json.dumps(cloud_config, indent=2)

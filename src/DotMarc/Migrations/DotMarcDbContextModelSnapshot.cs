@@ -167,6 +167,87 @@ namespace DotMarc.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DotMarc.Backups.BackupSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccessKeyId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Bucket")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("EndpointUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("LastBackupKey")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<long?>("LastBackupSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("LastRunMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool?>("LastRunSucceeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LastRunUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastSuccessUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("PassphraseConfigured")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Region")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RetentionDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RunHourUtc")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("SecretAccessKeyConfigured")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Enabled = false,
+                            PassphraseConfigured = false,
+                            Prefix = "dotmarc-backups",
+                            RetentionDays = 30,
+                            RunHourUtc = 3,
+                            SecretAccessKeyConfigured = false
+                        });
+                });
+
             modelBuilder.Entity("DotMarc.Data.ApiKey", b =>
                 {
                     b.Property<int>("Id")
