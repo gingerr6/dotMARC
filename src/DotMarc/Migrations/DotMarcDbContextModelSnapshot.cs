@@ -458,6 +458,24 @@ namespace DotMarc.Migrations
                     b.ToTable("Groups");
                 });
 
+            modelBuilder.Entity("DotMarc.Data.IpHostName", b =>
+                {
+                    b.Property<string>("Ip")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
+                    b.Property<string>("HostName")
+                        .HasMaxLength(253)
+                        .HasColumnType("character varying(253)");
+
+                    b.Property<DateTimeOffset>("LookedUpUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Ip");
+
+                    b.ToTable("IpHostNames");
+                });
+
             modelBuilder.Entity("DotMarc.Data.IpInfo", b =>
                 {
                     b.Property<string>("Ip")

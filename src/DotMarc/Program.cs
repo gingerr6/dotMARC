@@ -142,6 +142,12 @@ builder.Services.AddHttpClient<ITlsrptDnsChecker, TlsrptDnsChecker>(client =>
     client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
 });
 
+builder.Services.AddHttpClient<DotMarc.IpEnrichment.IReverseDnsLookup, DotMarc.IpEnrichment.ReverseDnsLookup>(client =>
+{
+    client.BaseAddress = new Uri("https://cloudflare-dns.com/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+
 // MTA-STS hosting is opt-in per deployment (see MtaStsOptions), so this section is intentionally
 // not validated at startup the way GraphOptions is above - a deployment that never sets
 // MtaSts:HostingHostname simply never enables MtaStsEnabled on any domain, and the background
