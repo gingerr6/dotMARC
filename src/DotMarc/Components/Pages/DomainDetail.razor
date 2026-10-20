@@ -66,7 +66,8 @@ else
                 <MudItem xs="4"><MudText>Volume (30d): <b>@_totalVolume</b></MudText></MudItem>
                 <MudItem xs="4"><MudText>Sources: <b>@_sourceCount</b></MudText></MudItem>
             </MudGrid>
-            <MudChart ChartType="ChartType.Line" ChartSeries="@_series" ChartLabels="@_xAxisLabels" Width="100%" Height="250px" />
+            <MudText Typo="Typo.subtitle2" Class="mt-2">Messages a day, by what receivers did with them (30 days to yesterday)</MudText>
+            <MudChart ChartType="ChartType.Line" ChartSeries="@_series" ChartLabels="@_xAxisLabels" ChartOptions="@_chartOptions" Width="100%" Height="260px" />
             @if (_reasonBreakdown is { Total: > 0 } breakdown)
             {
                 <MudPaper Class="pa-4 mt-4" Elevation="1">
@@ -615,6 +616,7 @@ else
     private int _sourceCount;
     private List<ChartSeries<double>> _series = [];
     private string[] _xAxisLabels = [];
+    private LineChartOptions _chartOptions = new();
     private ReasonBreakdown? _reasonBreakdown;
     private double[] _reasonData = [];
     private string[] _reasonLabels = ["Benign override", "Local policy", "Other", "SPF failure (inferred)", "DKIM failure (inferred)", "SPF & DKIM failure (inferred)", "No reason given"];
@@ -872,19 +874,40 @@ else
                 Reject = g.Where(x => x.Disposition == DispositionResult.Reject).Sum(x => x.MessageCount)
             });
 
+        // The 30 days up to yesterday: today's reports mostly arrive tomorrow, so a point for today would always dip,
+        // looking as if mail had stopped.
         var days = Enumerable.Range(0, 30)
-            .Select(i => DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-29 + i)))
+            .Select(i => DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30 + i)))
             .ToList();
-        _xAxisLabels = days.Select(d => d.ToString("MM/dd")).ToArray();
+        // A date every five days (and today), so 30 labels don't run into each other.
+        _xAxisLabels = days.Select((d, i) => i % 5 == 0 || i == days.Count - 1 ? d.ToString("d MMM") : "").ToArray();
         _series =
         [
-            new ChartSeries<double> { Name = "Passed (none)", Data = days.Select(d => (double)(dailyBuckets.TryGetValue(d, out var b) ? b.None : 0)).ToArray() },
+            new ChartSeries<double> { Name = "Delivered", Data = days.Select(d => (double)(dailyBuckets.TryGetValue(d, out var b) ? b.None : 0)).ToArray() },
             new ChartSeries<double> { Name = "Quarantined", Data = days.Select(d => (double)(dailyBuckets.TryGetValue(d, out var b) ? b.Quarantine : 0)).ToArray() },
             new ChartSeries<double> { Name = "Rejected", Data = days.Select(d => (double)(dailyBuckets.TryGetValue(d, out var b) ? b.Reject : 0)).ToArray() }
         ];
 
+        // A y-axis scale that fits the busiest day in four or five steps, instead of one fixed step that can leave
+        // nothing but 0 on the axis.
+        var busiest = _series.SelectMany(series => series.Data.Values).DefaultIfEmpty(0).Max();
+        _chartOptions = new LineChartOptions { YAxisTicks = NiceStep(busiest / 4), YAxisFormat = "N0", YAxisLines = true };
+
         _reasonBreakdown = DomainStatistics.GetReasonBreakdown(_domain.Reports);
         _reasonData = [_reasonBreakdown.BenignOverride, _reasonBreakdown.LocalPolicy, _reasonBreakdown.Other, _reasonBreakdown.InferredSpfFailure, _reasonBreakdown.InferredDkimFailure, _reasonBreakdown.InferredBothFailure, _reasonBreakdown.NoReasonGiven];
+    }
+
+    /// <summary>1, 2 or 5 times a power of ten, at least 1: a round step for the chart's y-axis.</summary>
+    private static int NiceStep(double rough)
+    {
+        if (rough <= 1)
+        {
+            return 1;
+        }
+
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rough)));
+        var step = new[] { 1, 2, 5, 10 }.Select(multiple => multiple * magnitude).First(candidate => candidate >= rough);
+        return (int)Math.Min(step, int.MaxValue);
     }
 
     private SenderApprovalStatus? ApprovalStatus(SourceRow source) =>
