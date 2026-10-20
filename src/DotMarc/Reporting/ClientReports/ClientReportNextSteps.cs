@@ -97,5 +97,6 @@ public static class ClientReportNextSteps
         }
 
         if (domain.MtaStsStatus == MtaStsStatus.Failed) yield return $"MTA-STS for {name} is failing. Check its policy host.";
+        if (domain.MtaStsStatus == MtaStsStatus.PendingPolicyRecord) yield return $"MTA-STS for {name} needs its _mta-sts TXT record before senders will use it.";
     }
 }

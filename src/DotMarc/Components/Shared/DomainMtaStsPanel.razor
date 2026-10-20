@@ -19,6 +19,7 @@
 @inject IEnumerable<IDnsPushProvider> DnsPushProviders
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <MudPaper Class="pa-4 my-2" Elevation="1">
     @if (string.IsNullOrEmpty(MtaStsOptions.Value.HostingHostname))
@@ -30,14 +31,43 @@
     }
     else
     {
-        <MudAlert Severity="Severity.Info" Class="mb-3">
-            Add a CNAME: <code>mta-sts.@Domain.Name → @MtaStsOptions.Value.HostingHostname</code>.
-            @if (!string.IsNullOrEmpty(_domainVerificationId))
-            {
-                <text> Azure also requires a second record proving you control the domain:
-                <code>asuid.mta-sts.@Domain.Name TXT @_domainVerificationId</code>.</text>
-            }
-        </MudAlert>
+        <MudText Typo="Typo.subtitle2" Class="mb-1">DNS records MTA-STS needs (both)</MudText>
+        <MudSimpleTable Dense="true" Elevation="0" Class="mb-3">
+            <thead><tr><th></th><th>Type</th><th>Name</th><th>Value</th><th></th></tr></thead>
+            <tbody>
+                <tr>
+                    <td>@RecordIcon(_cnameOk)</td>
+                    <td>CNAME</td>
+                    <td><code>mta-sts.@Domain.Name</code></td>
+                    <td><code>@MtaStsOptions.Value.HostingHostname</code><div class="mud-text-secondary" style="font-size:12px">Where the policy is hosted</div></td>
+                    <td><MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="Copy value" OnClick="@(() => CopyAsync(MtaStsOptions.Value.HostingHostname!))" /></td>
+                </tr>
+                <tr>
+                    <td>@RecordIcon(_txtOk)</td>
+                    <td>TXT</td>
+                    <td><code>_mta-sts.@Domain.Name</code></td>
+                    <td>
+                        <code>@PolicyRecord</code>
+                        <div class="mud-text-secondary" style="font-size:12px">Tells senders there's a policy. The id changes when the policy does: update it here after changing the mode, MX hosts or max age.</div>
+                        @if (_txtDetail is not null)
+                        {
+                            <div style="font-size:12px" class="mud-warning-text">@_txtDetail</div>
+                        }
+                    </td>
+                    <td><MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="Copy value" OnClick="@(() => CopyAsync(PolicyRecord))" /></td>
+                </tr>
+                @if (!string.IsNullOrEmpty(_domainVerificationId))
+                {
+                    <tr>
+                        <td></td>
+                        <td>TXT</td>
+                        <td><code>asuid.mta-sts.@Domain.Name</code></td>
+                        <td><code>@_domainVerificationId</code><div class="mud-text-secondary" style="font-size:12px">Azure's proof that you control the domain</div></td>
+                        <td><MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="Copy value" OnClick="@(() => CopyAsync(_domainVerificationId!))" /></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
     }
     <div class="d-flex align-center mb-2">
         <MudText Typo="Typo.subtitle1">Policy hosting status</MudText>
@@ -84,7 +114,7 @@
             }
             else
             {
-                @if (Domain.MtaStsStatus is MtaStsStatus.PendingDns or MtaStsStatus.PendingCertificate or MtaStsStatus.Failed)
+                @if (Domain.MtaStsStatus is MtaStsStatus.PendingDns or MtaStsStatus.PendingCertificate or MtaStsStatus.Failed or MtaStsStatus.PendingPolicyRecord || _txtOk == false)
                 {
                     @if (_isPushing)
                     {
@@ -150,6 +180,54 @@
     private bool _mxHostsFromDns;
     private bool _isLookingUpMx;
     private bool _advancedExpanded;
+    private bool? _cnameOk;
+    private bool? _txtOk;
+    private string? _txtDetail;
+
+    private string PolicyRecord => MtaStsPolicyRenderer.PolicyRecord(MtaStsPolicyRenderer.PolicyId(Domain.MtaStsMode, Domain.MtaStsMxHosts, Domain.MtaStsMaxAgeSeconds));
+
+    private static RenderFragment RecordIcon(bool? ok) => ok switch
+    {
+        true => @<MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" title="Found in DNS" />,
+        false => @<MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" title="Not right in DNS yet" />,
+        _ => @<MudIcon Icon="@Icons.Material.Outlined.HelpOutline" Size="Size.Small" title="Checking…" />
+    };
+
+    private async Task CopyAsync(string value)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", value);
+        Snackbar.Add("Copied.", Severity.Success);
+    }
+
+    /// <summary>Checks both records in live DNS, for the ticks beside them.</summary>
+    private async Task CheckRecordsAsync()
+    {
+        var hostingHostname = MtaStsOptions.Value.HostingHostname;
+        if (string.IsNullOrEmpty(hostingHostname))
+        {
+            return;
+        }
+
+        try
+        {
+            _cnameOk = await MtaStsDnsVerifier.VerifyAsync(Domain.Name, hostingHostname, CancellationToken.None) == MtaStsDnsVerificationResult.Resolved;
+            var record = await MtaStsDnsVerifier.CheckPolicyRecordAsync(Domain.Name, CancellationToken.None);
+            var expectedId = MtaStsPolicyRenderer.PolicyId(Domain.MtaStsMode, Domain.MtaStsMxHosts, Domain.MtaStsMaxAgeSeconds);
+            _txtOk = record.State == MtaStsPolicyRecordState.Present && record.Id == expectedId;
+            _txtDetail = record.State switch
+            {
+                MtaStsPolicyRecordState.Missing => "Not found in DNS yet.",
+                MtaStsPolicyRecordState.Multiple => "There's more than one v=STSv1 record; keep only this one.",
+                MtaStsPolicyRecordState.Invalid => "The record there has no valid id; replace it with this.",
+                _ when record.Id != expectedId => $"Found with id={record.Id}; change it to this so senders fetch the current policy.",
+                _ => null
+            };
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _cnameOk = _txtOk = null;
+        }
+    }
 
     protected override void OnParametersSet()
     {
@@ -166,6 +244,11 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (RendererInfo.IsInteractive)
+        {
+            await CheckRecordsAsync();
+        }
+
         if (RendererInfo.IsInteractive && string.Equals(MtaStsOptions.Value.Provisioner, "Azure", StringComparison.OrdinalIgnoreCase))
         {
             _domainVerificationId = await MtaStsHostProvisioner.GetDomainVerificationIdAsync(CancellationToken.None);
@@ -376,6 +459,7 @@
                 return;
             }
             await db.SaveChangesAsync();
+            await CheckRecordsAsync();
 
             Domain.MtaStsStatus = domain.MtaStsStatus;
             Domain.MtaStsCheckedUtc = domain.MtaStsCheckedUtc;
