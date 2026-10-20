@@ -28,5 +28,5 @@ public enum Permission
     AuditView,
     AuditManage,
     ReportsManage,
-    BackupsManage
+    ServerManage
 }
