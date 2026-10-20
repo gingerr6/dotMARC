@@ -100,9 +100,9 @@ else:
 ### Inviting people as Entra guests
 
 Someone from outside your organisation can only sign in once they're a guest in your Entra tenant. With
-**Invite to Entra as a guest** ticked when you grant access, dotMARC invites them for you, and Microsoft
-emails them an invitation that brings them back to dotMARC once they accept. Untick it for people already
-in your tenant.
+**Invite to Entra as a guest** ticked when you grant access, dotMARC adds them as a guest for you. Microsoft
+doesn't email them: send them dotMARC's address yourself, and they accept the invitation the first time they
+sign in. Untick it for people already in your tenant.
 
 This needs the dashboard app registration to hold the Microsoft Graph application permission
 `User.Invite.All`, with admin consent. Access is granted whether or not the invite works; if it doesn't,

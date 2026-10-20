@@ -15,9 +15,10 @@ public interface IEntraGuestInviter
     /// <summary>False where there's no Entra tenant to invite into, as in the demo.</summary>
     bool IsAvailable { get; }
 
-    /// <summary>Invites someone into the tenant as a guest, sending Microsoft's invitation email, which brings them back
-    /// to redirectUrl once they accept. Never throws for a refusal or a failure: granting access in dotMARC has already
-    /// happened, so the caller only needs to say how the invite went.</summary>
+    /// <summary>Adds someone to the tenant as a guest, without Microsoft's invitation email: they accept the invitation
+    /// the first time they sign in to dotMARC, and redirectUrl is where Entra sends them if they open the invitation
+    /// another way. Never throws for a refusal or a failure: granting access in dotMARC has already happened, so the
+    /// caller only needs to say how the invite went.</summary>
     Task<GuestInviteResult> InviteAsync(string email, string redirectUrl, CancellationToken cancellationToken);
 }
 
@@ -77,7 +78,7 @@ public sealed class EntraGuestInviter : IEntraGuestInviter
             {
                 invitedUserEmailAddress = email,
                 inviteRedirectUrl = redirectUrl,
-                sendInvitationMessage = true,
+                sendInvitationMessage = false,
             }),
         };
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);

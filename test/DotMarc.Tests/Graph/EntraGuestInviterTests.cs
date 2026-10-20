@@ -20,7 +20,7 @@ public sealed class EntraGuestInviterTests
     }
 
     [Fact]
-    public async Task InviteAsync_PostsAnInvitationThatSendsMicrosoftsEmail()
+    public async Task InviteAsync_PostsAnInvitation_WithoutMicrosoftsEmail()
     {
         var (inviter, handler) = Create();
         handler.StatusCode = HttpStatusCode.Created;
@@ -34,7 +34,7 @@ public sealed class EntraGuestInviterTests
         Assert.Equal("Bearer token", request.Headers.Authorization!.ToString());
         Assert.Contains("\"invitedUserEmailAddress\":\"client@aurora.example\"", handler.RequestBodies[0]);
         Assert.Contains("\"inviteRedirectUrl\":\"https://dotmarc.example/\"", handler.RequestBodies[0]);
-        Assert.Contains("\"sendInvitationMessage\":true", handler.RequestBodies[0]);
+        Assert.Contains("\"sendInvitationMessage\":false", handler.RequestBodies[0]);
     }
 
     [Fact]
