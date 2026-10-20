@@ -1,0 +1,22 @@
+#!/bin/sh
+# Keeps dotMARC on the newest image published under the tag in /opt/dotmarc/.env (DOTMARC_VERSION, normally edge).
+# Run by cron every 15 minutes. When the registry has a newer image than the one running, it backs up the database,
+# then restarts dotMARC on the new image. Nothing happens when there's nothing new. Log: /var/log/dotmarc-autoupdate.log
+set -eu
+cd /opt/dotmarc
+
+# The image dotMARC runs, as docker-compose.yml and .env resolve it.
+image=$(docker compose config | awk '/^  app:/ { in_app = 1; next } in_app && /^  [^ ]/ { exit } in_app && /^    image:/ { print $2; exit }')
+[ -n "$image" ] || { echo "$(date -Is) couldn't work out dotMARC's image" >&2; exit 1; }
+
+docker pull -q "$image" > /dev/null
+latest=$(docker image inspect --format '{{.Id}}' "$image")
+container=$(docker compose ps -q app)
+running=$( [ -n "$container" ] && docker inspect --format '{{.Image}}' "$container" || echo none)
+[ "$latest" = "$running" ] && exit 0
+
+echo "$(date -Is) updating dotMARC to $image ($latest)"
+/usr/local/bin/dotmarc-backup
+docker compose up -d app
+docker image prune -f > /dev/null
+echo "$(date -Is) updated"

@@ -147,6 +147,9 @@ def user_data(config):
             {"path": "/usr/local/bin/dotmarc-backup", "content": BACKUP_SCRIPT, "permissions": "0755"},
             {"path": "/usr/local/bin/dotmarc-update", "content": UPDATE_SCRIPT, "permissions": "0755"},
             {"path": "/etc/cron.d/dotmarc-backup", "content": "30 3 * * * root /usr/local/bin/dotmarc-backup\n"},
+            {"path": "/usr/local/bin/dotmarc-autoupdate", "content": (HERE / "dotmarc-autoupdate").read_text(), "permissions": "0755"},
+            {"path": "/etc/cron.d/dotmarc-autoupdate",
+             "content": "*/15 * * * * root /usr/local/bin/dotmarc-autoupdate >> /var/log/dotmarc-autoupdate.log 2>&1\n"},
         ],
         "runcmd": [
             "fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile",

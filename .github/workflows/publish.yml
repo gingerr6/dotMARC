@@ -44,9 +44,8 @@ jobs:
             echo "name=" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
+      # Builds for amd64 only: the arm64 build runs under emulation and took most of each run, and the servers this
+      # fork deploys to are amd64. Tagged releases (release.yml) still build both.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -63,7 +62,7 @@ jobs:
           context: .
           file: src/DotMarc/Dockerfile
           target: final
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ steps.image.outputs.name }}:edge
@@ -85,7 +84,7 @@ jobs:
           context: .
           file: src/DotMarc/Dockerfile
           target: final
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ steps.dockerhub.outputs.name }}:edge

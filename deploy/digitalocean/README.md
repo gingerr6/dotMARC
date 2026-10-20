@@ -48,6 +48,14 @@ Running it again is safe. It reuses an existing Droplet and firewall instead of 
 duplicates. Afterwards, add `https://<DOTMARC_HOSTNAME>/signin-oidc` as a Web redirect URI on the
 dashboard app registration.
 
+## Updates
+
+Every 15 minutes, `dotmarc-autoupdate` checks the registry for a newer image under the tag in `.env`
+(`DOTMARC_VERSION`). When there is one, it backs up the database and restarts dotMARC on it; otherwise it
+does nothing. With the workflow's default tag, `edge`, every change merged into `main` reaches the server
+within about 15 minutes of its image being published. Pin `DOTMARC_VERSION` to a commit SHA or a release
+to stop that. What it did is in `/var/log/dotmarc-autoupdate.log`.
+
 ## Later
 
 Open the Droplet's **Console** in the DigitalOcean control panel, then:
