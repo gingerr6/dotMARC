@@ -1,0 +1,9 @@
+# Installed at /etc/systemd/system/dotmarc-offsite-backup.service. Encrypted offsite backup to S3; see
+# /usr/local/bin/dotmarc-offsite-backup for what's included and how to configure it.
+[Unit]
+Description=Encrypted dotMARC backup to S3
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dotmarc-offsite-backup
