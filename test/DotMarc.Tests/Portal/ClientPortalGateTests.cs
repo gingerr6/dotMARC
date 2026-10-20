@@ -66,6 +66,7 @@ public sealed class ClientPortalGateTests
     [InlineData(typeof(DotMarc.Components.Pages.Portal.PortalHome), true)]
     [InlineData(typeof(DotMarc.Components.Pages.Portal.PortalDomain), true)]
     [InlineData(typeof(DotMarc.Components.Pages.Demo.DemoSignIn), true)] // anonymous, so switching demo persona still works
+    [InlineData(typeof(DotMarc.Components.Pages.SignedOut), true)] // anonymous: portal users sign out too
     [InlineData(typeof(DotMarc.Components.Pages.Portal.PortalPreview), false)]
     [InlineData(typeof(DotMarc.Components.Pages.Dashboard), false)]
     [InlineData(typeof(DotMarc.Components.Pages.Home), false)] // relies on the fallback policy alone
@@ -81,7 +82,7 @@ public sealed class ClientPortalGateTests
 
         var allowed = pages.Where(ClientPortalGate.AllowsPortalUserOn).Select(type => type.Name).OrderBy(name => name);
 
-        Assert.Equal(["AccessDenied", "DemoSignIn", "Error", "PortalDomain", "PortalHome"], allowed);
+        Assert.Equal(["AccessDenied", "DemoSignIn", "Error", "PortalDomain", "PortalHome", "SignedOut"], allowed);
     }
 
     [Fact]
