@@ -1891,7 +1891,8 @@
                   "NameserversChanged",
                   "ApiKeyExpiring",
                   "ClientReportFailed",
-                  "PsaConnectionLost"
+                  "PsaConnectionLost",
+                  "UnapprovedSender"
                 ],
                 "type": "string"
               },
@@ -2208,6 +2209,7 @@
                   "domains.imported",
                   "domain.groups_changed",
                   "domain.tags_changed",
+                  "domain.sender_reviewed",
                   "group.added",
                   "group.renamed",
                   "group.removed",

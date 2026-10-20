@@ -1,4 +1,5 @@
 using DotMarc.Data;
+using DotMarc.IpEnrichment;
 using DotMarc.Notifications;
 using DotMarc.Reporting;
 using DotMarc.Tests.Internal;
@@ -540,6 +541,126 @@ public sealed class AlertingServiceTests : IAsyncLifetime
             CreateCallCount++;
             return Task.FromResult("9000");
         }
+    }
+
+    private const string MicrosoftIp = "40.107.22.1";
+    private const string UnknownIp = "203.0.113.5";
+
+    /// <summary>A monitored domain with a week's mail: Microsoft 365 passing, plus one record per given unknown-server
+    /// result. Microsoft 365's IP has its name cached, as the Sources tab would have left it.</summary>
+    private async Task<int> SeedDomainWithSendersAsync(params AuthResult[] unknownServerResults)
+    {
+        await using var context = CreateContext();
+        var domain = new Domain { Name = "contoso.io", IsMonitored = true, FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-10), LastReportReceivedUtc = DateTimeOffset.UtcNow };
+        var report = new Report
+        {
+            ReportingOrg = "google.com", ReportId = Guid.NewGuid().ToString(), RawXml = "<feedback/>",
+            DateRangeBeginUtc = DateTimeOffset.UtcNow.AddDays(-2), DateRangeEndUtc = DateTimeOffset.UtcNow.AddDays(-1),
+            ReceivedUtc = DateTimeOffset.UtcNow.AddDays(-1), AuthDetailBackfilledUtc = DateTimeOffset.UtcNow
+        };
+        report.Records.Add(new ReportRecord { SourceIp = MicrosoftIp, MessageCount = 40, Disposition = DispositionResult.None, SpfResult = AuthResult.Pass, DkimResult = AuthResult.Pass, HeaderFrom = "contoso.io" });
+        foreach (var result in unknownServerResults)
+        {
+            report.Records.Add(new ReportRecord { SourceIp = UnknownIp, MessageCount = 3, Disposition = DispositionResult.None, SpfResult = result, DkimResult = result, HeaderFrom = "contoso.io" });
+        }
+        domain.Reports.Add(report);
+        context.Domains.Add(domain);
+        context.IpHostNames.Add(new IpHostName { Ip = MicrosoftIp, HostName = "mail-am6eur05on2001.outbound.protection.outlook.com", LookedUpUtc = DateTimeOffset.UtcNow });
+        await context.SaveChangesAsync();
+        return domain.Id;
+    }
+
+    private async Task ReviewAsync(int domainId, string senderKey, SenderApprovalStatus status)
+    {
+        await using var context = CreateContext();
+        await DotMarc.Senders.SenderApprovalService.SetAsync(context, TestActors.Admin, domainId, senderKey, status);
+    }
+
+    private async Task<List<AlertEvent>> UnapprovedSenderAlertsAsync()
+    {
+        await using var context = CreateContext();
+        return await context.AlertEvents.Where(alert => alert.AlertType == AlertTypes.UnapprovedSender).ToListAsync();
+    }
+
+    private AlertingService CreateService(IReverseDnsLookup? reverseDnsLookup = null) =>
+        new(new FakeDbContextFactory(_connectionString), new FakeAlertWebhookClient(), CreateNoOpPsaTicketService(), NullLogger<AlertingService>.Instance, reverseDnsLookup);
+
+    [Fact]
+    public async Task UnapprovedSender_StaysQuiet_UntilSomeoneHasApprovedASender()
+    {
+        await SeedSettingsAsync();
+        await SeedDomainWithSendersAsync(AuthResult.Pass);
+
+        await CreateService().CheckPinnedDomainsAsync();
+
+        Assert.Empty(await UnapprovedSenderAlertsAsync());
+    }
+
+    [Fact]
+    public async Task UnapprovedSender_FlagsPassingMailFromAnUnapprovedServer_AndResolvesOnceItIsApproved()
+    {
+        await SeedSettingsAsync();
+        var domainId = await SeedDomainWithSendersAsync(AuthResult.Pass);
+        await ReviewAsync(domainId, "microsoft365", SenderApprovalStatus.Approved);
+        var service = CreateService();
+
+        await service.CheckPinnedDomainsAsync();
+
+        var alert = Assert.Single(await UnapprovedSenderAlertsAsync());
+        Assert.Equal("contoso.io", alert.DomainName);
+        Assert.Contains($"{UnknownIp} (3 messages)", alert.Message);
+        Assert.DoesNotContain("Microsoft 365", alert.Message);
+
+        await ReviewAsync(domainId, "ip:" + UnknownIp, SenderApprovalStatus.Approved);
+        await service.CheckPinnedDomainsAsync();
+
+        Assert.True(Assert.Single(await UnapprovedSenderAlertsAsync()).IsResolved);
+    }
+
+    [Fact]
+    public async Task UnapprovedSender_IgnoresMailFailingDmarc()
+    {
+        await SeedSettingsAsync();
+        var domainId = await SeedDomainWithSendersAsync(AuthResult.Fail);
+        await ReviewAsync(domainId, "microsoft365", SenderApprovalStatus.Approved);
+
+        await CreateService().CheckPinnedDomainsAsync();
+
+        Assert.Empty(await UnapprovedSenderAlertsAsync());
+    }
+
+    [Fact]
+    public async Task UnapprovedSender_FlagsPassingMailFromASenderMarkedNotOurs()
+    {
+        await SeedSettingsAsync();
+        var domainId = await SeedDomainWithSendersAsync(AuthResult.Pass);
+        await ReviewAsync(domainId, "microsoft365", SenderApprovalStatus.Approved);
+        await ReviewAsync(domainId, "ip:" + UnknownIp, SenderApprovalStatus.NotOurs);
+
+        await CreateService().CheckPinnedDomainsAsync();
+
+        Assert.Contains("marked not ours", Assert.Single(await UnapprovedSenderAlertsAsync()).Message);
+    }
+
+    [Fact]
+    public async Task UnapprovedSender_LooksUpAnUnnamedSender_SoAnApprovedServiceIsRecognised()
+    {
+        await SeedSettingsAsync();
+        var domainId = await SeedDomainWithSendersAsync(AuthResult.Pass);
+        await ReviewAsync(domainId, "microsoft365", SenderApprovalStatus.Approved);
+        await ReviewAsync(domainId, "sendgrid", SenderApprovalStatus.Approved);
+
+        await CreateService(new FixedReverseDnsLookup(UnknownIp, "o1.ptr42.sendgrid.net")).CheckPinnedDomainsAsync();
+
+        Assert.Empty(await UnapprovedSenderAlertsAsync());
+        await using var context = CreateContext();
+        Assert.Equal("o1.ptr42.sendgrid.net", (await context.IpHostNames.SingleAsync(name => name.Ip == UnknownIp)).HostName);
+    }
+
+    private sealed class FixedReverseDnsLookup(string ip, string hostName) : IReverseDnsLookup
+    {
+        public Task<string?> LookupAsync(string address, CancellationToken cancellationToken) =>
+            Task.FromResult<string?>(address == ip ? hostName : null);
     }
 
     private static IPsaTicketService CreateNoOpPsaTicketService() => PsaTestSupport.ForHalo(new NoOpHaloPsaClient());

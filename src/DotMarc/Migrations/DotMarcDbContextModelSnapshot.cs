@@ -841,6 +841,42 @@ namespace DotMarc.Migrations
                     b.ToTable("Roles");
                 });
 
+            modelBuilder.Entity("DotMarc.Data.SenderApproval", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTimeOffset>("DecidedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DomainId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SenderKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DomainId", "SenderKey")
+                        .IsUnique();
+
+                    b.ToTable("SenderApprovals");
+                });
+
             modelBuilder.Entity("DotMarc.Data.Tag", b =>
                 {
                     b.Property<int>("Id")
@@ -2164,6 +2200,15 @@ namespace DotMarc.Migrations
                     b.Navigation("ReportRecord");
                 });
 
+            modelBuilder.Entity("DotMarc.Data.SenderApproval", b =>
+                {
+                    b.HasOne("DotMarc.Data.Domain", null)
+                        .WithMany("SenderApprovals")
+                        .HasForeignKey("DomainId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DotMarc.Data.TlsrptFailureDetail", b =>
                 {
                     b.HasOne("DotMarc.Data.TlsrptReportPolicy", "TlsrptReportPolicy")
@@ -2289,6 +2334,8 @@ namespace DotMarc.Migrations
                     b.Navigation("PsaCompanyLinks");
 
                     b.Navigation("Reports");
+
+                    b.Navigation("SenderApprovals");
 
                     b.Navigation("TlsrptReports");
                 });
