@@ -537,12 +537,16 @@ app.MapPost("/signout", async (HttpContext httpContext) =>
 {
     await httpContext.SignOutAsync(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
 
-    if (!demoOptions.Enabled)
+    if (demoOptions.Enabled)
     {
-        await httpContext.SignOutAsync(Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectDefaults.AuthenticationScheme);
+        return Results.Redirect("/");
     }
 
-    return Results.Redirect("/");
+    // The Entra sign-out has to be the response: it's a redirect to Microsoft that ends the Microsoft session. Answering
+    // with a redirect of our own replaced it, so that session survived and the next page signed the person straight back
+    // in. Entra comes back through /signout-callback-oidc to /signed-out, which needs no sign-in.
+    return Results.SignOut(new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/signed-out" },
+        [Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectDefaults.AuthenticationScheme]);
 }).RequireAuthorization();
 
 if (demoOptions.Enabled)

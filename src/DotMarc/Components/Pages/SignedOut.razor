@@ -1,0 +1,11 @@
+@page "/signed-out"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@using Microsoft.AspNetCore.Authorization
+
+@* Where signing out ends up, after Entra has ended the Microsoft session too. It needs no sign-in: sending someone to a
+   page that does would start a fresh sign-in straight away. *@
+<PageTitle>dotMARC - Signed out</PageTitle>
+<MudText Typo="Typo.h5" Class="mb-2">You've signed out</MudText>
+<MudText Class="mb-4">You're signed out of dotMARC and your Microsoft account. On a shared computer, close the browser too.</MudText>
+<MudButton Href="/" Variant="Variant.Filled" Color="Color.Primary">Sign in again</MudButton>
