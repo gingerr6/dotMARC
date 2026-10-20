@@ -64,6 +64,9 @@ jobs:
           target: final
           platforms: linux/amd64
           push: true
+          build-args: |
+            DOTMARC_REPOSITORY=${{ github.repository }}
+            DOTMARC_COMMIT=${{ github.sha }}
           tags: |
             ${{ steps.image.outputs.name }}:edge
             ${{ steps.image.outputs.name }}:${{ github.sha }}
@@ -86,6 +89,9 @@ jobs:
           target: final
           platforms: linux/amd64
           push: true
+          build-args: |
+            DOTMARC_REPOSITORY=${{ github.repository }}
+            DOTMARC_COMMIT=${{ github.sha }}
           tags: |
             ${{ steps.dockerhub.outputs.name }}:edge
             ${{ steps.dockerhub.outputs.name }}:${{ github.sha }}

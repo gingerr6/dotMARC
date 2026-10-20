@@ -549,7 +549,7 @@ public sealed class AlertingService : IAlertingService
         }
 
         await EnsureAlertAsync(db, settings, BackupAlertSubject, AlertTypes.BackupFailed, "Warning", "Offsite backup failed",
-            $"dotMARC's offsite backup failed: {reason} It's retried hourly. See Manage > Backups.", cancellationToken).ConfigureAwait(false);
+            $"dotMARC's offsite backup failed: {reason} It's retried hourly. See Manage > Control panel > Backups.", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task ResolveBackupFailedAsync(CancellationToken cancellationToken = default)

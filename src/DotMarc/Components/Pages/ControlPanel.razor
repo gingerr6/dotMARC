@@ -1,0 +1,39 @@
+@page "/control-panel"
+@page "/control-panel/{Tab}"
+@page "/backups"
+@attribute [Authorize(Policy = "ServerManage")]
+@using DotMarc.Components.Shared
+@using Microsoft.AspNetCore.Authorization
+@inject NavigationManager Navigation
+
+<PageTitle>dotMARC - Control panel</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-4">Control panel</MudText>
+
+<MudTabs ActivePanelIndex="_activeIndex" ActivePanelIndexChanged="OnTabChanged" KeepPanelsAlive="false" Class="mb-4">
+    <MudTabPanel Text="Updates">
+        <div class="mt-4"><UpdatesPanel /></div>
+    </MudTabPanel>
+    <MudTabPanel Text="Backups">
+        <div class="mt-4"><BackupsPanel /></div>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private static readonly string[] TabSlugs = ["updates", "backups"];
+
+    [Parameter] public string? Tab { get; set; }
+
+    private int _activeIndex;
+
+    protected override void OnParametersSet()
+    {
+        var slug = Tab ?? (Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("backups", StringComparison.OrdinalIgnoreCase) ? "backups" : "updates");
+        _activeIndex = Math.Max(0, Array.IndexOf(TabSlugs, slug.ToLowerInvariant()));
+    }
+
+    private void OnTabChanged(int index)
+    {
+        _activeIndex = index;
+        Navigation.NavigateTo($"/control-panel/{TabSlugs[index]}", replace: true);
+    }
+}

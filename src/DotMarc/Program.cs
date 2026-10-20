@@ -148,6 +148,17 @@ builder.Services.AddHttpClient<DotMarc.IpEnrichment.IReverseDnsLookup, DotMarc.I
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 
+// The control panel's list of updates reads the public GitHub API, as GitHub asks, with a User-Agent.
+builder.Services.AddHttpClient("GitHub", client =>
+{
+    client.BaseAddress = new Uri("https://api.github.com/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("dotMARC");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+});
+builder.Services.AddSingleton(services => new DotMarc.Updates.UpdateStatusService(
+    services.GetRequiredService<IHttpClientFactory>().CreateClient("GitHub"), builder.Configuration, services.GetService<TimeProvider>() ?? TimeProvider.System));
+
 // MTA-STS hosting is opt-in per deployment (see MtaStsOptions), so this section is intentionally
 // not validated at startup the way GraphOptions is above - a deployment that never sets
 // MtaSts:HostingHostname simply never enables MtaStsEnabled on any domain, and the background

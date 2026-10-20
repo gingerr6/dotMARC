@@ -1,5 +1,4 @@
-@page "/backups"
-@attribute [Authorize(Policy = "ServerManage")]
+@* The Backups tab of the control panel (ControlPanel.razor), which checks the ServerManage permission. *@
 @using DotMarc.Backups
 @using DotMarc.Components.Dialogs
 @using DotMarc.Components.Shared
@@ -13,9 +12,6 @@
 @inject OffsiteBackupService Backups
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
-
-<PageTitle>dotMARC - Backups</PageTitle>
-<MudText Typo="Typo.h4" Class="mb-4">Backups</MudText>
 
 @if (_settings is null)
 {

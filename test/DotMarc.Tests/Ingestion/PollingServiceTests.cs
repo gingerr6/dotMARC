@@ -238,6 +238,33 @@ public class PollingServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PollOnceAsync_GivesUpOnAnUnparseableEmail_AfterMaxAttempts_MarkingItRead()
+    {
+        var graphClient = new FakeGraphMailboxClient();
+        graphClient.UnreadMessages.Add(new MailboxMessage("msg-2", "Fwd: holiday photos", true));
+        graphClient.Attachments["msg-2"] = [new MailboxAttachment("photo.png", "image/png", [0x89, 0x50, 0x4E, 0x47])];
+
+        for (var attempt = 1; attempt < PollingService.MaxParseAttempts; attempt++)
+        {
+            using var context = CreateContext();
+            await new PollingService(graphClient, context, NullLogger<PollingService>.Instance).PollOnceAsync(CancellationToken.None);
+        }
+
+        Assert.DoesNotContain("msg-2", graphClient.MarkedAsRead);
+        using (var context = CreateContext())
+        {
+            await new PollingService(graphClient, context, NullLogger<PollingService>.Instance).PollOnceAsync(CancellationToken.None);
+        }
+
+        Assert.Contains("msg-2", graphClient.MarkedAsRead);
+        using var verify = CreateContext();
+        var failure = verify.ParseFailures.Single();
+        Assert.Equal(PollingService.MaxParseAttempts, failure.AttemptCount);
+        Assert.Equal("Fwd: holiday photos", failure.Subject);
+        Assert.NotNull(failure.GaveUpUtc);
+    }
+
+    [Fact]
     public async Task PollOnceAsync_SkipsMessagesWithNoAttachments()
     {
         var graphClient = new FakeGraphMailboxClient();

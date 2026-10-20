@@ -616,6 +616,9 @@ namespace DotMarc.Migrations
                     b.Property<int>("AttemptCount")
                         .HasColumnType("integer");
 
+                    b.Property<DateTimeOffset?>("GaveUpUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("GraphMessageId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -626,6 +629,10 @@ namespace DotMarc.Migrations
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
 

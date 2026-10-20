@@ -1060,8 +1060,7 @@ public sealed class PollingService : BackgroundService
                 catch (Exception exception)
                 {
                     context.ChangeTracker.Clear();
-                    await RecordParseFailureAsync(context, messageKey, exception.Message, cancellationToken).ConfigureAwait(false);
-                    _logger.LogWarning(exception, "Failed to parse TLSRPT message {MessageId}; leaving unread for retry.", message.Id);
+                    await HandleParseFailureAsync(graphClient, context, messageKey, message, "TLSRPT", exception, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -1359,15 +1358,13 @@ public sealed class PollingService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to parse message {MessageId}; leaving unread for retry.", message.Id);
-
                 // A prior SaveChangesAsync failure earlier in this method (e.g. inside
                 // StoreReportAsync) can leave half-built Domain/Report/ReportRecord entities
                 // tracked as Added on this shared context. Without clearing the tracker first, the
                 // save below would re-attempt those leftover entities alongside the ParseFailure
                 // and could throw again here, uncaught, aborting the rest of the poll cycle.
                 context.ChangeTracker.Clear();
-                await RecordParseFailureAsync(context, message.Id, ex.Message, cancellationToken).ConfigureAwait(false);
+                await HandleParseFailureAsync(graphClient, context, message.Id, message, "DMARC", ex, cancellationToken).ConfigureAwait(false);
                 parseFailures++;
             }
         }
@@ -1601,12 +1598,49 @@ public sealed class PollingService : BackgroundService
         }
     }
 
+    /// <summary>How many times an unparseable message is tried before dotMARC gives up on it: about an hour of polls,
+    /// enough to ride out a transient Graph or database problem.</summary>
+    public const int MaxParseAttempts = 12;
+
+    /// <summary>Records a message that couldn't be turned into a report, and retries it on later polls, so a fixed
+    /// problem picks it up. The first failure is logged as a warning, naming the email; repeats only at debug level.
+    /// After MaxParseAttempts it gives up: the message is marked read, so it stops being retried, and stays listed on
+    /// the Parse failures page.</summary>
+    private async Task HandleParseFailureAsync(IGraphMailboxClient graphClient, DotMarcDbContext context, string failureKey, MailboxMessage message, string kind,
+        Exception exception, CancellationToken cancellationToken)
+    {
+        var failure = await RecordParseFailureAsync(context, failureKey, message.Subject, exception.Message, cancellationToken).ConfigureAwait(false);
+        if (failure.AttemptCount == 1)
+        {
+            _logger.LogWarning(exception, "Couldn't read the {Kind} report in email {MessageId} (\"{Subject}\"); retrying on later polls, giving up after {MaxAttempts} tries.",
+                kind, message.Id, message.Subject, MaxParseAttempts);
+        }
+        else if (failure.AttemptCount < MaxParseAttempts || failure.GaveUpUtc is not null)
+        {
+            _logger.LogDebug("Email {MessageId} (\"{Subject}\") still can't be read as a {Kind} report (try {Attempt}).", message.Id, message.Subject, kind, failure.AttemptCount);
+        }
+        else
+        {
+            try
+            {
+                await graphClient.MarkAsReadAsync(message.Id, cancellationToken).ConfigureAwait(false);
+                failure.GaveUpUtc = DateTimeOffset.UtcNow;
+                await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                _logger.LogWarning("Gave up on email {MessageId} (\"{Subject}\") after {Attempts} tries: it isn't a {Kind} report dotMARC can read ({Reason}). Marked it read; it's listed under Parse failures.",
+                    message.Id, message.Subject, failure.AttemptCount, kind, exception.Message);
+            }
+            catch (Exception markReadException)
+            {
+                _logger.LogWarning(markReadException, "Gave up on email {MessageId}, but couldn't mark it read; it will be tried again.", message.Id);
+            }
+        }
+    }
+
     /// <summary>Inserts a new ParseFailure row for a never-before-failed message, or updates the
     /// existing row's attempt count/reason/timestamp for a repeat failure - keeps a permanently
     /// unparseable message from growing a new row every poll cycle forever (see
-    /// <see cref="ParseFailure"/>). No auto-give-up policy here: the message is retried
-    /// indefinitely, only the bookkeeping row is deduplicated.</summary>
-    private static async Task RecordParseFailureAsync(DotMarcDbContext context, string graphMessageId, string reason, CancellationToken cancellationToken)
+    /// <see cref="ParseFailure"/>).</summary>
+    private static async Task<ParseFailure> RecordParseFailureAsync(DotMarcDbContext context, string graphMessageId, string? subject, string reason, CancellationToken cancellationToken)
     {
         var existing = await context.ParseFailures
             .SingleOrDefaultAsync(f => f.GraphMessageId == graphMessageId, cancellationToken)
@@ -1614,13 +1648,14 @@ public sealed class PollingService : BackgroundService
 
         if (existing is null)
         {
-            context.ParseFailures.Add(new ParseFailure
+            existing = new ParseFailure
             {
                 GraphMessageId = graphMessageId,
                 Reason = reason,
                 AttemptCount = 1,
                 LastAttemptedUtc = DateTimeOffset.UtcNow
-            });
+            };
+            context.ParseFailures.Add(existing);
         }
         else
         {
@@ -1629,6 +1664,8 @@ public sealed class PollingService : BackgroundService
             existing.LastAttemptedUtc = DateTimeOffset.UtcNow;
         }
 
+        existing.Subject = subject is { Length: > 500 } ? subject[..500] : subject;
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return existing;
     }
 }

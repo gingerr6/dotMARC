@@ -58,14 +58,14 @@ to stop that. What it did is in `/var/log/dotmarc-autoupdate.log`.
 
 ## Offsite backups
 
-Offsite backups are set up in dotMARC itself, under **Manage > Backups**: the S3 bucket and keys, an encryption
+Offsite backups are set up in dotMARC itself, under **Manage > Control panel > Backups**: the S3 bucket and keys, an encryption
 passphrase, and the hour they run. Every night dotMARC dumps its database and settings, encrypts them with AES-256 and
 the passphrase before they leave the server, and uploads them to S3. Daily backups are kept 30 days (adjustable); the
 one taken on the 1st of each month is kept until deleted. The same page backs up on demand, tests the bucket, lists
 what's stored, and restores any backup, taking a fresh backup first in case. A failed backup raises a "Backup failed"
 alert. Keep the passphrase somewhere outside dotMARC too: without it no backup can be restored.
 
-To rebuild on a new Droplet: deploy it, sign in, enter the same bucket, keys and passphrase under **Manage > Backups**,
+To rebuild on a new Droplet: deploy it, sign in, enter the same bucket, keys and passphrase under **Manage > Control panel > Backups**,
 and restore the newest backup.
 
 A backup can also be decrypted by hand, without dotMARC:

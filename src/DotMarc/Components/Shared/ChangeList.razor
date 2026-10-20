@@ -1,0 +1,31 @@
+@* One list of pull requests on the control panel's Updates tab. *@
+@using DotMarc.Updates
+
+@if (Changes.Count == 0)
+{
+    <MudText Typo="Typo.body2">@Empty</MudText>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" Elevation="0">
+        <tbody>
+            @foreach (var change in Changes)
+            {
+                <tr>
+                    <td style="width:110px"><MudChip T="string" Size="Size.Small" Color="Color" Variant="Variant.Outlined">@Label</MudChip></td>
+                    <td><MudLink Href="@change.Url" Target="_blank">#@change.Number</MudLink> @change.Title</td>
+                    <td style="white-space:nowrap" class="mud-text-secondary">
+                        @(change.MergedUtc is { } merged ? $"merged {merged:yyyy-MM-dd HH:mm}" : $"updated {change.UpdatedUtc:yyyy-MM-dd HH:mm}") UTC
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ChangeSummary> Changes { get; set; } = [];
+    [Parameter] public string Empty { get; set; } = "None.";
+    [Parameter] public Color Color { get; set; } = Color.Default;
+    [Parameter] public string Label { get; set; } = "";
+}

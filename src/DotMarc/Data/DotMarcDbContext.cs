@@ -202,6 +202,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<ParseFailure>(entity =>
         {
             entity.HasIndex(f => f.GraphMessageId).IsUnique();
+            entity.Property(f => f.Subject).HasMaxLength(500);
         });
 
         modelBuilder.Entity<ProcessedMessage>(entity =>
