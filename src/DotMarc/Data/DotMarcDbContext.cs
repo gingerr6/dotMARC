@@ -76,6 +76,9 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(d => d.SpfCheckStatus).HasConversion<string>();
             entity.Property(d => d.MxCheckStatus).HasConversion<string>();
             entity.Property(d => d.DkimCheckStatus).HasConversion<string>();
+            entity.Property(d => d.BimiCheckStatus).HasConversion<string>();
+            entity.Property(d => d.BimiCheckDetail).HasMaxLength(2000);
+            entity.Property(d => d.BimiLogoUrl).HasMaxLength(2048);
             entity.Property(d => d.DnsProvider).HasConversion<string>();
             entity.Property(d => d.DmarcPolicy).HasConversion<string>();
             entity.Property(d => d.DmarcSubdomainPolicy).HasConversion<string>();

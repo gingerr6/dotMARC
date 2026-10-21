@@ -30,17 +30,17 @@ public sealed class PsaDataMigrationTests(PostgresContainerFixture fixture)
             {
                 await context.GetService<IMigrator>().MigrateAsync(MigrationBeforePsaTables);
 
-                // Inserted through EF (only the old tables' columns are written), then the old Halo columns set in SQL,
-                // because they leave the model in a later change. The Group is inserted in SQL outright, as later changes
-                // add Group columns this old schema doesn't have.
+                // Alerts are inserted through EF (only the old tables' columns are written), then the old Halo columns set
+                // in SQL, because they leave the model in a later change. The Group and Domain are inserted in SQL outright,
+                // as later changes add columns to them that this old schema doesn't have.
                 groupId = await context.Database.SqlQueryRaw<int>("INSERT INTO \"Groups\" (\"Name\") VALUES ('Client A') RETURNING \"Id\" AS \"Value\"").AsAsyncEnumerable().SingleAsync();
-                var domain = new Domain { Name = "contoso.io", FirstSeenUtc = DateTimeOffset.UtcNow };
+                domainId = await InsertOldSchemaDomainAsync(context, "contoso.io");
                 var openAlert = new AlertEvent { DomainName = "contoso.io", AlertType = "MissedReport", Severity = "Warning", Title = "open", Message = "m" };
                 var resolvedAlert = new AlertEvent { DomainName = "contoso.io", AlertType = "MissedReport", Severity = "Warning", Title = "resolved", Message = "m", IsResolved = true };
                 var alertWithoutTicket = new AlertEvent { DomainName = "contoso.io", AlertType = "SpfMissing", Severity = "Warning", Title = "none", Message = "m" };
-                context.AddRange(domain, openAlert, resolvedAlert, alertWithoutTicket);
+                context.AddRange(openAlert, resolvedAlert, alertWithoutTicket);
                 await context.SaveChangesAsync();
-                (domainId, openAlertId, resolvedAlertId) = (domain.Id, openAlert.Id, resolvedAlert.Id);
+                (openAlertId, resolvedAlertId) = (openAlert.Id, resolvedAlert.Id);
 
                 await context.Database.ExecuteSqlRawAsync("UPDATE \"Groups\" SET \"HaloClientId\" = 7 WHERE \"Id\" = {0}", groupId);
                 await context.Database.ExecuteSqlRawAsync("UPDATE \"Domains\" SET \"HaloClientId\" = 9 WHERE \"Id\" = {0}", domainId);
@@ -100,4 +100,26 @@ public sealed class PsaDataMigrationTests(PostgresContainerFixture fixture)
             await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
         }
     }
+
+    /// <summary>Inserts a domain into the Domains table as an old migration left it, giving each required column with no
+    /// default a placeholder of its type.</summary>
+    private static async Task<int> InsertOldSchemaDomainAsync(DotMarcDbContext context, string name)
+    {
+        var required = await context.Database.SqlQueryRaw<RequiredColumn>(
+            "SELECT column_name AS \"Name\", data_type AS \"Type\" FROM information_schema.columns " +
+            "WHERE table_name = 'Domains' AND is_nullable = 'NO' AND column_default IS NULL AND column_name NOT IN ('Id', 'Name')").ToListAsync();
+        var columns = string.Join("", required.Select(column => $", \"{column.Name}\""));
+        var values = string.Join("", required.Select(column => ", " + (column.Type switch
+        {
+            "boolean" => "true",
+            "integer" or "bigint" or "smallint" or "double precision" or "numeric" => "0",
+            "timestamp with time zone" => "now()",
+            "ARRAY" => "'{}'",
+            _ => "'NotChecked'",
+        })));
+        return await context.Database.SqlQueryRaw<int>($"INSERT INTO \"Domains\" (\"Name\"{columns}) VALUES ('{name}'{values}) RETURNING \"Id\" AS \"Value\"")
+            .AsAsyncEnumerable().SingleAsync();
+    }
+
+    private sealed record RequiredColumn(string Name, string Type);
 }

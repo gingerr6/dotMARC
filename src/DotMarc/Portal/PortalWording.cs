@@ -21,6 +21,10 @@ public static class PortalWording
             new("DKIM", DkimStatusPresentation.GetLabel(domain.DkimCheckStatus), DkimStatusPresentation.GetColor(domain.DkimCheckStatus)),
             new("TLS reporting", TlsrptStatusPresentation.GetLabel(domain.TlsrptCheckStatus), TlsrptStatusPresentation.GetColor(domain.TlsrptCheckStatus)),
         };
+        if (domain.BimiCheckStatus is not (BimiCheckStatus.NotChecked or BimiCheckStatus.NoRecord))
+        {
+            rows.Add(new("BIMI logo", BimiStatusPresentation.GetLabel(domain.BimiCheckStatus), BimiStatusPresentation.GetColor(domain.BimiCheckStatus)));
+        }
         if (domain.MtaStsStatus != MtaStsStatus.NotConfigured)
         {
             rows.Add(new("MTA-STS", MtaStsStatusPresentation.GetLabel(domain.MtaStsStatus, domain.MtaStsMode), MtaStsStatusPresentation.GetColor(domain.MtaStsStatus, domain.MtaStsMode)));
