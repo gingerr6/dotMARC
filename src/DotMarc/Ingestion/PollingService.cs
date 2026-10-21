@@ -171,16 +171,6 @@ public sealed class PollingService : BackgroundService
                         _logger.LogWarning(ex, "MX check cycle failed; will retry next interval.");
                     }
 
-                    try
-                    {
-                        context.ChangeTracker.Clear();
-                        var bimiChecker = scope.ServiceProvider.GetRequiredService<IBimiChecker>();
-                        await RunBimiCheckCycleAsync(context, bimiChecker, stoppingToken).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "BIMI check cycle failed; will retry next interval.");
-                    }
 
                     try
                     {
