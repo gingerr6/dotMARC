@@ -37,6 +37,7 @@
 @inject IDkimDnsChecker DkimDnsChecker
 @inject IMailServiceDetector MailServiceDetector
 @inject ITxtRecordLookup TxtRecordLookup
+@inject IBimiChecker BimiChecker
 @inject ICnameLookup CnameLookup
 @inject IEnumerable<IDnsChangeBuilder> ChangeBuilders
 @inject IOptions<GraphOptions> GraphOptions
@@ -372,6 +373,31 @@ else
                                     }
                                 }
                                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="OpenDkimSelectorsDialogAsync">Configure selectors</MudButton>
+                            </Authorized>
+                        </AuthorizeView>
+                    </ActionContent>
+                </DomainHealthCheckRow>
+
+                <DomainHealthCheckRow Title="BIMI (logo in inboxes)"
+                                      StatusColor="@BimiStatusPresentation.GetColor(_domain.BimiCheckStatus)"
+                                      StatusLabel="@BimiStatusPresentation.GetLabel(_domain.BimiCheckStatus)"
+                                      CheckedUtc="_domain.BimiCheckedUtc"
+                                      Detail="@_domain.BimiCheckDetail">
+                    <ActionContent>
+                        @if (_domain.BimiLogoUrl is { } logoUrl)
+                        {
+                            <img src="@logoUrl" alt="BIMI logo" width="28" height="28" style="border-radius:50%; border:1px solid var(--mud-palette-lines-default)" referrerpolicy="no-referrer" />
+                        }
+                        <AuthorizeView Policy="DomainsEdit" Context="bimiRecheckAuthState">
+                            <Authorized>
+                                @if (_isRecheckingBimi)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                }
+                                else
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckBimiAsync" title="Recheck now" />
+                                }
                             </Authorized>
                         </AuthorizeView>
                     </ActionContent>
@@ -739,6 +765,7 @@ else
     private bool _isRecheckingDmarcAuth;
     private bool _isRecheckingSpf;
     private bool _isRecheckingMx;
+    private bool _isRecheckingBimi;
     private bool _isRecheckingDkim;
     private bool _isRecheckingDnsProvider;
     private DotNetObjectReference<DomainDetail>? _dotNetRef;
@@ -1623,6 +1650,37 @@ else
         finally
         {
             _isRecheckingMx = false;
+        }
+    }
+
+    /// <summary>BIMI counterpart to RecheckDmarcAsync - see its remarks.</summary>
+    private async Task RecheckBimiAsync()
+    {
+        _isRecheckingBimi = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var domain = await db.Domains.SingleAsync(d => d.Id == _domain!.Id);
+            try
+            {
+                await PollingService.RunSingleBimiCheckAsync(domain, BimiChecker, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add($"Failed to check {DomainName}'s BIMI record. Try again.", Severity.Error);
+                return;
+            }
+            await db.SaveChangesAsync();
+
+            _domain!.BimiCheckStatus = domain.BimiCheckStatus;
+            _domain.BimiCheckedUtc = domain.BimiCheckedUtc;
+            _domain.BimiCheckDetail = domain.BimiCheckDetail;
+            _domain.BimiLogoUrl = domain.BimiLogoUrl;
+            _domain.BimiCertificateExpiresUtc = domain.BimiCertificateExpiresUtc;
+        }
+        finally
+        {
+            _isRecheckingBimi = false;
         }
     }
 

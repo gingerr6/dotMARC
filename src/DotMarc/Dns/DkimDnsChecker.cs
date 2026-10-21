@@ -22,6 +22,7 @@ public sealed class DkimDnsChecker : IDkimDnsChecker
         var keyNotPublished = new List<string>();
         var noKey = new List<string>();
         var mismatches = new List<string>();
+        var keyPublished = 0;
 
         foreach (var selector in selectors)
         {
@@ -49,6 +50,9 @@ public sealed class DkimDnsChecker : IDkimDnsChecker
                 case DkimRecordType.Cname when string.IsNullOrEmpty(DkimRecordValue.PublicKey(live.DirectValue ?? "")):
                     keyNotPublished.Add(selector);
                     break;
+                case DkimRecordType.Cname:
+                    keyPublished++;
+                    break;
                 case DkimRecordType.Txt when live.DirectValue is null:
                     missing.Add(selector);
                     break;
@@ -56,6 +60,16 @@ public sealed class DkimDnsChecker : IDkimDnsChecker
                     mismatches.Add($"{selector}'s key doesn't match the one stored in dotMARC");
                     break;
             }
+        }
+
+        // Platforms that rotate keys between two selectors (Microsoft 365's selector1 and selector2) publish only the key in
+        // use, and the standby selector's key at the next rotation. While another selector's key is published, a standby
+        // selector without one is expected, not a fault.
+        string? standbyNote = null;
+        if (keyNotPublished.Count > 0 && keyPublished > 0)
+        {
+            standbyNote = $"{string.Join(", ", keyNotPublished)} {(keyNotPublished.Count == 1 ? "is the standby key" : "are standby keys")}: the mail platform publishes {(keyNotPublished.Count == 1 ? "it" : "them")} when it rotates keys.";
+            keyNotPublished.Clear();
         }
 
         if (missing.Count > 0 || keyNotPublished.Count > 0)
@@ -85,7 +99,7 @@ public sealed class DkimDnsChecker : IDkimDnsChecker
             return new DkimCheckResult(DkimCheckStatus.Misconfigured, string.Join("; ", parts));
         }
 
-        return new DkimCheckResult(DkimCheckStatus.Ok, null);
+        return new DkimCheckResult(DkimCheckStatus.Ok, standbyNote);
     }
 
     public Task<DnsRecordLookupResult> LookupSelectorAsync(string domainName, string selector, CancellationToken cancellationToken) =>

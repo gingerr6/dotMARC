@@ -24,6 +24,15 @@ public sealed class Domain
     public DateTimeOffset? TlsrptCheckedUtc { get; set; }
     public string? TlsrptCheckDetail { get; set; }
 
+    public BimiCheckStatus BimiCheckStatus { get; set; }
+    public DateTimeOffset? BimiCheckedUtc { get; set; }
+    public string? BimiCheckDetail { get; set; }
+
+    /// <summary>The BIMI record's logo URL, when it has a valid one, to show the logo.</summary>
+    public string? BimiLogoUrl { get; set; }
+
+    public DateTimeOffset? BimiCertificateExpiresUtc { get; set; }
+
     public DmarcAuthorizationCheckStatus DmarcAuthorizationCheckStatus { get; set; }
     public DateTimeOffset? DmarcAuthorizationCheckedUtc { get; set; }
     public string? DmarcAuthorizationCheckDetail { get; set; }

@@ -136,6 +136,18 @@ builder.Services.AddHttpClient<IDmarcDnsChecker, DmarcDnsChecker>(client =>
     client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
 });
 
+builder.Services.AddHttpClient<DotMarc.Dns.PublicHttpFetcher>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("dotMARC-BIMI-check");
+}).ConfigurePrimaryHttpMessageHandler(DotMarc.Dns.PublicHttpFetcher.CreateHandler);
+
+builder.Services.AddHttpClient<DotMarc.Dns.IBimiChecker, DotMarc.Dns.BimiChecker>(client =>
+{
+    client.BaseAddress = new Uri("https://cloudflare-dns.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
+});
+
 builder.Services.AddHttpClient<ITlsrptDnsChecker, TlsrptDnsChecker>(client =>
 {
     client.BaseAddress = new Uri("https://cloudflare-dns.com/");

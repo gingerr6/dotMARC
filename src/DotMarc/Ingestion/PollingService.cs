@@ -46,6 +46,8 @@ public sealed class PollingService : BackgroundService
 
     internal const long MxCheckLeaderLockKey = 84_200_015;
 
+    internal const long BimiCheckLeaderLockKey = 84_200_027;
+
     /// <summary>Arbitrary fixed key for this service's DKIM-check advisory lock. Runs on the same
     /// schedule as every other check even though most domains will have no selectors configured
     /// yet (RunSingleDkimCheckAsync short-circuits to NotConfigured in that case) - simpler than
@@ -167,6 +169,17 @@ public sealed class PollingService : BackgroundService
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "MX check cycle failed; will retry next interval.");
+                    }
+
+                    try
+                    {
+                        context.ChangeTracker.Clear();
+                        var bimiChecker = scope.ServiceProvider.GetRequiredService<IBimiChecker>();
+                        await RunBimiCheckCycleAsync(context, bimiChecker, stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "BIMI check cycle failed; will retry next interval.");
                     }
 
                     try
@@ -493,6 +506,18 @@ public sealed class PollingService : BackgroundService
     }
 
     /// <summary>MX counterpart to RunSingleDmarcCheckAsync - see its remarks.</summary>
+    /// <summary>BIMI counterpart to RunSingleDmarcCheckAsync - see its remarks. Reads the domain's DMARC policy as last
+    /// checked, so run it after the DMARC check when both run together.</summary>
+    internal static async Task RunSingleBimiCheckAsync(Domain domain, IBimiChecker bimiChecker, CancellationToken cancellationToken)
+    {
+        var result = await bimiChecker.CheckAsync(domain, cancellationToken).ConfigureAwait(false);
+        domain.BimiCheckStatus = result.Status;
+        domain.BimiCheckedUtc = DateTimeOffset.UtcNow;
+        domain.BimiCheckDetail = result.Detail;
+        domain.BimiLogoUrl = result.LogoUrl;
+        domain.BimiCertificateExpiresUtc = result.CertificateExpiresUtc;
+    }
+
     internal static async Task RunSingleMxCheckAsync(Domain domain, IMxDnsChecker mxChecker, CancellationToken cancellationToken)
     {
         var result = await mxChecker.CheckAsync(domain.Name, cancellationToken).ConfigureAwait(false);
@@ -872,6 +897,62 @@ public sealed class PollingService : BackgroundService
 
     /// <summary>Runs an MX check for every domain whose last check (MxCheckedUtc) is null or more
     /// than 24 hours old.</summary>
+    /// <summary>Checks BIMI once a day for every monitored domain, like the other DNS checks, under its own lock.</summary>
+    internal async Task RunBimiCheckCycleAsync(DotMarcDbContext context, IBimiChecker bimiChecker, CancellationToken cancellationToken)
+    {
+        var connectionString = context.Database.GetConnectionString()
+            ?? throw new InvalidOperationException("DotMarcDbContext has no connection string configured.");
+
+        await using var lockConnection = new NpgsqlConnection(connectionString);
+        await lockConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var lockTransaction = await lockConnection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        bool acquired;
+        await using (var lockCommand = new NpgsqlCommand("SELECT pg_try_advisory_xact_lock(@key)", lockConnection, lockTransaction))
+        {
+            lockCommand.Parameters.AddWithValue("key", BimiCheckLeaderLockKey);
+            acquired = (bool)(await lockCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+        }
+
+        if (!acquired)
+        {
+            _logger.LogDebug("Another instance already holds the BIMI-check lock for this cycle; skipping.");
+            return;
+        }
+
+        try
+        {
+            var cutoff = DateTimeOffset.UtcNow.AddHours(-24);
+            var staleDomains = await context.Domains
+                .Where(d => d.IsMonitored && (d.BimiCheckedUtc == null || d.BimiCheckedUtc < cutoff))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            var anyUpdated = false;
+            foreach (var domain in staleDomains)
+            {
+                try
+                {
+                    await RunSingleBimiCheckAsync(domain, bimiChecker, cancellationToken).ConfigureAwait(false);
+                    anyUpdated = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "BIMI check failed for {Domain}; will retry next cycle.", domain.Name);
+                }
+            }
+
+            if (anyUpdated)
+            {
+                await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await lockTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     internal async Task RunMxCheckCycleAsync(DotMarcDbContext context, IMxDnsChecker mxChecker, CancellationToken cancellationToken)
     {
         var connectionString = context.Database.GetConnectionString()

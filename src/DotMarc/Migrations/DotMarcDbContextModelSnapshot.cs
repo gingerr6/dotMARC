@@ -313,6 +313,24 @@ namespace DotMarc.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTimeOffset?>("BimiCertificateExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BimiCheckDetail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("BimiCheckStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("BimiCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BimiLogoUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<string>("DkimCheckDetail")
                         .HasColumnType("text");
 
