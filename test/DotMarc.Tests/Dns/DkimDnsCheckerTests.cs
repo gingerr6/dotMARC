@@ -184,4 +184,33 @@ public sealed class DkimDnsCheckerTests
         Assert.Equal("v=DKIM1; k=rsa; p=MIIBIjANBgkq", published.DirectValue);
         Assert.Null(published.DelegatedToCname);
     }
+
+    private static readonly DkimExpectedRecord ExpectedCname2 =
+        new("selector2", DkimRecordType.Cname, "selector2-contoso-io._domainkey.contoso.onmicrosoft.com");
+
+    [Fact]
+    public async Task CheckAsync_CnameExpected_IsOk_WhenOnlyTheStandbySelectorsKeyIsUnpublished()
+    {
+        var (checker, handler) = CreateChecker();
+        handler.ResponseBodies.Enqueue(Answers((5, "selector1-contoso-io._domainkey.contoso.onmicrosoft.com."), (16, "\"v=DKIM1; k=rsa; p=MIIB\"")));
+        handler.ResponseBodies.Enqueue(Answers((5, "selector2-contoso-io._domainkey.contoso.onmicrosoft.com.")));
+
+        var result = await checker.CheckAsync("contoso.io", ["selector1", "selector2"], CancellationToken.None, [ExpectedCname, ExpectedCname2]);
+
+        Assert.Equal(DkimCheckStatus.Ok, result.Status);
+        Assert.Contains("selector2 is the standby key", result.Detail);
+    }
+
+    [Fact]
+    public async Task CheckAsync_CnameExpected_IsMissing_WhenNoSelectorsKeyIsPublished()
+    {
+        var (checker, handler) = CreateChecker();
+        handler.ResponseBodies.Enqueue(Answers((5, "selector1-contoso-io._domainkey.contoso.onmicrosoft.com.")));
+        handler.ResponseBodies.Enqueue(Answers((5, "selector2-contoso-io._domainkey.contoso.onmicrosoft.com.")));
+
+        var result = await checker.CheckAsync("contoso.io", ["selector1", "selector2"], CancellationToken.None, [ExpectedCname, ExpectedCname2]);
+
+        Assert.Equal(DkimCheckStatus.Missing, result.Status);
+        Assert.Contains("turn on DKIM signing", result.Detail);
+    }
 }
