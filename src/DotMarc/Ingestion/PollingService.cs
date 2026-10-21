@@ -213,6 +213,8 @@ public sealed class PollingService : BackgroundService
                         _logger.LogWarning(ex, "Auth-detail backfill cycle failed; will retry next interval.");
                     }
 
+                    // A separate TLSRPT mailbox is polled on its own. Without one, TLS reports go to the DMARC mailbox,
+                    // whose poller reads them, and domains' TLS reporting records are still checked against it.
                     if (!string.IsNullOrWhiteSpace(_options!.TlsrptMailboxAddress))
                     {
                         try
@@ -225,17 +227,17 @@ public sealed class PollingService : BackgroundService
                         {
                             _logger.LogWarning(ex, "TLSRPT mailbox poll cycle failed; will retry next interval.");
                         }
+                    }
 
-                        try
-                        {
-                            context.ChangeTracker.Clear();
-                            var tlsrptChecker = scope.ServiceProvider.GetRequiredService<ITlsrptDnsChecker>();
-                            await RunTlsrptCheckCycleAsync(context, tlsrptChecker, _options.TlsrptMailboxAddress, stoppingToken).ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "TLSRPT check cycle failed; will retry next interval.");
-                        }
+                    try
+                    {
+                        context.ChangeTracker.Clear();
+                        var tlsrptChecker = scope.ServiceProvider.GetRequiredService<ITlsrptDnsChecker>();
+                        await RunTlsrptCheckCycleAsync(context, tlsrptChecker, _options.TlsReportingAddress, stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "TLSRPT check cycle failed; will retry next interval.");
                     }
 
                     try

@@ -11,7 +11,7 @@ public sealed class TlsrptChangeBuilder(ITlsrptTxtLookup tlsrptTxtLookup, IOptio
 
     public async Task<DnsChangePlan> BuildAsync(DnsPushRequest request, CancellationToken cancellationToken)
     {
-        var mailbox = graphOptions.Value.TlsrptMailboxAddress;
+        var mailbox = graphOptions.Value.TlsReportingAddress;
         if (string.IsNullOrWhiteSpace(mailbox))
         {
             return DnsChangePlan.Refuse("error");

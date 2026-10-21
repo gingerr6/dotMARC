@@ -28,6 +28,12 @@ else
     }
 
     <MudPaper Class="pa-4 mt-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-1" Color="Color.Secondary">DNS setup checklist</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2 mud-text-secondary">The records this domain needs in its DNS. Each ticks itself once we see it, usually within a day of it being added.</MudText>
+        <DotMarc.Components.Shared.DnsChecklist Domain="domain" ForClient="true" />
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mt-4" Elevation="1">
         <MudText Typo="Typo.h6" Class="mb-1" Color="Color.Secondary">Policy</MudText>
         <MudText Typo="Typo.body1">@PortalWording.PolicySentence(domain)</MudText>
     </MudPaper>

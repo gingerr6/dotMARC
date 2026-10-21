@@ -180,7 +180,7 @@ else
                     </ActionContent>
                 </DomainHealthCheckRow>
 
-                @if (!string.IsNullOrWhiteSpace(GraphOptions.Value.TlsrptMailboxAddress))
+                @if (!string.IsNullOrWhiteSpace(GraphOptions.Value.TlsReportingAddress))
                 {
                     <DomainHealthCheckRow Title="TLS reporting record"
                                           StatusColor="@TlsrptStatusPresentation.GetColor(_domain.TlsrptCheckStatus)"
@@ -1242,7 +1242,7 @@ else
             return;
         }
 
-        var mailbox = GraphOptions.Value.TlsrptMailboxAddress;
+        var mailbox = GraphOptions.Value.TlsReportingAddress;
         if (string.IsNullOrWhiteSpace(mailbox))
         {
             Snackbar.Add("TLS reporting isn't configured on this deployment.", Severity.Warning);
@@ -1353,7 +1353,7 @@ else
     /// <summary>TLSRPT counterpart to RecheckDmarcAsync - see its remarks.</summary>
     private async Task RecheckTlsrptAsync()
     {
-        var mailbox = GraphOptions.Value.TlsrptMailboxAddress;
+        var mailbox = GraphOptions.Value.TlsReportingAddress;
         if (string.IsNullOrWhiteSpace(mailbox))
         {
             Snackbar.Add("TLS reporting isn't configured on this deployment.", Severity.Warning);

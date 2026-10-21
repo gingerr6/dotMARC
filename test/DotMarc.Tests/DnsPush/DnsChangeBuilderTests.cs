@@ -58,9 +58,11 @@ public sealed class DnsChangeBuilderTests
     }
 
     [Fact]
-    public async Task Tlsrpt_RefusesWithoutATlsrptMailbox()
+    public async Task Tlsrpt_SendsReportsToTheDmarcMailbox_WithoutATlsrptMailbox()
     {
-        Assert.Equal("error", (await new TlsrptChangeBuilder(new FakeTlsrptTxtLookup(), Graph(tlsrptMailbox: null)).BuildAsync(Request(), CancellationToken.None)).Refusal);
+        var change = Assert.Single((await new TlsrptChangeBuilder(new FakeTlsrptTxtLookup(), Graph(tlsrptMailbox: null)).BuildAsync(Request(), CancellationToken.None)).Changes);
+
+        Assert.Equal("v=TLSRPTv1; rua=mailto:rua@dotmarc.example", change.DesiredValue);
     }
 
     [Fact]

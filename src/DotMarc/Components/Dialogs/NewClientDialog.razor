@@ -1,0 +1,48 @@
+@* The New client wizard on the Groups page: the client's name, domains, whether they manage their own DNS, and who
+   sees them in the client portal. ManageGroups does the work (ClientOnboarding) with the answers. *@
+@using DotMarc.Setup
+
+<MudDialog>
+    <TitleContent>New client</TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="Client name" Placeholder="Contoso Ltd" Variant="Variant.Outlined" Class="mb-3" Immediate="true" />
+        <MudTextField @bind-Value="_domains" Label="Their domains" Lines="4" Variant="Variant.Outlined" Class="mb-1"
+                      Placeholder="contoso.com&#10;contoso.co.uk" HelperText="One per line. A domain dotMARC already monitors joins this client too." />
+        <MudSwitch T="bool" @bind-Value="_clientManagesDns" Color="Color.Primary" Class="mt-3"
+                   Label="They manage their own DNS (show them records to add, rather than pushing them)" />
+        @if (CanGrantAccess)
+        {
+            <MudTextField @bind-Value="_emails" Label="Client portal users (optional)" Lines="2" Variant="Variant.Outlined" Class="mt-3"
+                          Placeholder="it@contoso.com" HelperText="One email per line. They see only this client's domains, and their setup checklist." />
+            @if (CanInviteGuests)
+            {
+                <MudCheckBox T="bool" @bind-Value="_inviteAsGuests" Label="Add them to Entra as guests (no email is sent)" Color="Color.Primary" Dense="true" />
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@string.IsNullOrWhiteSpace(_name)" OnClick="Submit">Create client</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public bool CanGrantAccess { get; set; }
+    [Parameter] public bool CanInviteGuests { get; set; }
+
+    private string _name = "";
+    private string _domains = "";
+    private bool _clientManagesDns;
+    private string _emails = "";
+    private bool _inviteAsGuests = true;
+
+    public sealed record Answers(NewClientRequest Request, bool InviteAsGuests);
+
+    private void Submit()
+    {
+        static IReadOnlyList<string> Lines(string text) =>
+            text.Split(['\n', '\r', ',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        MudDialog.Close(DialogResult.Ok(new Answers(new NewClientRequest(_name, Lines(_domains), _clientManagesDns, Lines(_emails)), _inviteAsGuests)));
+    }
+}

@@ -20,5 +20,9 @@ public sealed class GraphOptions
 
     public string? TlsrptMailboxAddress { get; set; }
 
+    /// <summary>Where domains' TLS reports should go: the TLSRPT mailbox when there is one, otherwise the DMARC mailbox,
+    /// whose poller reads TLS reports too.</summary>
+    public string TlsReportingAddress => string.IsNullOrWhiteSpace(TlsrptMailboxAddress) ? MailboxAddress : TlsrptMailboxAddress;
+
     public int PollIntervalSeconds { get; set; } = 300;
 }
