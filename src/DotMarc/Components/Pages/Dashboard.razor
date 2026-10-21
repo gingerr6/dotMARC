@@ -117,7 +117,7 @@ else
             </tr>
             <tr>
                 <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => DmarcStatusPresentation.GetLabel(r.DmarcCheckStatus, r.DmarcAuthorizationCheckStatus))">DMARC</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => MtaStsStatusPresentation.GetLabel(r.MtaStsStatus))">MTA-STS</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => MtaStsStatusPresentation.GetLabel(r.MtaStsStatus, r.MtaStsMode))">MTA-STS</MudTableSortLabel></MudTh>
             </tr>
             @if (_showFilters)
             {
@@ -151,7 +151,7 @@ else
                 </MudTh>
                 <MudTh>
                     <MudSelect T="string" Value="_mtaStsFilter" ValueChanged="@(v => _mtaStsFilter = v)" Clearable="true" Placeholder="Any" Margin="Margin.Dense">
-                        @foreach (var label in _rows.Select(r => MtaStsStatusPresentation.GetLabel(r.MtaStsStatus)).Distinct().OrderBy(l => l))
+                        @foreach (var label in _rows.Select(r => MtaStsStatusPresentation.GetLabel(r.MtaStsStatus, r.MtaStsMode)).Distinct().OrderBy(l => l))
                         {
                             <MudSelectItem T="string" Value="label">@label</MudSelectItem>
                         }
@@ -187,7 +187,7 @@ else
                 <MudChip T="string" Color="@DmarcStatusPresentation.GetColor(context.DmarcCheckStatus, context.DmarcAuthorizationCheckStatus)" Size="Size.Small">@DmarcStatusPresentation.GetLabel(context.DmarcCheckStatus, context.DmarcAuthorizationCheckStatus)</MudChip>
             </MudTd>
             <MudTd @onclick="@(() => Navigation.NavigateTo($"/domains/{Uri.EscapeDataString(context.Name)}"))" Style="cursor:pointer">
-                <MudChip T="string" Color="@MtaStsStatusPresentation.GetColor(context.MtaStsStatus)" Size="Size.Small">@MtaStsStatusPresentation.GetLabel(context.MtaStsStatus)</MudChip>
+                <MudChip T="string" Color="@MtaStsStatusPresentation.GetColor(context.MtaStsStatus, context.MtaStsMode)" Size="Size.Small">@MtaStsStatusPresentation.GetLabel(context.MtaStsStatus, context.MtaStsMode)</MudChip>
             </MudTd>
         </RowTemplate>
     </MudTable>
@@ -296,7 +296,7 @@ else
         {
             return false;
         }
-        if (_mtaStsFilter is not null && MtaStsStatusPresentation.GetLabel(row.MtaStsStatus) != _mtaStsFilter)
+        if (_mtaStsFilter is not null && MtaStsStatusPresentation.GetLabel(row.MtaStsStatus, row.MtaStsMode) != _mtaStsFilter)
         {
             return false;
         }

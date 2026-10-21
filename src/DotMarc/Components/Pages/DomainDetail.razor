@@ -275,8 +275,8 @@ else
                 }
 
                 <DomainHealthCheckRow Title="MTA-STS"
-                                      StatusColor="@MtaStsStatusPresentation.GetColor(_domain.MtaStsStatus)"
-                                      StatusLabel="@MtaStsStatusPresentation.GetLabel(_domain.MtaStsStatus)"
+                                      StatusColor="@MtaStsStatusPresentation.GetColor(_domain.MtaStsStatus, _domain.MtaStsMode)"
+                                      StatusLabel="@MtaStsStatusPresentation.GetLabel(_domain.MtaStsStatus, _domain.MtaStsMode)"
                                       CheckedUtc="_domain.MtaStsCheckedUtc"
                                       Detail="@_domain.MtaStsCheckDetail">
                     <ActionContent>
