@@ -1,0 +1,52 @@
+@using DotMarc.Scoring
+@* A domain's or client's security score as a grade chip, with the breakdown and what would raise it on hover when a
+   domain's score is given. *@
+@if (Value is { } value)
+{
+    <MudTooltip Arrow="true" Placement="Placement.Top">
+        <ChildContent>
+            <MudChip T="string" Size="Size.Small" Color="@ColorOf(value)" Style="cursor:help; font-weight:600">@SecurityScore.GradeOf(value) · @value</MudChip>
+        </ChildContent>
+        <TooltipContent>
+            <div style="text-align:left; max-width:380px">
+                @if (Domain is { } domain)
+                {
+                    @foreach (var factor in domain.Factors)
+                    {
+                        <div>@factor.Name: @factor.Points / @factor.Max</div>
+                    }
+                    @if (ShowAdvice && domain.Improvements.FirstOrDefault() is { } next)
+                    {
+                        <div class="mt-1"><b>Biggest gain:</b> @next.Improve</div>
+                    }
+                }
+                else
+                {
+                    <div>@Caption</div>
+                }
+            </div>
+        </TooltipContent>
+    </MudTooltip>
+}
+
+@code {
+    /// <summary>A domain's score, with its breakdown.</summary>
+    [Parameter] public DomainScore? Domain { get; set; }
+
+    /// <summary>A score with no breakdown, such as a client's average.</summary>
+    [Parameter] public int? Score { get; set; }
+
+    /// <summary>Off in the client portal: the advice names dotMARC's own pages.</summary>
+    [Parameter] public bool ShowAdvice { get; set; } = true;
+
+    [Parameter] public string Caption { get; set; } = "The average of the client's domains' security scores.";
+
+    private int? Value => Domain?.Score ?? Score;
+
+    public static Color ColorOf(int score) => score switch
+    {
+        >= 75 => Color.Success,
+        >= 60 => Color.Warning,
+        _ => Color.Error,
+    };
+}

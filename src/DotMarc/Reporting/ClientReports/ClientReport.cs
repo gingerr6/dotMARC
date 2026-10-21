@@ -9,6 +9,11 @@ public sealed record ClientReport(
     string NumberFormat = ReportSettings.DefaultNumberFormat)
 {
     public CultureInfo Culture => ReportSettingsService.ResolveNumberFormat(NumberFormat);
+
+    /// <summary>The client's security score: the average of its domains' (see DotMarc.Scoring.SecurityScore).</summary>
+    public int? Score => DotMarc.Scoring.SecurityScore.Average(Domains.Select(domain => domain.Score).OfType<DotMarc.Scoring.DomainScore>());
+
+    public string? ScoreText => Score is { } score ? $"{DotMarc.Scoring.SecurityScore.GradeOf(score)} ({score}/100)" : null;
 }
 
 public sealed record ClientReportDomain(
@@ -16,6 +21,11 @@ public sealed record ClientReportDomain(
     string PolicySentence, IReadOnlyList<HealthRow> Health, IReadOnlyList<ClientReportSender> TopSenders, ReceiverActions Receivers,
     IReadOnlyList<ClientReportAlert> Alerts)
 {
+    /// <summary>The domain's security score, from its DNS now and its mail in the period.</summary>
+    public DotMarc.Scoring.DomainScore? Score { get; init; }
+
+    public string ScoreText => Score is { } score ? $"{score.Grade} ({score.Score})" : "";
+
     /// <summary>The pass rate's change from the comparison period in percentage points, "new" when that period had no
     /// mail, or empty when this one had none.</summary>
     public string ChangeText => FormatChange(CultureInfo.InvariantCulture);

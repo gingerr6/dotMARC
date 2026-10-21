@@ -12,6 +12,9 @@ public sealed record PortalDomainSummary(string Name, PortalDomainStatus Status,
 {
     /// <summary>The domain's DNS setup checklist progress (see DotMarc.Setup.DomainChecklist).</summary>
     public (int Done, int Total) Setup { get; init; }
+
+    /// <summary>The domain's security score (see DotMarc.Scoring.SecurityScore).</summary>
+    public DotMarc.Scoring.DomainScore? Score { get; init; }
 }
 
 public sealed record PortalDomainDetail(PortalDomainSummary Summary, Domain Domain, IReadOnlyList<SourceAggregate> TopSources, IReadOnlyList<AlertEvent> RecentAlerts);
@@ -99,6 +102,6 @@ public sealed class PortalData(IDbContextFactory<DotMarcDbContext> dbFactory, Ti
             DomainStatistics.GetPassRate(domain.Reports),
             PortalTrend.DailyPassRates(domain.Reports, TrendDays, timeProvider.GetUtcNow()),
             alerts);
-        return summary with { Setup = DotMarc.Setup.DomainChecklist.Progress(domain) };
+        return summary with { Setup = DotMarc.Setup.DomainChecklist.Progress(domain), Score = DotMarc.Scoring.SecurityScoreData.For(domain, domain.Reports) };
     }
 }

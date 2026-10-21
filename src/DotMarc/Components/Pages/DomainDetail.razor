@@ -47,7 +47,13 @@
 
 <PageTitle>dotMARC - @DomainName</PageTitle>
 <MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
-<MudText Typo="Typo.h4" Class="mb-4">@DomainName</MudText>
+<div class="d-flex align-center flex-wrap mb-4" style="gap:12px">
+    <MudText Typo="Typo.h4">@DomainName</MudText>
+    @if (_score is not null)
+    {
+        <DotMarc.Components.Shared.ScoreChip Domain="_score" />
+    }
+</div>
 @if (_clientManagesDns)
 {
     <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">@_noPushReason When a record needs changing, dotMARC shows it with a copy button to send to them.</MudAlert>
@@ -678,6 +684,7 @@ else
     private Domain? _domain;
     private List<DetectedMailService> _detectedMailServices = [];
     private List<ReturnPathRow> _returnPaths = [];
+    private DotMarc.Scoring.DomainScore? _score;
 
     private sealed record ReturnPathRow(ReturnPathDomain Domain, string? Cname);
     private List<Report> _reports = [];
@@ -880,6 +887,7 @@ else
             ? $"{string.Join(", ", _domain.Groups.Where(group => group.ClientManagesDns).Select(group => group.Name))} manages its own DNS, so dotMARC doesn't push records for this domain."
             : "You don't have permission to push records to DNS from dotMARC.";
         _enforcement = (await EnforcementData.AssessAsync(db, [_domain], DateTimeOffset.UtcNow))[_domain.Id];
+        _score = DotMarc.Scoring.SecurityScoreData.For(_domain, _domain.Reports);
         _reports = _domain.Reports.OrderByDescending(r => r.ReceivedUtc).ToList();
         _tlsrptReports = _domain.TlsrptReports.OrderByDescending(report => report.ReceivedUtc).ToList();
 

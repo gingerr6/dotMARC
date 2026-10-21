@@ -22,12 +22,16 @@ public static class ClientReportEmail
         html.Append($"<h1 style=\"font-size:20px;margin:0 0 4px;color:{E(report.Brand.SecondaryColour)}\">{E(report.Brand.Heading)}</h1>");
         html.Append($"<p style=\"margin:0 0 12px;color:#555\">Email security report: {E(report.Period.Label)}</p>");
         html.Append($"<p style=\"font-weight:bold\">{E(report.Verdict)}</p>");
+        if (report.ScoreText is { } score)
+        {
+            html.Append($"<p>Email security score: <b>{E(score)}</b></p>");
+        }
         if (report.Domains.Count > 0)
         {
-            html.Append($"<table cellpadding=\"6\" style=\"border-collapse:collapse\"><tr style=\"text-align:left;background:{E(report.Brand.SecondaryColour)};color:{E(PortalTheme.ReadableTextOn(report.Brand.SecondaryColour))}\"><th>Domain</th><th>Messages</th><th>Pass rate</th><th>Change</th></tr>");
+            html.Append($"<table cellpadding=\"6\" style=\"border-collapse:collapse\"><tr style=\"text-align:left;background:{E(report.Brand.SecondaryColour)};color:{E(PortalTheme.ReadableTextOn(report.Brand.SecondaryColour))}\"><th>Domain</th><th>Score</th><th>Messages</th><th>Pass rate</th><th>Change</th></tr>");
             foreach (var domain in report.Domains)
             {
-                html.Append($"<tr><td>{E(domain.Name)}</td><td>{E(domain.Messages.ToString("N0", culture))}</td><td>{E(domain.PassRate?.ToString("P1", culture) ?? "No mail")}</td><td>{E(domain.FormatChange(culture))}</td></tr>");
+                html.Append($"<tr><td>{E(domain.Name)}</td><td>{E(domain.ScoreText)}</td><td>{E(domain.Messages.ToString("N0", culture))}</td><td>{E(domain.PassRate?.ToString("P1", culture) ?? "No mail")}</td><td>{E(domain.FormatChange(culture))}</td></tr>");
             }
 
             html.Append("</table>");
@@ -47,6 +51,10 @@ public static class ClientReportEmail
             .AppendLine()
             .AppendLine(report.Verdict)
             .AppendLine();
+        if (report.ScoreText is { } scoreLine)
+        {
+            text.AppendLine($"Email security score: {scoreLine}").AppendLine();
+        }
         foreach (var domain in report.Domains)
         {
             text.AppendLine($"{domain.Name}: {domain.Messages.ToString("N0", culture)} messages, pass rate {domain.PassRate?.ToString("P1", culture) ?? "no mail"} {domain.FormatChange(culture)}".TrimEnd());
