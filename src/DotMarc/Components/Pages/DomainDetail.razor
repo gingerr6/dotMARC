@@ -16,6 +16,7 @@
 @using DotMarc.Components.Shared
 @using DotMarc.Notifications
 @using DotMarc.Senders
+@using DotMarc.Enforcement
 @inject AuditActorAccessor AuditActorAccessor
 @inject IDbContextFactory<DotMarcDbContext> DbFactory
 @inject IIpInfoLookup IpLookup
@@ -70,6 +71,66 @@ else
                 <MudItem xs="4"><MudText>Volume (30d): <b>@_totalVolume</b></MudText></MudItem>
                 <MudItem xs="4"><MudText>Sources: <b>@_sourceCount</b></MudText></MudItem>
             </MudGrid>
+            @if (_enforcement is { } enforcement)
+            {
+                <MudPaper Class="pa-4 my-3" Elevation="1">
+                    <div class="d-flex align-center flex-wrap" style="gap:8px">
+                        <MudText Typo="Typo.h6">Enforcement</MudText>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                 Color="@(enforcement.Enforced ? Color.Success : enforcement.Stage == EnforcementStage.NoRecord ? Color.Error : Color.Warning)">@EnforcementReadiness.Describe(enforcement.Stage)</MudChip>
+                        @if (enforcement.StuckMonitoring)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">On p=none for over 30 days</MudChip>
+                        }
+                        <MudSpacer />
+                        <MudLink Href="/enforcement" Typo="Typo.body2">All domains</MudLink>
+                    </div>
+                    @if (enforcement.Enforced)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-2">Fully enforced: receivers reject mail that fails DMARC, so the domain can't be spoofed.</MudText>
+                    }
+                    else if (enforcement.NextPolicy is { } nextPolicy)
+                    {
+                        var nextName = nextPolicy == DmarcPolicyLevel.Reject ? "reject" : "quarantine";
+                        @if (enforcement.Ready)
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">
+                                <b>Ready for p=@nextName.</b> Over the last @EnforcementReadiness.DaysNeeded days every sender with real volume has been reviewed, and approved senders pass DMARC@(enforcement.ApprovedPassRate is { } rate ? $" ({rate:P1})" : "").
+                                @(nextPolicy == DmarcPolicyLevel.Reject ? "Mail failing DMARC will then be refused outright." : "Mail failing DMARC will then go to junk.")
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Class="mt-2">Not ready for p=@nextName yet:</MudText>
+                            <ul class="mt-1 mb-1" style="padding-left:20px">
+                                @foreach (var blocker in enforcement.Blockers)
+                                {
+                                    <li><MudText Typo="Typo.body2"><b>@blocker.Title.</b> @blocker.Detail</MudText></li>
+                                }
+                            </ul>
+                        }
+                        <AuthorizeView Policy="DomainsEdit" Context="enforcementAuthState">
+                            <div class="d-flex mt-2" style="gap:8px">
+                                @if (enforcement.Ready && _mayPush)
+                                {
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="@(() => PushPolicyAsync(nextPolicy))">Move to p=@nextName</MudButton>
+                                }
+                                <MudButton Variant="@(enforcement.Ready && !_mayPush ? Variant.Filled : Variant.Text)" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy"
+                                           OnClick="@(() => ShowRecordsAsync("dmarc-policy", $"DMARC record for p={nextName}", nextName))">@(enforcement.Ready ? "Show record" : "Show the record anyway")</MudButton>
+                            </div>
+                        </AuthorizeView>
+                    }
+                    else
+                    {
+                        <ul class="mt-1 mb-1" style="padding-left:20px">
+                            @foreach (var blocker in enforcement.Blockers)
+                            {
+                                <li><MudText Typo="Typo.body2"><b>@blocker.Title.</b> @blocker.Detail</MudText></li>
+                            }
+                        </ul>
+                    }
+                </MudPaper>
+            }
             <MudText Typo="Typo.subtitle2" Class="mt-2">Messages a day, by what receivers did with them (30 days to yesterday)</MudText>
             <MudChart ChartType="ChartType.Line" ChartSeries="@_series" ChartLabels="@_xAxisLabels" ChartOptions="@_chartOptions" Width="100%" Height="260px" />
             @if (_reasonBreakdown is { Total: > 0 } breakdown)
@@ -648,6 +709,7 @@ else
     // Whether this person may push records for this domain from dotMARC: they need the DnsPush permission, and none of
     // the domain's Groups may be marked as managing its own DNS. Otherwise the push buttons show the records to copy.
     private bool _mayPush;
+    private EnforcementAssessment? _enforcement;
     private bool _clientManagesDns;
     private string _noPushReason = "";
     private bool _isPushingDmarcAuthRecord;
@@ -803,6 +865,7 @@ else
         _noPushReason = _clientManagesDns
             ? $"{string.Join(", ", _domain.Groups.Where(group => group.ClientManagesDns).Select(group => group.Name))} manages its own DNS, so dotMARC doesn't push records for this domain."
             : "You don't have permission to push records to DNS from dotMARC.";
+        _enforcement = (await EnforcementData.AssessAsync(db, [_domain], DateTimeOffset.UtcNow))[_domain.Id];
         _reports = _domain.Reports.OrderByDescending(r => r.ReceivedUtc).ToList();
         _tlsrptReports = _domain.TlsrptReports.OrderByDescending(report => report.ReceivedUtc).ToList();
 
@@ -945,7 +1008,7 @@ else
     }
 
     /// <summary>Shows the records a push would change, to copy into the DNS provider by hand.</summary>
-    private async Task ShowRecordsAsync(string target, string title)
+    private async Task ShowRecordsAsync(string target, string title, string? payload = null)
     {
         var builder = ChangeBuilders.Find(target);
         if (builder is null || _domain is null)
@@ -956,7 +1019,7 @@ else
         DnsChangePlan plan;
         try
         {
-            plan = await builder.BuildAsync(new DnsPushRequest(_domain, "", _domain.DnsZone ?? _domain.Name, null), CancellationToken.None);
+            plan = await builder.BuildAsync(new DnsPushRequest(_domain, "", _domain.DnsZone ?? _domain.Name, payload), CancellationToken.None);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -1082,6 +1145,48 @@ else
         finally
         {
             await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>Enforcement readiness's next step: pushes the DMARC record with the stricter policy, after showing the
+    /// change.</summary>
+    private async Task PushPolicyAsync(DmarcPolicyLevel policy)
+    {
+        var providerKey = _domain!.DnsProvider.ToProviderKey();
+        var pushProvider = await DnsPushProviders.FindConfiguredAsync(providerKey);
+        if (pushProvider is null)
+        {
+            Snackbar.Add("There's no DNS push for this domain's DNS provider. Use Show record and add it by hand.", Severity.Warning);
+            return;
+        }
+
+        var name = policy == DmarcPolicyLevel.Reject ? "reject" : "quarantine";
+        var builder = ChangeBuilders.Find("dmarc-policy")!;
+        DnsChangePlan plan;
+        try
+        {
+            plan = await builder.BuildAsync(new DnsPushRequest(_domain, pushProvider.ProviderKey, _domain.DnsZone ?? _domain.Name, name), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            Snackbar.Add("Couldn't look up the current DMARC record. Try again.", Severity.Error);
+            return;
+        }
+
+        if (plan.Refusal is not null || plan.Changes.Count == 0)
+        {
+            Snackbar.Add(plan.Refusal is null ? $"The DMARC record is already at p={name}." : "This DMARC record can't be changed from here: it's missing, or delegated elsewhere.", Severity.Warning);
+            return;
+        }
+
+        var change = plan.Changes[0];
+        var confirmed = await DialogService.ShowMessageBoxAsync($"Move {DomainName} to p={name}",
+            (MarkupString)$"<p>Now: <code>{System.Net.WebUtility.HtmlEncode(change.ExistingValue)}</code></p><p>New: <code>{System.Net.WebUtility.HtmlEncode(change.DesiredValue)}</code></p>" +
+            (policy == DmarcPolicyLevel.Reject ? "<p>Mail that fails DMARC will be refused. Undo it by pushing p=quarantine again if something goes wrong.</p>" : "<p>Mail that fails DMARC will go to junk.</p>"),
+            yesText: "Push", cancelText: "Cancel");
+        if (confirmed == true)
+        {
+            await OpenDnsPushPopupAsync(pushProvider.ProviderKey, _domain.Id, "dmarc-policy", name);
         }
     }
 

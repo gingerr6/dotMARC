@@ -36,6 +36,9 @@
             <AuthorizeView Policy="DomainsWrite">
                 <MudMenuItem Href="/domains" Icon="@Icons.Material.Filled.Language">Domains</MudMenuItem>
             </AuthorizeView>
+            <AuthorizeView Policy="DomainsView">
+                <MudMenuItem Href="/enforcement" Icon="@Icons.Material.Filled.Shield">Enforcement</MudMenuItem>
+            </AuthorizeView>
             <AuthorizeView Policy="GroupsOrTagsWrite">
                 <MudMenuItem Href="/groups" Icon="@Icons.Material.Filled.GroupWork">Groups</MudMenuItem>
             </AuthorizeView>
