@@ -36,6 +36,7 @@ else
         </ToolBarContent>
         <HeaderContent>
             <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Name)" InitialDirection="SortDirection.Ascending">Client</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Score ?? -1)">Score</MudTableSortLabel></MudTh>
             <MudTh>Schedule</MudTh>
             <MudTh>Recipients</MudTh>
             <MudTh>Last report</MudTh>
@@ -43,6 +44,7 @@ else
         </HeaderContent>
         <RowTemplate>
             <MudTd>@context.Name</MudTd>
+            <MudTd><DotMarc.Components.Shared.ScoreChip Score="context.Score" /></MudTd>
             <MudTd>@(context.Frequency is { } frequency and not ReportFrequency.Off ? frequency.ToString() : "Off")</MudTd>
             <MudTd>@(context.Recipients.Count == 0 ? "None" : string.Join(", ", context.Recipients))</MudTd>
             <MudTd>
@@ -76,7 +78,7 @@ else
     private List<Row>? _rows;
     private string? _search;
 
-    private sealed record Row(int Id, string Name, ReportFrequency? Frequency, IReadOnlyList<string> Recipients, ClientReportDelivery? Last);
+    private sealed record Row(int Id, string Name, ReportFrequency? Frequency, IReadOnlyList<string> Recipients, ClientReportDelivery? Last, int? Score);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -93,10 +95,13 @@ else
             .GroupBy(delivery => delivery.GroupId)
             .ToDictionary(group => group.Key, group => group.OrderByDescending(delivery => delivery.LastAttemptUtc ?? delivery.FirstAttemptUtc).First());
 
+        var scores = await DotMarc.Scoring.SecurityScoreData.ForGroupsAsync(db, ids, DateTimeOffset.UtcNow);
+
         _rows = groups.Select(group => new Row(group.Id, group.Name,
                 schedules.GetValueOrDefault(group.Id)?.Frequency,
                 schedules.GetValueOrDefault(group.Id)?.Recipients ?? [],
-                latest.GetValueOrDefault(group.Id)))
+                latest.GetValueOrDefault(group.Id),
+                scores.GetValueOrDefault(group.Id)))
             .ToList();
     }
 

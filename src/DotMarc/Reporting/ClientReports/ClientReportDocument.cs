@@ -110,17 +110,21 @@ public static partial class ClientReportDocument
         verdict.Format.SpaceBefore = Unit.FromPoint(12);
         verdict.Format.Font.Size = 12;
         verdict.Format.Font.Bold = true;
+        if (report.ScoreText is { } score)
+        {
+            section.AddParagraph($"Email security score: {score}").Format.Font.Size = 12;
+        }
     }
 
     private static void AddSummary(Section section, ClientReport report)
     {
         var culture = report.Culture;
         section.AddParagraph("Summary", StyleNames.Heading2);
-        var table = NewTable(section, report.Brand, ("Domain", 6.0), ("Status", 3.2), ("Messages", 2.4), ("Pass rate", 2.2), ("Change", 2.2));
+        var table = NewTable(section, report.Brand, ("Domain", 5.0), ("Score", 1.8), ("Status", 2.8), ("Messages", 2.2), ("Pass rate", 2.0), ("Change", 2.2));
         foreach (var domain in report.Domains)
         {
-            AddRow(table, domain.Name, StatusText(domain.Status.Health), Count(culture, domain.Messages), Percent(culture, domain.PassRate), domain.FormatChange(culture));
-            table.Rows[^1].Cells[1].Format.Font.Color = StatusColour(domain.Status.Health);
+            AddRow(table, domain.Name, domain.ScoreText, StatusText(domain.Status.Health), Count(culture, domain.Messages), Percent(culture, domain.PassRate), domain.FormatChange(culture));
+            table.Rows[^1].Cells[2].Format.Font.Color = StatusColour(domain.Status.Health);
         }
     }
 

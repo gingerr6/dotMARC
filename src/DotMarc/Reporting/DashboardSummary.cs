@@ -31,7 +31,7 @@ public sealed record DashboardSummary(int DomainCount, double OverallPassRate, i
                 var status = StatusOf(d, passRate);
                 var color = status switch { "Missing" => Color.Error, "Warning" => Color.Warning, _ => Color.Success };
 
-                return new DashboardDomainRow(d.Id, d.Name, status, color, passRate, d.LastReportReceivedUtc, d.IsMonitored, d.DmarcCheckStatus, d.DmarcAuthorizationCheckStatus, d.MtaStsStatus, d.SpfCheckStatus) { MtaStsMode = d.MtaStsMode, Setup = DotMarc.Setup.DomainChecklist.Progress(d) };
+                return new DashboardDomainRow(d.Id, d.Name, status, color, passRate, d.LastReportReceivedUtc, d.IsMonitored, d.DmarcCheckStatus, d.DmarcAuthorizationCheckStatus, d.MtaStsStatus, d.SpfCheckStatus) { MtaStsMode = d.MtaStsMode, Setup = DotMarc.Setup.DomainChecklist.Progress(d), Score = DotMarc.Scoring.SecurityScoreData.For(d, d.Reports) };
             })
             .ToList();
 
@@ -57,4 +57,7 @@ public sealed record DashboardDomainRow(int Id, string Name, string Status, Colo
 
     /// <summary>The domain's DNS setup checklist progress (see DotMarc.Setup.DomainChecklist).</summary>
     public (int Done, int Total) Setup { get; init; }
+
+    /// <summary>The domain's security score (see DotMarc.Scoring.SecurityScore).</summary>
+    public DotMarc.Scoring.DomainScore? Score { get; init; }
 }

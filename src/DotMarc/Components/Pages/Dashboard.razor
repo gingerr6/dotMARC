@@ -115,6 +115,7 @@ else
                 <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.IsMonitored)">Monitored</MudTableSortLabel></MudTh>
                 <MudTh colspan="2" Style="text-align:center">DNS Status</MudTh>
                 <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Setup.Total == 0 ? 1.0 : (double)r.Setup.Done / r.Setup.Total)">Setup</MudTableSortLabel></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Score?.Score ?? -1)">Score</MudTableSortLabel></MudTh>
             </tr>
             <tr>
                 <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => DmarcStatusPresentation.GetLabel(r.DmarcCheckStatus, r.DmarcAuthorizationCheckStatus))">DMARC</MudTableSortLabel></MudTh>
@@ -159,6 +160,7 @@ else
                     </MudSelect>
                 </MudTh>
                 <MudTh></MudTh>
+                <MudTh></MudTh>
             </tr>
             }
         </HeaderContent>
@@ -198,6 +200,7 @@ else
                              Variant="@(setup.Done == setup.Total ? Variant.Filled : Variant.Outlined)">@setup.Done of @setup.Total</MudChip>
                 }
             </MudTd>
+            <MudTd><DotMarc.Components.Shared.ScoreChip Domain="context.Score" /></MudTd>
         </RowTemplate>
     </MudTable>
 

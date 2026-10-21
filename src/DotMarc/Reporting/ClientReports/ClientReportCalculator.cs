@@ -39,7 +39,10 @@ public static class ClientReportCalculator
                     PortalWording.HealthRows(domain),
                     TopSenders(inPeriod, inputs.Owners),
                     Receivers(inPeriod),
-                    Alerts(inputs.PeriodAlerts.Where(alert => alert.DomainName == domain.Name)));
+                    Alerts(inputs.PeriodAlerts.Where(alert => alert.DomainName == domain.Name)))
+                {
+                    Score = DotMarc.Scoring.SecurityScoreData.For(domain, inPeriod),
+                };
             })
             .ToList();
 

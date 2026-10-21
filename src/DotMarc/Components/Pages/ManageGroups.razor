@@ -144,7 +144,7 @@
                     {
                         <MudTh>Ticket rules</MudTh>
                     }
-                    <MudTh>Setup</MudTh>
+                    <MudTh>Setup &amp; score</MudTh>
                     <MudTh>
                         <MudTooltip Text="On for a client that changes its own DNS: dotMARC shows the records to add instead of pushing them." Arrow="true">
                             <span>Client manages DNS</span>
@@ -249,6 +249,10 @@
                     else
                     {
                         <MudLink Href="@($"/groups/{context.Id}/setup")" Typo="Typo.body2">Checklist</MudLink>
+                    }
+                    @if (_scores.GetValueOrDefault(context.Id) is { } score)
+                    {
+                        <span class="ml-1"><DotMarc.Components.Shared.ScoreChip Score="score" /></span>
                     }
                 </MudTd>
                 <MudTd>
@@ -797,6 +801,7 @@
     }
 
     private Dictionary<int, (int Done, int Total)> _setupProgress = [];
+    private Dictionary<int, int?> _scores = [];
     private bool _creatingClient;
 
     /// <summary>Each Group's setup checklist progress, added up over its domains.</summary>
@@ -807,6 +812,7 @@
             .SelectMany(domain => domain.Groups.Select(group => (GroupId: group.Id, Progress: DotMarc.Setup.DomainChecklist.Progress(domain))))
             .GroupBy(item => item.GroupId)
             .ToDictionary(group => group.Key, group => (group.Sum(item => item.Progress.Done), group.Sum(item => item.Progress.Total)));
+        _scores = await DotMarc.Scoring.SecurityScoreData.ForGroupsAsync(db, domains.SelectMany(domain => domain.Groups).Select(group => group.Id).Distinct().ToList(), DateTimeOffset.UtcNow);
     }
 
     /// <summary>The New client wizard: creates the Group, adds its domains and portal users, then opens its setup

@@ -5,7 +5,10 @@
     <MudCardContent>
         <div class="d-flex align-center justify-space-between flex-wrap mb-2" style="gap: 0.5rem;">
             <MudLink Href="@DomainHref" Typo="Typo.h6">@Summary.Name</MudLink>
-            <PortalHealthChip Health="Summary.Status.Health" />
+            <div class="d-flex align-center" style="gap:6px">
+                <DotMarc.Components.Shared.ScoreChip Domain="Summary.Score" ShowAdvice="false" />
+                <PortalHealthChip Health="Summary.Status.Health" />
+            </div>
         </div>
         @foreach (var reason in Summary.Status.Reasons)
         {
