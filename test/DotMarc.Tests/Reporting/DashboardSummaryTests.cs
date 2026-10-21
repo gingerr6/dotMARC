@@ -200,4 +200,19 @@ public class DashboardSummaryTests
         Assert.Equal(40, summary.ReasonBreakdown.NoReasonGiven);
         Assert.Equal(40, summary.ReasonBreakdown.Total);
     }
+
+    [Fact]
+    public void Build_CarriesEachDomainsSetupProgress()
+    {
+        var domain = DomainWith("contoso.io", isMonitored: true, DateTimeOffset.UtcNow);
+        domain.DmarcCheckStatus = DmarcCheckStatus.Ok;
+        domain.SpfCheckStatus = SpfCheckStatus.MissingRecord;
+        domain.TlsrptCheckStatus = TlsrptCheckStatus.Ok;
+
+        var row = Assert.Single(DashboardSummary.Build([domain], parseFailureCount: 0).Rows);
+
+        Assert.Equal(DotMarc.Setup.DomainChecklist.Progress(domain), row.Setup);
+        Assert.Equal(2, row.Setup.Done);
+        Assert.True(row.Setup.Total > row.Setup.Done);
+    }
 }

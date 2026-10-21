@@ -114,6 +114,7 @@ else
                 <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.LastReportReceivedUtc ?? DateTimeOffset.MinValue)">Last report</MudTableSortLabel></MudTh>
                 <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.IsMonitored)">Monitored</MudTableSortLabel></MudTh>
                 <MudTh colspan="2" Style="text-align:center">DNS Status</MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Setup.Total == 0 ? 1.0 : (double)r.Setup.Done / r.Setup.Total)">Setup</MudTableSortLabel></MudTh>
             </tr>
             <tr>
                 <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => DmarcStatusPresentation.GetLabel(r.DmarcCheckStatus, r.DmarcAuthorizationCheckStatus))">DMARC</MudTableSortLabel></MudTh>
@@ -157,6 +158,7 @@ else
                         }
                     </MudSelect>
                 </MudTh>
+                <MudTh></MudTh>
             </tr>
             }
         </HeaderContent>
@@ -188,6 +190,13 @@ else
             </MudTd>
             <MudTd @onclick="@(() => Navigation.NavigateTo($"/domains/{Uri.EscapeDataString(context.Name)}"))" Style="cursor:pointer">
                 <MudChip T="string" Color="@MtaStsStatusPresentation.GetColor(context.MtaStsStatus, context.MtaStsMode)" Size="Size.Small">@MtaStsStatusPresentation.GetLabel(context.MtaStsStatus, context.MtaStsMode)</MudChip>
+            </MudTd>
+            <MudTd @onclick="@(() => Navigation.NavigateTo($"/domains/{Uri.EscapeDataString(context.Name)}"))" Style="cursor:pointer">
+                @if (context.Setup is { Total: > 0 } setup)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@(setup.Done == setup.Total ? Color.Success : Color.Warning)"
+                             Variant="@(setup.Done == setup.Total ? Variant.Filled : Variant.Outlined)">@setup.Done of @setup.Total</MudChip>
+                }
             </MudTd>
         </RowTemplate>
     </MudTable>
