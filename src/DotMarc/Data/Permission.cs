@@ -28,5 +28,8 @@ public enum Permission
     AuditView,
     AuditManage,
     ReportsManage,
-    ServerManage
+    ServerManage,
+
+    /// <summary>Push records to a domain's DNS provider from dotMARC. Without it, dotMARC shows the records to copy.</summary>
+    DnsPush
 }

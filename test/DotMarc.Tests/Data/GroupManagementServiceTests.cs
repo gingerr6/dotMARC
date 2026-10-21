@@ -504,4 +504,22 @@ public sealed class GroupManagementServiceTests : IAsyncLifetime
 
         Assert.Equal([otherOfMine], await GroupIdsOfAsync(domainId));
     }
+
+    [Fact]
+    public async Task SetClientManagesDnsAsync_StopsPushesForTheGroupsDomains_AndIsAudited()
+    {
+        await using var context = CreateContext();
+        var group = new Group { Name = "Contoso" };
+        var inGroup = new Domain { Name = "contoso.com", FirstSeenUtc = DateTimeOffset.UtcNow, Groups = [group] };
+        var other = new Domain { Name = "fabrikam.com", FirstSeenUtc = DateTimeOffset.UtcNow };
+        context.Domains.AddRange(inGroup, other);
+        await context.SaveChangesAsync();
+
+        Assert.True(await DotMarc.DnsPush.DnsPushAllowance.IsAllowedAsync(context, inGroup.Id));
+        await GroupManagementService.SetClientManagesDnsAsync(context, TestActors.Admin, group.Id, true);
+
+        Assert.False(await DotMarc.DnsPush.DnsPushAllowance.IsAllowedAsync(context, inGroup.Id));
+        Assert.True(await DotMarc.DnsPush.DnsPushAllowance.IsAllowedAsync(context, other.Id));
+        Assert.Contains(context.AuditEntries, entry => entry.Action == AuditActions.GroupDnsManagementChanged);
+    }
 }

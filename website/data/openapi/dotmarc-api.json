@@ -2216,6 +2216,7 @@
                   "group.removed",
                   "group.halo_client_changed",
                   "group.psa_company_changed",
+                  "group.dns_management_changed",
                   "tag.added",
                   "tag.updated",
                   "tag.removed",

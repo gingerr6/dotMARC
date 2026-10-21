@@ -69,7 +69,7 @@ public sealed class GroupLimitedScreensTests : IAsyncLifetime
                 Name = "Client manager",
                 IsScopable = true,
                 Permissions = [Permission.DomainsView, Permission.DomainsAdd, Permission.DomainsEdit, Permission.DomainsDelete, Permission.AlertsView,
-                    Permission.AlertsManage, Permission.AuditView, Permission.ReportsManage],
+                    Permission.AlertsManage, Permission.AuditView, Permission.ReportsManage, Permission.DnsPush],
             };
             var grant = await context.UserAccesses.SingleAsync(access => access.Email == DotMarc.Demo.DemoDataSeeder.ViewerEmail);
             grant.Role = role;
@@ -144,6 +144,47 @@ public sealed class GroupLimitedScreensTests : IAsyncLifetime
 
             Assert.True(IsForbidden(outsideResponse), $"Expected forbidden, got {(int)outsideResponse.StatusCode} {outsideResponse.Headers.Location}");
             Assert.False(IsForbidden(insideResponse), $"Expected allowed, got {(int)insideResponse.StatusCode} {insideResponse.Headers.Location}");
+        }
+    }
+
+    [Fact]
+    public async Task ADnsPush_IsForbidden_WithoutTheDnsPushPermission()
+    {
+        var (client, inside, _) = await SignInAsAClientManagerAsync();
+        using (client)
+        {
+            await using (var context = CreateContext())
+            {
+                var grant = await context.UserAccesses.Include(access => access.Role).SingleAsync(access => access.Email == DotMarc.Demo.DemoDataSeeder.ViewerEmail);
+                grant.Role!.Permissions = grant.Role.Permissions.Where(permission => permission != Permission.DnsPush).ToList();
+                await context.SaveChangesAsync();
+            }
+
+            using var fresh = await SignInAsync("viewer");
+            var response = await StartDmarcPushAsync(fresh, inside.Id);
+
+            Assert.True(IsForbidden(response), $"Expected forbidden, got {(int)response.StatusCode} {response.Headers.Location}");
+        }
+    }
+
+    [Fact]
+    public async Task ADnsPush_IsForbidden_ForADomainWhoseClientManagesItsOwnDns()
+    {
+        var (client, inside, _) = await SignInAsAClientManagerAsync();
+        using (client)
+        {
+            await using (var context = CreateContext())
+            {
+                var groupIds = await context.Domains.Where(domain => domain.Id == inside.Id).SelectMany(domain => domain.Groups).Select(group => group.Id).ToListAsync();
+                foreach (var groupId in groupIds)
+                {
+                    await GroupManagementService.SetClientManagesDnsAsync(context, DotMarc.Tests.Internal.TestActors.Admin, groupId, true);
+                }
+            }
+
+            var response = await StartDmarcPushAsync(client, inside.Id);
+
+            Assert.True(IsForbidden(response), $"Expected forbidden, got {(int)response.StatusCode} {response.Headers.Location}");
         }
     }
 

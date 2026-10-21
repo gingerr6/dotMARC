@@ -46,6 +46,10 @@
 <PageTitle>dotMARC - @DomainName</PageTitle>
 <MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
 <MudText Typo="Typo.h4" Class="mb-4">@DomainName</MudText>
+@if (_clientManagesDns)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">@_noPushReason Use "Show record to add" and send the records to the client.</MudAlert>
+}
 @if (_domain is not null && _domain.DnsProvider.ToProviderKey() is not null)
 {
     <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
@@ -118,7 +122,11 @@ else
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDmarcAsync" title="Recheck now" />
                                 }
-                                @if (_domain.DmarcCheckStatus is DmarcCheckStatus.MissingOwnRecord or DmarcCheckStatus.Misconfigured)
+                                @if ((_domain.DmarcCheckStatus is DmarcCheckStatus.MissingOwnRecord or DmarcCheckStatus.Misconfigured) && !_mayPush)
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("dmarc", "DMARC record"))">Show record to add</MudButton>
+                                }
+                                else if (_domain.DmarcCheckStatus is DmarcCheckStatus.MissingOwnRecord or DmarcCheckStatus.Misconfigured)
                                 {
                                     @if (_isPushingDmarcRecord)
                                     {
@@ -151,7 +159,11 @@ else
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDmarcAuthorizationAsync" title="Recheck now" />
                                 }
-                                @if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing)
+                                @if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing && !_mayPush)
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("dmarc-auth", "DMARC authorization record"))">Show record to add</MudButton>
+                                }
+                                else if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing)
                                 {
                                     @if (_isPushingDmarcAuthRecord)
                                     {
@@ -186,7 +198,11 @@ else
                                     {
                                         <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckTlsrptAsync" title="Recheck now" />
                                     }
-                                    @if (_domain.TlsrptCheckStatus is TlsrptCheckStatus.MissingOwnRecord or TlsrptCheckStatus.Misconfigured)
+                                    @if ((_domain.TlsrptCheckStatus is TlsrptCheckStatus.MissingOwnRecord or TlsrptCheckStatus.Misconfigured) && !_mayPush)
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("tlsrpt", "TLS reporting record"))">Show record to add</MudButton>
+                                    }
+                                    else if (_domain.TlsrptCheckStatus is TlsrptCheckStatus.MissingOwnRecord or TlsrptCheckStatus.Misconfigured)
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync"
                                                    OnClick="PushTlsrptRecordAsync">Push via your DNS provider</MudButton>
@@ -268,7 +284,14 @@ else
                                 }
                                 @if (_domain.DkimRecords.Count > 0 && _domain.DkimCheckStatus is DkimCheckStatus.Missing or DkimCheckStatus.Misconfigured)
                                 {
-                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="PushDkimRecordsAsync">Push DKIM records</MudButton>
+                                    @if (_mayPush)
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="PushDkimRecordsAsync">Push DKIM records</MudButton>
+                                    }
+                                    else
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("dkim", "DKIM records"))">Show records to add</MudButton>
+                                    }
                                 }
                                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="OpenDkimSelectorsDialogAsync">Configure selectors</MudButton>
                             </Authorized>
@@ -307,7 +330,7 @@ else
 
         <MudTabPanel Text="MTA-STS">
             <AuthorizeView Policy="MtaStsView" Context="viewAuthState">
-                <DomainMtaStsPanel Domain="_domain" OpenDnsPushPopup="OpenDnsPushPopupAsync" />
+                <DomainMtaStsPanel Domain="_domain" OpenDnsPushPopup="OpenDnsPushPopupAsync" MayPush="_mayPush" />
             </AuthorizeView>
         </MudTabPanel>
 
@@ -621,6 +644,12 @@ else
     private double[] _reasonData = [];
     private string[] _reasonLabels = ["Benign override", "Local policy", "Other", "SPF failure (inferred)", "DKIM failure (inferred)", "SPF & DKIM failure (inferred)", "No reason given"];
     private bool _isPushingDmarcRecord;
+
+    // Whether this person may push records for this domain from dotMARC: they need the DnsPush permission, and none of
+    // the domain's Groups may be marked as managing its own DNS. Otherwise the push buttons show the records to copy.
+    private bool _mayPush;
+    private bool _clientManagesDns;
+    private string _noPushReason = "";
     private bool _isPushingDmarcAuthRecord;
     private bool _isRecheckingDmarc;
     private bool _isRecheckingTlsrpt;
@@ -769,6 +798,11 @@ else
         }
 
         _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
+        _clientManagesDns = _domain.Groups.Any(group => group.ClientManagesDns);
+        _mayPush = !_clientManagesDns && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.DnsPush))).Succeeded;
+        _noPushReason = _clientManagesDns
+            ? $"{string.Join(", ", _domain.Groups.Where(group => group.ClientManagesDns).Select(group => group.Name))} manages its own DNS, so dotMARC doesn't push records for this domain."
+            : "You don't have permission to push records to DNS from dotMARC.";
         _reports = _domain.Reports.OrderByDescending(r => r.ReceivedUtc).ToList();
         _tlsrptReports = _domain.TlsrptReports.OrderByDescending(report => report.ReceivedUtc).ToList();
 
@@ -908,6 +942,40 @@ else
         var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rough)));
         var step = new[] { 1, 2, 5, 10 }.Select(multiple => multiple * magnitude).First(candidate => candidate >= rough);
         return (int)Math.Min(step, int.MaxValue);
+    }
+
+    /// <summary>Shows the records a push would change, to copy into the DNS provider by hand.</summary>
+    private async Task ShowRecordsAsync(string target, string title)
+    {
+        var builder = ChangeBuilders.Find(target);
+        if (builder is null || _domain is null)
+        {
+            return;
+        }
+
+        DnsChangePlan plan;
+        try
+        {
+            plan = await builder.BuildAsync(new DnsPushRequest(_domain, "", _domain.DnsZone ?? _domain.Name, null), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            Snackbar.Add("Couldn't look up the current DNS records. Try again.", Severity.Error);
+            return;
+        }
+
+        if (plan.Refusal is not null || plan.Changes.Count == 0)
+        {
+            Snackbar.Add(plan.Refusal is null ? "DNS already has the right records." : "dotMARC can't work out the records for this domain yet.", Severity.Info);
+            return;
+        }
+
+        await DialogService.ShowAsync<RecordsToAddDialog>(title, new DialogParameters<RecordsToAddDialog>
+        {
+            { x => x.Title, title },
+            { x => x.ZoneHint, plan.Changes[0].ZoneName },
+            { x => x.Changes, plan.Changes },
+        }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
     }
 
     private SenderApprovalStatus? ApprovalStatus(SourceRow source) =>
@@ -1505,8 +1573,10 @@ else
             { x => x.LiveValues, live },
             { x => x.SuggestedIncludes, SpfIncludeCatalog.SuggestedIncludes(_detectedMailServices).ToList() },
             { x => x.DefaultEnding, DnsRecordSettings.ToQualifier(settings.SpfAllQualifier) },
-            { x => x.CanPush, pushProvider is not null },
-            { x => x.CannotPushReason, "No DNS push option is configured for this domain's DNS provider, so you can preview changes here but not push them." },
+            { x => x.CanPush, pushProvider is not null && _mayPush },
+            { x => x.CannotPushReason, _mayPush
+                ? "No DNS push option is configured for this domain's DNS provider, so you can preview changes here but not push them."
+                : $"{_noPushReason} Copy the record below into the DNS provider instead." },
         };
         var dialogRef = await DialogService.ShowAsync<SpfEditorDialog>("Edit SPF", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         var result = await dialogRef.Result;

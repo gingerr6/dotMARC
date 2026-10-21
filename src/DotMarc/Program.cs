@@ -727,15 +727,17 @@ app.MapGet("/dns-push/{provider}/start", async (
     }
 
     var authResult = await authorizationService.AuthorizeAsync(httpContext.User, changeBuilder.RequiredPolicy);
-    if (!authResult.Succeeded)
+    if (!authResult.Succeeded || !(await authorizationService.AuthorizeAsync(httpContext.User, nameof(Permission.DnsPush))).Succeeded)
     {
         return Results.Forbid();
     }
 
-    // Someone limited to Groups can only push records for their own Groups' domains.
+    // Someone limited to Groups can only push records for their own Groups' domains, and nobody pushes to a domain whose
+    // client manages their own DNS.
     await using (var context = await dbContextFactory.CreateDbContextAsync())
     {
-        if (!await DotMarc.Api.ApiScope.From(httpContext.User).Domains(context.Domains.AsNoTracking()).AnyAsync(domain => domain.Id == domainId))
+        if (!await DotMarc.Api.ApiScope.From(httpContext.User).Domains(context.Domains.AsNoTracking()).AnyAsync(domain => domain.Id == domainId)
+            || !await DnsPushAllowance.IsAllowedAsync(context, domainId))
         {
             return Results.Forbid();
         }

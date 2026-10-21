@@ -31,15 +31,16 @@ public sealed class PsaDataMigrationTests(PostgresContainerFixture fixture)
                 await context.GetService<IMigrator>().MigrateAsync(MigrationBeforePsaTables);
 
                 // Inserted through EF (only the old tables' columns are written), then the old Halo columns set in SQL,
-                // because they leave the model in a later change.
-                var group = new Group { Name = "Client A" };
+                // because they leave the model in a later change. The Group is inserted in SQL outright, as later changes
+                // add Group columns this old schema doesn't have.
+                groupId = await context.Database.SqlQueryRaw<int>("INSERT INTO \"Groups\" (\"Name\") VALUES ('Client A') RETURNING \"Id\" AS \"Value\"").AsAsyncEnumerable().SingleAsync();
                 var domain = new Domain { Name = "contoso.io", FirstSeenUtc = DateTimeOffset.UtcNow };
                 var openAlert = new AlertEvent { DomainName = "contoso.io", AlertType = "MissedReport", Severity = "Warning", Title = "open", Message = "m" };
                 var resolvedAlert = new AlertEvent { DomainName = "contoso.io", AlertType = "MissedReport", Severity = "Warning", Title = "resolved", Message = "m", IsResolved = true };
                 var alertWithoutTicket = new AlertEvent { DomainName = "contoso.io", AlertType = "SpfMissing", Severity = "Warning", Title = "none", Message = "m" };
-                context.AddRange(group, domain, openAlert, resolvedAlert, alertWithoutTicket);
+                context.AddRange(domain, openAlert, resolvedAlert, alertWithoutTicket);
                 await context.SaveChangesAsync();
-                (groupId, domainId, openAlertId, resolvedAlertId) = (group.Id, domain.Id, openAlert.Id, resolvedAlert.Id);
+                (domainId, openAlertId, resolvedAlertId) = (domain.Id, openAlert.Id, resolvedAlert.Id);
 
                 await context.Database.ExecuteSqlRawAsync("UPDATE \"Groups\" SET \"HaloClientId\" = 7 WHERE \"Id\" = {0}", groupId);
                 await context.Database.ExecuteSqlRawAsync("UPDATE \"Domains\" SET \"HaloClientId\" = 9 WHERE \"Id\" = {0}", domainId);

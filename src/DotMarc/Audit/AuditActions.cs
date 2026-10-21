@@ -21,6 +21,7 @@ public static class AuditActions
     public const string GroupRemoved = "group.removed";
     public const string GroupHaloClientChanged = "group.halo_client_changed";
     public const string GroupPsaCompanyChanged = "group.psa_company_changed";
+    public const string GroupDnsManagementChanged = "group.dns_management_changed";
     public const string TagAdded = "tag.added";
     public const string TagUpdated = "tag.updated";
     public const string TagRemoved = "tag.removed";
@@ -94,6 +95,7 @@ public static class AuditActions
         (GroupRemoved, "Group removed"),
         (GroupHaloClientChanged, "Group Halo client changed"),
         (GroupPsaCompanyChanged, "Group PSA company changed"),
+        (GroupDnsManagementChanged, "Group DNS management changed"),
         (TagAdded, "Tag added"),
         (TagUpdated, "Tag updated"),
         (TagRemoved, "Tag removed"),
