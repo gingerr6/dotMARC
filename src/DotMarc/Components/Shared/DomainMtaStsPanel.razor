@@ -92,7 +92,7 @@
     <MudChip T="string" Color="@MtaStsStatusPresentation.GetColor(Domain.MtaStsStatus)" Size="Size.Small">@MtaStsStatusPresentation.GetLabel(Domain.MtaStsStatus)</MudChip>
     @if (Domain.MtaStsCheckedUtc is { } checkedUtc)
     {
-        <MudText Typo="Typo.caption" Class="mt-1">Last checked: @checkedUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudText>
+        <MudText Typo="Typo.caption" Class="mt-1">Last checked: @DotMarc.Reporting.UkTime.DateTimeSeconds(checkedUtc)</MudText>
     }
     @if (!string.IsNullOrWhiteSpace(Domain.MtaStsCheckDetail))
     {

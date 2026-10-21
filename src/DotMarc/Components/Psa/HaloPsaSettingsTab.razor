@@ -154,7 +154,7 @@ else
         {
             @foreach (var call in recentWebhookCalls)
             {
-                <MudText Typo="Typo.body2">@call.ReceivedUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC: @DescribeWebhookCall(call)</MudText>
+                <MudText Typo="Typo.body2">@DotMarc.Reporting.UkTime.DateTimeSeconds(call.ReceivedUtc): @DescribeWebhookCall(call)</MudText>
             }
         }
     </MudPaper>

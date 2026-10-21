@@ -25,7 +25,7 @@
             {
                 <span>a build that doesn't say which commit it is</span>
             }
-            . Checked @_status.CheckedUtc.ToString("HH:mm") UTC.
+            . Checked at @DotMarc.Reporting.UkTime.Time(_status.CheckedUtc).
         </MudText>
         @if (_status.Problem is { } problem)
         {

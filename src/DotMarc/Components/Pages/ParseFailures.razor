@@ -54,11 +54,11 @@ else
             </MudTd>
             <MudTd>@context.Reason</MudTd>
             <MudTd>@context.AttemptCount</MudTd>
-            <MudTd>@context.LastAttemptedUtc.ToString("g")</MudTd>
+            <MudTd>@DotMarc.Reporting.UkTime.DateTime(context.LastAttemptedUtc)</MudTd>
             <MudTd>
                 @if (context.GaveUpUtc is { } gaveUp)
                 {
-                    <MudTooltip Text="@($"Stopped retrying on {gaveUp:g} and marked the email read.")" Arrow="true">
+                    <MudTooltip Text="@($"Stopped retrying on {DotMarc.Reporting.UkTime.DateTime(gaveUp)} and marked the email read.")" Arrow="true">
                         <MudChip T="string" Size="Size.Small">Gave up</MudChip>
                     </MudTooltip>
                 }
@@ -94,7 +94,7 @@ else
         {
             return false;
         }
-        if (!string.IsNullOrWhiteSpace(_lastAttemptedFilter) && !failure.LastAttemptedUtc.ToString("g").Contains(_lastAttemptedFilter, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(_lastAttemptedFilter) && !DotMarc.Reporting.UkTime.DateTime(failure.LastAttemptedUtc).Contains(_lastAttemptedFilter, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

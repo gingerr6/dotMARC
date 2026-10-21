@@ -74,7 +74,7 @@
         }
     </HeaderContent>
     <RowTemplate>
-        <MudTd Style="white-space:nowrap">@context.OccurredUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+        <MudTd Style="white-space:nowrap">@DotMarc.Reporting.UkTime.DateTimeSeconds(context.OccurredUtc)</MudTd>
         <MudTd><MudChip T="string" Size="Size.Small" Color="@KindColor(context.Kind)">@KindLabel(context.Kind)</MudChip></MudTd>
         <MudTd>@context.ActorName</MudTd>
         <MudTd><MudText Typo="Typo.caption">@context.Action</MudText></MudTd>

@@ -491,6 +491,17 @@ builder.Services.AddCascadingAuthenticationState();
 
 var app = builder.Build();
 
+// UK formats for everything shown (dates, numbers), whatever culture the server or container defaults to. Times are
+// converted to UK time where shown, through DotMarc.Reporting.UkTime.
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = DotMarc.Reporting.UkTime.Culture;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = DotMarc.Reporting.UkTime.Culture;
+app.UseRequestLocalization(new RequestLocalizationOptions
+{
+    DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture(DotMarc.Reporting.UkTime.Culture),
+    SupportedCultures = [DotMarc.Reporting.UkTime.Culture],
+    SupportedUICultures = [DotMarc.Reporting.UkTime.Culture],
+});
+
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<DotMarcDbContext>();

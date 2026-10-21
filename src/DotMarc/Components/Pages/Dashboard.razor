@@ -172,7 +172,7 @@ else
             </MudTd>
             <MudTd @onclick="@(() => Navigation.NavigateTo($"/domains/{Uri.EscapeDataString(context.Name)}"))" Style="cursor:pointer"><MudChip T="string" Color="@context.StatusColor" Size="Size.Small">@context.Status</MudChip></MudTd>
             <MudTd @onclick="@(() => Navigation.NavigateTo($"/domains/{Uri.EscapeDataString(context.Name)}"))" Style="cursor:pointer">@(context.PassRate is { } rate ? rate.ToString("P1") : "—")</MudTd>
-            <MudTd @onclick="@(() => Navigation.NavigateTo($"/domains/{Uri.EscapeDataString(context.Name)}"))" Style="cursor:pointer">@(context.LastReportReceivedUtc is { } last ? last.ToString("g") : "never")</MudTd>
+            <MudTd @onclick="@(() => Navigation.NavigateTo($"/domains/{Uri.EscapeDataString(context.Name)}"))" Style="cursor:pointer">@(context.LastReportReceivedUtc is { } last ? DotMarc.Reporting.UkTime.DateTime(last) : "never")</MudTd>
             <MudTd>
                 <AuthorizeView Policy="DomainsEdit" Context="authState">
                     <Authorized>
@@ -203,7 +203,7 @@ else
             <MudGrid>
                 <MudItem xs="12" sm="3">
                     <MudText Typo="Typo.caption">Last polled</MudText>
-                    <MudText>@_lastPoll.PolledUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudText>
+                    <MudText>@DotMarc.Reporting.UkTime.DateTimeSeconds(_lastPoll.PolledUtc)</MudText>
                 </MudItem>
                 <MudItem xs="12" sm="3">
                     <MudText Typo="Typo.caption">Messages checked</MudText>
@@ -222,7 +222,7 @@ else
         else
         {
             <MudText Color="Color.Error" Style="overflow-wrap:anywhere">
-                Last poll (@_lastPoll.PolledUtc.ToString("yyyy-MM-dd HH:mm:ss")) failed:
+                Last poll (@DotMarc.Reporting.UkTime.DateTimeSeconds(_lastPoll.PolledUtc)) failed:
                 @(string.IsNullOrWhiteSpace(_lastPoll.ErrorMessage) ? "no error message was recorded." : _lastPoll.ErrorMessage)
             </MudText>
         }
@@ -282,7 +282,7 @@ else
         }
         if (!string.IsNullOrWhiteSpace(_lastReportFilter))
         {
-            var text = row.LastReportReceivedUtc is { } last ? last.ToString("g") : "never";
+            var text = row.LastReportReceivedUtc is { } last ? DotMarc.Reporting.UkTime.DateTime(last) : "never";
             if (!text.Contains(_lastReportFilter, StringComparison.OrdinalIgnoreCase))
             {
                 return false;

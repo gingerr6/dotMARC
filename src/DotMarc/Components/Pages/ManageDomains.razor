@@ -180,7 +180,7 @@ else
                 </AuthorizeView>
             </MudTd>
             <MudTd>@context.ReportCount</MudTd>
-            <MudTd>@(context.LastReportReceivedUtc is { } last ? last.ToString("g") : "never")</MudTd>
+            <MudTd>@(context.LastReportReceivedUtc is { } last ? DotMarc.Reporting.UkTime.DateTime(last) : "never")</MudTd>
             <MudTd>
                 <AuthorizeView Policy="DomainsDelete" Context="authState">
                     <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => DeleteDomainAsync(context))" />
@@ -257,7 +257,7 @@ else
         }
         if (!string.IsNullOrWhiteSpace(_lastReportFilter))
         {
-            var text = row.LastReportReceivedUtc is { } last ? last.ToString("g") : "never";
+            var text = row.LastReportReceivedUtc is { } last ? DotMarc.Reporting.UkTime.DateTime(last) : "never";
             if (!text.Contains(_lastReportFilter, StringComparison.OrdinalIgnoreCase))
             {
                 return false;

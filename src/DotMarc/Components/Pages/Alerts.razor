@@ -87,7 +87,7 @@ else
             <MudTd>@context.AlertType</MudTd>
             <MudTd><MudChip T="string" Color="@GetSeverityColor(context.Severity)" Size="Size.Small">@context.Severity</MudChip></MudTd>
             <MudTd>@FormatCreated(context)</MudTd>
-            <MudTd>@(context.IsResolved ? context.ResolvedUtc?.ToLocalTime().ToString("g") ?? "—" : "Open")</MudTd>
+            <MudTd>@(context.IsResolved ? (context.ResolvedUtc is { } resolved ? DotMarc.Reporting.UkTime.DateTime(resolved) : "—") : "Open")</MudTd>
             <MudTd>@context.Message</MudTd>
             <MudTd DataLabel="Tickets">
                 @foreach (var ticket in context.Tickets.OrderBy(ticket => ticket.Psa))
@@ -130,7 +130,7 @@ else
     private string? _messageFilter;
     private bool _showFilters;
 
-    private static string FormatCreated(AlertEvent alert) => alert.CreatedUtc.ToLocalTime().ToString("g");
+    private static string FormatCreated(AlertEvent alert) => DotMarc.Reporting.UkTime.DateTime(alert.CreatedUtc);
 
     private bool AlertMatchesFilters(AlertEvent alert)
     {
