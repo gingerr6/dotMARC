@@ -2,6 +2,8 @@
 @using DotMarc.Dns
 @using DotMarc.DnsPush
 @inject ITxtRecordLookup TxtRecordLookup
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <TitleContent>Edit SPF for @DomainName</TitleContent>
@@ -70,7 +72,7 @@
             }
         }
 
-        @if (!CanPush)
+        @if (!CanPush && !string.IsNullOrWhiteSpace(CannotPushReason))
         {
             <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">@CannotPushReason</MudAlert>
         }
@@ -81,7 +83,14 @@
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!CanPush || _proposedCount is null || BlockMessage() is not null)" OnClick="Push">Push</MudButton>
+        @if (CanPush)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_proposedCount is null || BlockMessage() is not null)" OnClick="Push">Push</MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyRecordAsync">Copy record</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -95,6 +104,13 @@
     [Parameter] public string? CannotPushReason { get; set; }
 
     private SpfRecord _record = SpfRecord.Parse("v=spf1");
+
+    /// <summary>Where the record can't be pushed, it's copied to paste into the DNS provider.</summary>
+    private async Task CopyRecordAsync()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", _record.Format());
+        Snackbar.Add($"SPF record copied. Put it in a TXT record at {DomainName}, replacing the current SPF record.", Severity.Success);
+    }
     private bool _isMerge;
     private SpfLookupCounter _counter = default!;
     private SpfLookupCount? _proposedCount;
