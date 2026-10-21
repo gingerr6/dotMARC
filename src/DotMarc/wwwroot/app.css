@@ -71,3 +71,62 @@ html {
 .reason-list .reason-none {
     color: var(--mud-palette-text-secondary);
 }
+
+/* The box shown while the live connection to the server is down (App.razor). Hidden until Blazor adds one of its
+   components-reconnect-* classes; themed with MudBlazor's colours, so it follows light and dark mode. */
+.dotmarc-reconnect {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+}
+
+.dotmarc-reconnect.components-reconnect-show,
+.dotmarc-reconnect.components-reconnect-retrying,
+.dotmarc-reconnect.components-reconnect-failed,
+.dotmarc-reconnect.components-reconnect-resume-failed,
+.dotmarc-reconnect.components-reconnect-rejected,
+.dotmarc-reconnect.components-reconnect-paused {
+    display: flex;
+}
+
+.dotmarc-reconnect-box {
+    max-width: 360px;
+    margin: 16px;
+    padding: 24px 28px;
+    border-radius: 12px;
+    text-align: center;
+    background: var(--mud-palette-surface, #fff);
+    color: var(--mud-palette-text-primary, #222);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    font-family: var(--mud-typography-default-family, Roboto, sans-serif);
+}
+
+.dotmarc-reconnect-spinner {
+    width: 36px;
+    height: 36px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    border: 3px solid var(--mud-palette-lines-default, rgba(128, 128, 128, 0.3));
+    border-top-color: var(--mud-palette-primary, #e57373);
+    animation: dotmarc-reconnect-spin 0.9s linear infinite;
+}
+
+.dotmarc-reconnect-title {
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.dotmarc-reconnect-text {
+    font-size: 0.875rem;
+    color: var(--mud-palette-text-secondary, #666);
+}
+
+@keyframes dotmarc-reconnect-spin {
+    to { transform: rotate(360deg); }
+}

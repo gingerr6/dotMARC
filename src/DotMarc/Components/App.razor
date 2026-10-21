@@ -14,9 +14,44 @@
 </head>
 <body>
     <Routes @rendermode="PageRenderMode" />
+    @* Blazor shows this, instead of its own plain box, while the live connection to the server is down: see the
+       reconnect script below. Blazor adds components-reconnect-* classes to it as the state changes. *@
+    <div id="components-reconnect-modal" class="dotmarc-reconnect" role="status" aria-live="polite">
+        <div class="dotmarc-reconnect-box">
+            <div class="dotmarc-reconnect-spinner" aria-hidden="true"></div>
+            <div class="dotmarc-reconnect-title">Reconnecting to dotMARC…</div>
+            <div class="dotmarc-reconnect-text">If dotMARC is being updated, this page reloads by itself as soon as it's back.</div>
+        </div>
+    </div>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
     <script>
+        // When the connection to the server can't be resumed (dotMARC restarted, usually for an update), reload the page
+        // as soon as the server answers again, rather than leaving a box asking the user to. "rejected" means the server
+        // is back but no longer knows this page; "failed" means Blazor gave up retrying while it was still down.
+        (() => {
+            const modal = document.getElementById('components-reconnect-modal');
+            let waiting = false;
+            const reloadWhenServerIsBack = () => {
+                if (waiting) {
+                    return;
+                }
+                waiting = true;
+                const tryOnce = () => fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
+                    .then(response => response.status < 500 ? window.location.reload() : setTimeout(tryOnce, 3000))
+                    .catch(() => setTimeout(tryOnce, 3000));
+                tryOnce();
+            };
+            new MutationObserver(() => {
+                const classes = modal.classList;
+                if (classes.contains('components-reconnect-rejected')) {
+                    window.location.reload();
+                } else if (classes.contains('components-reconnect-failed') || classes.contains('components-reconnect-resume-failed')) {
+                    reloadWhenServerIsBack();
+                }
+            }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+        })();
+
         // Firefox refuses to start a drag on an element that isn't natively draggable (e.g. a
         // <td>) unless dataTransfer carries a payload set during dragstart. Blazor Server can't
         // set this from the C# handler - by the time the server round-trip returns, dragstart has

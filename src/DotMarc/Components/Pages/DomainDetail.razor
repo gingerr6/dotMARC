@@ -48,7 +48,7 @@
 <MudText Typo="Typo.h4" Class="mb-4">@DomainName</MudText>
 @if (_clientManagesDns)
 {
-    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">@_noPushReason Use "Show record to add" and send the records to the client.</MudAlert>
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">@_noPushReason When a record needs changing, dotMARC shows it with a copy button to send to them.</MudAlert>
 }
 @if (_domain is not null && _domain.DnsProvider.ToProviderKey() is not null)
 {
@@ -1576,7 +1576,7 @@ else
             { x => x.CanPush, pushProvider is not null && _mayPush },
             { x => x.CannotPushReason, _mayPush
                 ? "No DNS push option is configured for this domain's DNS provider, so you can preview changes here but not push them."
-                : $"{_noPushReason} Copy the record below into the DNS provider instead." },
+                : null },
         };
         var dialogRef = await DialogService.ShowAsync<SpfEditorDialog>("Edit SPF", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
         var result = await dialogRef.Result;
