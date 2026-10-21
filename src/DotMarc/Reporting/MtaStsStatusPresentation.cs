@@ -25,4 +25,19 @@ public static class MtaStsStatusPresentation
         MtaStsStatus.PendingPolicyRecord => "Waiting for TXT record",
         _ => "Not configured"
     };
+
+    /// <summary>As GetColor, but an active policy in testing mode shows as not yet protecting: receivers only report
+    /// failures, they still deliver over an insecure connection.</summary>
+    public static Color GetColor(MtaStsStatus status, MtaStsMode mode) =>
+        status == MtaStsStatus.Active && mode != MtaStsMode.Enforce ? Color.Info : GetColor(status);
+
+    /// <summary>As GetLabel, with an active policy's mode: "Active: testing" or "Active: enforcing".</summary>
+    public static string GetLabel(MtaStsStatus status, MtaStsMode mode) => status == MtaStsStatus.Active
+        ? mode switch
+        {
+            MtaStsMode.Enforce => "Active: enforcing",
+            MtaStsMode.Testing => "Active: testing",
+            _ => "Active: withdrawn (none)",
+        }
+        : GetLabel(status);
 }

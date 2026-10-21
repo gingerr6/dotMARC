@@ -23,7 +23,7 @@ public static class PortalWording
         };
         if (domain.MtaStsStatus != MtaStsStatus.NotConfigured)
         {
-            rows.Add(new("MTA-STS", MtaStsStatusPresentation.GetLabel(domain.MtaStsStatus), MtaStsStatusPresentation.GetColor(domain.MtaStsStatus)));
+            rows.Add(new("MTA-STS", MtaStsStatusPresentation.GetLabel(domain.MtaStsStatus, domain.MtaStsMode), MtaStsStatusPresentation.GetColor(domain.MtaStsStatus, domain.MtaStsMode)));
         }
 
         return rows;

@@ -267,6 +267,7 @@ builder.Services.AddSingleton<DotMarc.DnsPush.IDnsPushProvider>(sp => sp.GetRequ
 
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.MtaStsChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.DmarcChangeBuilder>();
+builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.DmarcPolicyChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.DmarcAuthorizationChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.TlsrptChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.SpfChangeBuilder>();

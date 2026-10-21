@@ -89,7 +89,7 @@
             </AuthorizeView>
         }
     </div>
-    <MudChip T="string" Color="@MtaStsStatusPresentation.GetColor(Domain.MtaStsStatus)" Size="Size.Small">@MtaStsStatusPresentation.GetLabel(Domain.MtaStsStatus)</MudChip>
+    <MudChip T="string" Color="@MtaStsStatusPresentation.GetColor(Domain.MtaStsStatus, Domain.MtaStsMode)" Size="Size.Small">@MtaStsStatusPresentation.GetLabel(Domain.MtaStsStatus, Domain.MtaStsMode)</MudChip>
     @if (Domain.MtaStsCheckedUtc is { } checkedUtc)
     {
         <MudText Typo="Typo.caption" Class="mt-1">Last checked: @DotMarc.Reporting.UkTime.DateTimeSeconds(checkedUtc)</MudText>

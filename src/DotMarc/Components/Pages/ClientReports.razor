@@ -1,0 +1,116 @@
+@page "/client-reports"
+@attribute [Authorize(Policy = "ReportsManage")]
+@using DotMarc.Components.Dialogs
+@using DotMarc.Data
+@using DotMarc.Reporting
+@using DotMarc.Reporting.ClientReports
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@* Client reports on their own page, so anyone who may send reports can, without needing to manage Groups. *@
+<PageTitle>dotMARC - Client reports</PageTitle>
+<MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
+<MudText Typo="Typo.h4">Client reports</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Send each client a report on their domains: on a schedule, or now for any past period. Open a client to set who gets it, send one, or download it.
+</MudText>
+
+@if (_rows is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_rows.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">There are no clients (Groups) you can send reports for yet.</MudAlert>
+}
+else
+{
+    <MudTable Items="_rows" Hover="true" Dense="true" T="Row" Filter="Matches">
+        <ToolBarContent>
+            <MudTextField T="string" @bind-Value="_search" Placeholder="Search client" Immediate="true" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Style="max-width:320px" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Name)" InitialDirection="SortDirection.Ascending">Client</MudTableSortLabel></MudTh>
+            <MudTh>Schedule</MudTh>
+            <MudTh>Recipients</MudTh>
+            <MudTh>Last report</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.Name</MudTd>
+            <MudTd>@(context.Frequency is { } frequency and not ReportFrequency.Off ? frequency.ToString() : "Off")</MudTd>
+            <MudTd>@(context.Recipients.Count == 0 ? "None" : string.Join(", ", context.Recipients))</MudTd>
+            <MudTd>
+                @if (context.Last is { } last)
+                {
+                    @if (last.Status == ClientReportDeliveryStatus.Failed)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Error">Failed</MudChip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">@last.Status @(last.SentUtc is { } sent ? UkTime.DateTime(sent) : "")</MudText>
+                    }
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">Never sent</MudText>
+                }
+            </MudTd>
+            <MudTd Style="text-align:right">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Assessment" OnClick="@(() => OpenAsync(context))">Reports</MudButton>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    private List<Row>? _rows;
+    private string? _search;
+
+    private sealed record Row(int Id, string Name, ReportFrequency? Frequency, IReadOnlyList<string> Recipients, ClientReportDelivery? Last);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var groups = (await db.Groups.AsNoTracking().OrderBy(group => group.Name).Select(group => new { group.Id, group.Name }).ToListAsync())
+            .Where(group => ClientReportAccess.MayManage(user, group.Id))
+            .ToList();
+        var ids = groups.Select(group => group.Id).ToList();
+        var schedules = await db.GroupReportSchedules.AsNoTracking().Where(schedule => ids.Contains(schedule.GroupId)).ToDictionaryAsync(schedule => schedule.GroupId);
+        var latest = (await db.ClientReportDeliveries.AsNoTracking().Where(delivery => ids.Contains(delivery.GroupId)).ToListAsync())
+            .GroupBy(delivery => delivery.GroupId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(delivery => delivery.LastAttemptUtc ?? delivery.FirstAttemptUtc).First());
+
+        _rows = groups.Select(group => new Row(group.Id, group.Name,
+                schedules.GetValueOrDefault(group.Id)?.Frequency,
+                schedules.GetValueOrDefault(group.Id)?.Recipients ?? [],
+                latest.GetValueOrDefault(group.Id)))
+            .ToList();
+    }
+
+    private async Task OpenAsync(Row row)
+    {
+        var parameters = new DialogParameters<GroupReportsDialog>
+        {
+            { dialog => dialog.GroupId, row.Id },
+            { dialog => dialog.GroupName, row.Name }
+        };
+        var dialogRef = await DialogService.ShowAsync<GroupReportsDialog>("Client reports", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        await dialogRef.Result;
+        await LoadAsync();
+    }
+
+    private bool Matches(Row row) => string.IsNullOrWhiteSpace(_search) || row.Name.Contains(_search, StringComparison.OrdinalIgnoreCase);
+}

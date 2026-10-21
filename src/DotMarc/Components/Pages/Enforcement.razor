@@ -1,0 +1,132 @@
+@page "/enforcement"
+@attribute [Authorize(Policy = "DomainsView")]
+@using DotMarc.Data
+@using DotMarc.Enforcement
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>dotMARC - Enforcement</PageTitle>
+<MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
+<MudText Typo="Typo.h4">DMARC enforcement</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+    Where each domain is on the road from watching (p=none) to blocking spoofed mail (p=reject). A domain is ready for its next step after
+    @EnforcementReadiness.DaysNeeded days of reports, once every sender with real volume is reviewed and its approved senders pass DMARC.
+    Open a domain to move it on.
+</MudText>
+
+@if (_rows is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    <div class="d-flex flex-wrap mb-4" style="gap:0.5rem">
+        <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined">@_rows.Count(r => r.Assessment.Enforced) fully enforced</MudChip>
+        <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">@_rows.Count(r => r.Assessment.Ready) ready for the next step</MudChip>
+        <MudChip T="string" Color="Color.Warning" Variant="Variant.Outlined">@_rows.Count(r => r.Assessment.StuckMonitoring) stuck on p=none</MudChip>
+    </div>
+    <MudTable Items="_rows" Hover="true" Dense="true" T="Row" Filter="Matches">
+        <ToolBarContent>
+            <MudTextField T="string" @bind-Value="_search" Placeholder="Search domain" Immediate="true" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Style="max-width:320px" />
+            <MudSpacer />
+            <MudSwitch T="bool" @bind-Value="_readyOnly" Color="Color.Info" Label="Ready only" />
+            <MudSwitch T="bool" @bind-Value="_stuckOnly" Color="Color.Warning" Label="Stuck only" />
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Name)">Domain</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Assessment.Stage)">Policy now</MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.SortKey)" InitialDirection="SortDirection.Ascending">Next step</MudTableSortLabel></MudTh>
+            <MudTh>What's in the way</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><MudLink Href="@($"/domains/{Uri.EscapeDataString(context.Name)}")">@context.Name</MudLink></MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@StageColor(context.Assessment.Stage)">@EnforcementReadiness.Describe(context.Assessment.Stage)</MudChip>
+                @if (context.Assessment.StuckMonitoring)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">Stuck</MudChip>
+                }
+            </MudTd>
+            <MudTd>
+                @if (context.Assessment.Enforced)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Success">Done</MudText>
+                }
+                else if (context.Assessment.NextPolicy is { } next)
+                {
+                    <MudText Typo="Typo.body2" Color="@(context.Assessment.Ready ? Color.Success : Color.Default)">
+                        p=@next.ToString().ToLowerInvariant()@(context.Assessment.Ready ? ": ready" : "")
+                    </MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2">Add a record</MudText>
+                }
+            </MudTd>
+            <MudTd>
+                @foreach (var blocker in context.Assessment.Blockers)
+                {
+                    <div><MudText Typo="Typo.body2"><b>@blocker.Title</b></MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">@blocker.Detail</MudText></div>
+                }
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="new[] { 25, 50, 100 }" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "group")] public int? GroupId { get; set; }
+
+    private List<Row>? _rows;
+    private string? _search;
+    private bool _readyOnly;
+    private bool _stuckOnly;
+
+    private sealed record Row(string Name, EnforcementAssessment Assessment)
+    {
+        /// <summary>Ready domains first, then those still being worked on, then the finished ones.</summary>
+        public int SortKey => Assessment.Ready ? 0 : Assessment.Enforced ? 2 : 1;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var scopedGroupIds = authState.User.FindAll(DotMarc.Security.UserAccessClaimsTransformation.ScopedGroupClaimType).Select(c => int.Parse(c.Value)).ToList();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var domains = db.Domains.AsNoTracking().Where(domain => domain.IsMonitored);
+        if (scopedGroupIds.Count > 0)
+        {
+            domains = domains.Where(domain => domain.Groups.Any(group => scopedGroupIds.Contains(group.Id)));
+        }
+        if (GroupId is { } groupId)
+        {
+            domains = domains.Where(domain => domain.Groups.Any(group => group.Id == groupId));
+        }
+
+        var list = await domains.ToListAsync();
+        var assessments = await EnforcementData.AssessAsync(db, list, DateTimeOffset.UtcNow);
+        _rows = list.Select(domain => new Row(domain.Name, assessments[domain.Id]))
+            .OrderBy(row => row.SortKey).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private bool Matches(Row row) =>
+        (!_readyOnly || row.Assessment.Ready)
+        && (!_stuckOnly || row.Assessment.StuckMonitoring)
+        && (string.IsNullOrWhiteSpace(_search) || row.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private static Color StageColor(EnforcementStage stage) => stage switch
+    {
+        EnforcementStage.Reject => Color.Success,
+        EnforcementStage.Quarantine or EnforcementStage.PartialReject => Color.Info,
+        EnforcementStage.NoRecord => Color.Error,
+        _ => Color.Warning,
+    };
+}
