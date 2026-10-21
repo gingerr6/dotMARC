@@ -133,6 +133,11 @@
                     {
                         <MudTh>Ticket rules</MudTh>
                     }
+                    <MudTh>
+                        <MudTooltip Text="On for a client that changes its own DNS: dotMARC shows the records to add instead of pushing them." Arrow="true">
+                            <span>Client manages DNS</span>
+                        </MudTooltip>
+                    </MudTh>
                     <MudTh>Portal branding</MudTh>
                     <AuthorizeView Policy="ReportsManage" Context="authState">
                         <MudTh>Client reports</MudTh>
@@ -162,6 +167,7 @@
                             </MudSelect>
                         </MudTh>
                     }
+                    <MudTh></MudTh>
                     <MudTh></MudTh>
                     <AuthorizeView Policy="ReportsManage" Context="authState">
                         <MudTh></MudTh>
@@ -220,6 +226,15 @@
                         }
                     </MudTd>
                 }
+                <MudTd>
+                    <AuthorizeView Policy="GroupsRename" Context="authState">
+                        <Authorized>
+                            <MudSwitch T="bool" Value="context.ClientManagesDns" ValueChanged="@(value => SetClientManagesDnsAsync(context, value))" Color="Color.Primary"
+                                       aria-label="@($"{context.Name} manages its own DNS")" />
+                        </Authorized>
+                        <NotAuthorized>@(context.ClientManagesDns ? "Yes" : "No")</NotAuthorized>
+                    </AuthorizeView>
+                </MudTd>
                 <MudTd>
                     <div class="d-flex align-center" style="gap: 0.5rem;">
                         <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Palette" OnClick="@(() => OpenBrandingAsync(context))">
@@ -445,7 +460,7 @@
         _groups = await db.Groups
             .AsNoTracking()
             .OrderBy(g => g.Name)
-            .Select(g => new GroupRow(g.Id, g.Name, g.Domains.Count, g.PsaCompanyLinks.ToList()))
+            .Select(g => new GroupRow(g.Id, g.Name, g.Domains.Count, g.PsaCompanyLinks.ToList(), g.ClientManagesDns))
             .ToListAsync();
         _ticketRuleOverrideCounts = await AlertTicketRuleService.CountOverridesByGroupAsync(db);
         _brandedGroupIds = (await db.GroupBrandings.Select(branding => branding.GroupId).ToListAsync()).ToHashSet();
@@ -755,6 +770,16 @@
         }
     }
 
+    private async Task SetClientManagesDnsAsync(GroupRow row, bool clientManagesDns)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await GroupManagementService.SetClientManagesDnsAsync(db, await AuditActorAccessor.GetAsync(), row.Id, clientManagesDns);
+        row.ClientManagesDns = clientManagesDns;
+        Snackbar.Add(clientManagesDns
+            ? $"{row.Name} manages its own DNS: dotMARC will show the records to add instead of pushing them."
+            : $"dotMARC can push DNS records for {row.Name}'s domains again.", Severity.Success);
+    }
+
     private async Task SetPsaCompanyAsync(GroupRow row, PsaKind psa, PsaCompany? company)
     {
         try
@@ -852,6 +877,9 @@
         }
     }
 
-    private sealed record GroupRow(int Id, string Name, int DomainCount, List<PsaCompanyLink> Links);
+    private sealed record GroupRow(int Id, string Name, int DomainCount, List<PsaCompanyLink> Links, bool ClientManagesDns)
+    {
+        public bool ClientManagesDns { get; set; } = ClientManagesDns;
+    }
     private sealed record TagRow(int Id, string Name, Color Color, int DomainCount);
 }

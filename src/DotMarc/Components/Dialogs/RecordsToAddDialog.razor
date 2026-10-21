@@ -1,0 +1,52 @@
+@* The DNS records a change needs, to copy into the DNS provider by hand: shown instead of pushing them when the client
+   manages their own DNS, or the person can't push. *@
+@using DotMarc.DnsPush
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>@Title</TitleContent>
+    <DialogContent>
+        <MudText Class="mb-3">Add @(Changes.Count == 1 ? "this record" : "these records") in the DNS provider for <b>@ZoneHint</b>. dotMARC rechecks DNS on its own, or use the refresh button once it's done.</MudText>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>Type</th><th>Name</th><th>Value</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var change in Changes)
+                {
+                    <tr>
+                        <td>@change.RecordType</td>
+                        <td><code>@change.Name</code></td>
+                        <td>
+                            <code style="overflow-wrap:anywhere">@change.DesiredValue</code>
+                            @if (change.ExistingValue is { } existing && change.Kind is DnsRecordChangeKind.Merge or DnsRecordChangeKind.Replace)
+                            {
+                                <div class="mud-text-secondary" style="font-size:12px">Replaces: <code style="overflow-wrap:anywhere">@existing</code></div>
+                            }
+                            @if (change.ValuesToRemove is { Count: > 0 } remove)
+                            {
+                                <div class="mud-text-secondary" style="font-size:12px">Remove: @string.Join(", ", remove)</div>
+                            }
+                        </td>
+                        <td><MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="Copy value" OnClick="@(() => CopyAsync(change.DesiredValue))" /></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Close())">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public string Title { get; set; } = "Records to add";
+    [Parameter] public string ZoneHint { get; set; } = "";
+    [Parameter] public IReadOnlyList<DnsRecordChange> Changes { get; set; } = [];
+
+    private async Task CopyAsync(string value)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", value);
+        Snackbar.Add("Copied.", Severity.Success);
+    }
+}

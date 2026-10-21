@@ -22,6 +22,7 @@ public static class GroupLimits
         Permission.MtaStsManage,
         Permission.AuditView,
         Permission.ReportsManage,
+        Permission.DnsPush,
         Permission.AlertsManage,
     };
 

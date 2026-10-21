@@ -8,6 +8,10 @@ public sealed class Group
 {
     public int Id { get; set; }
     public required string Name { get; set; }
+
+    /// <summary>The client changes their own DNS, so dotMARC doesn't offer to push records for this Group's domains: it
+    /// shows what to change instead.</summary>
+    public bool ClientManagesDns { get; set; }
     public List<Domain> Domains { get; set; } = [];
     public List<DotMarc.Psa.PsaCompanyLink> PsaCompanyLinks { get; set; } = [];
 }

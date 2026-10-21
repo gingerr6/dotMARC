@@ -114,7 +114,7 @@
             }
             else
             {
-                @if (Domain.MtaStsStatus is MtaStsStatus.PendingDns or MtaStsStatus.PendingCertificate or MtaStsStatus.Failed or MtaStsStatus.PendingPolicyRecord || _txtOk == false)
+                @if (MayPush && (Domain.MtaStsStatus is MtaStsStatus.PendingDns or MtaStsStatus.PendingCertificate or MtaStsStatus.Failed or MtaStsStatus.PendingPolicyRecord || _txtOk == false))
                 {
                     @if (_isPushing)
                     {
@@ -166,6 +166,9 @@
 
 @code {
     [Parameter, EditorRequired] public Domain Domain { get; set; } = default!;
+
+    /// <summary>Whether this person may push the records (see DomainDetail); otherwise they copy them from the table.</summary>
+    [Parameter] public bool MayPush { get; set; } = true;
     [Parameter, EditorRequired] public Func<string, int, string, Task> OpenDnsPushPopup { get; set; } = default!;
 
     private bool _enabled;
@@ -334,7 +337,7 @@
             _isEnabling = false;
         }
 
-        if (enabledSuccessfully)
+        if (enabledSuccessfully && MayPush)
         {
             await PushDnsRecordsAsync();
         }
