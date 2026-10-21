@@ -37,6 +37,7 @@
 @inject IDkimDnsChecker DkimDnsChecker
 @inject IMailServiceDetector MailServiceDetector
 @inject ITxtRecordLookup TxtRecordLookup
+@inject ICnameLookup CnameLookup
 @inject IEnumerable<IDnsChangeBuilder> ChangeBuilders
 @inject IOptions<GraphOptions> GraphOptions
 @inject IDialogService DialogService
@@ -284,6 +285,36 @@ else
                             </Authorized>
                         </AuthorizeView>
                     </ActionContent>
+                    <Below>
+                        @if (_returnPaths.Count > 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                Mail services sending for this domain use their own bounce subdomains, so receivers check SPF there instead:
+                            </MudText>
+                            @foreach (var returnPath in _returnPaths)
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                                    <code>@returnPath.Domain.Name</code>
+                                    @if (returnPath.Cname is { } cname)
+                                    {
+                                        <span> → <code>@cname</code></span>
+                                    }
+                                    @if (ReturnPathSender(returnPath) is { } sender)
+                                    {
+                                        <span> (@sender)</span>
+                                    }
+                                    <span>: @returnPath.Domain.Volume.ToString("N0") message@(returnPath.Domain.Volume == 1 ? "" : "s"), </span>
+                                    <MudText Typo="Typo.body2" Inline="true" Color="@(returnPath.Domain.PassRate >= 0.98 ? Color.Success : Color.Warning)">@returnPath.Domain.PassRate.ToString("P0") passing SPF</MudText>
+                                </MudText>
+                            }
+                            @if (_domain.SpfCheckStatus == SpfCheckStatus.MissingRecord)
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-1">
+                                    That mail passes SPF through those subdomains, but @_domain.Name itself still needs an SPF record, or anyone can use it as a bounce address. Add one with Edit SPF, listing the services that send as it.
+                                </MudText>
+                            }
+                        }
+                    </Below>
                 </DomainHealthCheckRow>
 
                 <DomainHealthCheckRow Title="MX"
@@ -646,6 +677,9 @@ else
     private int _activeTabIndex;
     private Domain? _domain;
     private List<DetectedMailService> _detectedMailServices = [];
+    private List<ReturnPathRow> _returnPaths = [];
+
+    private sealed record ReturnPathRow(ReturnPathDomain Domain, string? Cname);
     private List<Report> _reports = [];
     private List<TlsrptReport> _tlsrptReports = [];
     private List<SourceRow> _sources = [];
@@ -857,6 +891,9 @@ else
             .Select(a => new SourceRow(a.SourceIp, a.Volume, a.SpfResult.ToString(), a.DkimResult.ToString(), a.Disposition.ToString(), a.OverrideReasonTypes, a.AuthDetails, a.InferredReason))
             .OrderByDescending(s => s.Volume)
             .ToList();
+
+        _returnPaths = ReturnPathDomains.From(_domain.Name, _domain.Reports).Take(5).Select(domain => new ReturnPathRow(domain, null)).ToList();
+        _ = LoadReturnPathCnamesAsync(_returnPaths);
 
         // First-seen is across the source's ENTIRE history for this domain, not just the 30-day
         // window everything else here uses - a source that's been sending for a year reads very
@@ -1130,6 +1167,39 @@ else
 
     /// <summary>Enforcement readiness's next step: pushes the DMARC record with the stricter policy, after showing the
     /// change.</summary>
+    /// <summary>Fills in where each return-path subdomain points, once the page is up: a slow lookup only delays this.</summary>
+    private async Task LoadReturnPathCnamesAsync(List<ReturnPathRow> rows)
+    {
+        try
+        {
+            var targets = await Task.WhenAll(rows.Select(row => CnameLookup.LookupAsync(row.Domain.Name, CancellationToken.None)));
+            if (!ReferenceEquals(rows, _returnPaths))
+            {
+                return;
+            }
+            _returnPaths = rows.Select((row, index) => row with { Cname = targets[index] }).ToList();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogDebug(exception, "Couldn't look up return-path CNAMEs for {Domain}", _domain?.Name);
+        }
+    }
+
+    /// <summary>The service behind a return-path subdomain: from where its CNAME points, else from the servers using it.</summary>
+    private string? ReturnPathSender(ReturnPathRow row) =>
+        (row.Cname is { } cname ? DotMarc.Senders.KnownSenders.Recognise(cname, null)?.Name : null)
+        ?? _sources.Where(source => row.Domain.SourceIps.Contains(source.SourceIp) && source.Identity.IsService)
+            .OrderByDescending(source => source.Volume).Select(source => source.Identity.Label).FirstOrDefault();
+
+    /// <summary>The services to suggest for SPF from the reports: recognised services approved as this domain's mail, and
+    /// those behind a return-path subdomain (its CNAME was set up for them). Not every service seen: forwarders and
+    /// spoofers show up in reports too.</summary>
+    private IEnumerable<string> ReportedServices() =>
+        _sources.Where(source => source.Identity.IsService && ApprovalStatus(source) == SenderApprovalStatus.Approved).Select(source => source.Identity.Label)
+            .Concat(_returnPaths.Select(ReturnPathSender).OfType<string>())
+            .Distinct();
+
     /// <summary>One line for the enforcement row; the full reasons are in its tooltip.</summary>
     private static string EnforcementSummary(EnforcementAssessment enforcement)
     {
@@ -1675,7 +1745,7 @@ else
         {
             { x => x.DomainName, DomainName },
             { x => x.LiveValues, live },
-            { x => x.SuggestedIncludes, SpfIncludeCatalog.SuggestedIncludes(_detectedMailServices).ToList() },
+            { x => x.SuggestedIncludes, SpfIncludeCatalog.SuggestedIncludes(_detectedMailServices, ReportedServices()).ToList() },
             { x => x.DefaultEnding, DnsRecordSettings.ToQualifier(settings.SpfAllQualifier) },
             { x => x.CanPush, pushProvider is not null && _mayPush },
             { x => x.CannotPushReason, _mayPush

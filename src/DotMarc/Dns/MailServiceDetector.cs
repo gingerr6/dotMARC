@@ -33,6 +33,7 @@ public sealed class MailServiceDetector : IMailServiceDetector
         ("zoho.eu", "Zoho"),
         ("servers.mcsv.net", "Mailchimp"),
         ("sendgrid.net", "SendGrid"),
+        ("spf.smtp2go.com", "SMTP2GO"),
         ("amazonses.com", "Amazon SES"),
         ("_spf.salesforce.com", "Salesforce")
     ];

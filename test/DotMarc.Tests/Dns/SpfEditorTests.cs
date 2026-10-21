@@ -67,4 +67,13 @@ public sealed class SpfEditorTests
 
         Assert.Equal(["spf.protection.outlook.com", "sendgrid.net"], SpfIncludeCatalog.SuggestedIncludes(detected));
     }
+
+    [Fact]
+    public void SuggestedIncludes_AddTheServicesSeenInReports()
+    {
+        var detected = new[] { new DetectedMailService("Microsoft 365", DetectedMailServiceKind.Inbox) };
+
+        Assert.Equal(["spf.protection.outlook.com", "spf.smtp2go.com"],
+            SpfIncludeCatalog.SuggestedIncludes(detected, ["SMTP2GO", "Microsoft 365", "Unknown Service"]));
+    }
 }

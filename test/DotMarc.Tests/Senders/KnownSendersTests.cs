@@ -54,4 +54,10 @@ public sealed class KnownSendersTests
     {
         Assert.Equal(KnownSenders.All.Count, KnownSenders.All.Select(sender => sender.Key).Distinct().Count());
     }
+
+    [Theory]
+    [InlineData("mail213.smtp2go.com")]
+    [InlineData("return.smtp2go.net")]
+    public void Recognise_Smtp2Go(string hostName) =>
+        Assert.Equal("SMTP2GO", KnownSenders.Recognise(hostName, null)?.Name);
 }
