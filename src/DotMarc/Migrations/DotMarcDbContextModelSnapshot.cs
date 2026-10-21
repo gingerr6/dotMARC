@@ -248,6 +248,26 @@ namespace DotMarc.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DotMarc.Bimi.BimiAsset", b =>
+                {
+                    b.Property<int>("DomainId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CertificatePem")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LogoSvg")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("DomainId");
+
+                    b.ToTable("BimiAssets");
+                });
+
             modelBuilder.Entity("DotMarc.Data.ApiKey", b =>
                 {
                     b.Property<int>("Id")
@@ -2260,6 +2280,15 @@ namespace DotMarc.Migrations
                     b.HasOne("DotMarc.Data.Tag", null)
                         .WithMany()
                         .HasForeignKey("TagsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DotMarc.Bimi.BimiAsset", b =>
+                {
+                    b.HasOne("DotMarc.Data.Domain", null)
+                        .WithOne()
+                        .HasForeignKey("DotMarc.Bimi.BimiAsset", "DomainId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

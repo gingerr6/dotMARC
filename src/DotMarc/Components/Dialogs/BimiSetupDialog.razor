@@ -1,0 +1,234 @@
+@using DotMarc.Bimi
+@using DotMarc.Data
+@using DotMarc.Dns
+@using DotMarc.MtaSts
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Options
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject AuditActorAccessor AuditActorAccessor
+@inject IOptions<MtaStsOptions> MtaStsOptions
+@inject TimeProvider TimeProvider
+@inject ISnackbar Snackbar
+
+@* Sets up BIMI with dotMARC hosting the files: upload the logo (made SVG Tiny PS here where possible) and, optionally,
+   the mark certificate, then publish the record. Closes with "publish" when the record should be pushed or shown. *@
+<MudDialog>
+    <TitleContent>BIMI logo for @Domain.Name</TitleContent>
+    <DialogContent>
+        @if (string.IsNullOrWhiteSpace(_host))
+        {
+            <MudAlert Severity="Severity.Warning">dotMARC can't host BIMI files on this server: its public hostname (MtaSts:HostingHostname) isn't set.</MudAlert>
+        }
+        else if (!_loaded)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                dotMARC hosts the logo at <code>@BimiHosting.LogoUrl(_host, Domain.Name)</code>, so it needs no website. Mailboxes show it beside
+                @Domain.Name's mail once its record is published and DMARC is at quarantine or reject.
+            </MudText>
+
+            <MudText Typo="Typo.h6">1. Logo</MudText>
+            <MudTextField @bind-Value="_title" Label="Company name (the logo's title)" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" />
+            <div class="d-flex align-center flex-wrap" style="gap:12px">
+                <MudFileUpload T="IBrowserFile" FilesChanged="LogoChosenAsync" Accept=".svg,image/svg+xml">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync">@(_savedLogo is null ? "Choose the SVG logo" : "Replace the logo")</MudButton>
+                    </CustomContent>
+                    <SelectedTemplate></SelectedTemplate>
+                </MudFileUpload>
+                @if ((_preview ?? _savedLogo) is { } shown)
+                {
+                    <img src="@DataUri(shown)" alt="Logo preview" width="72" height="72" style="border-radius:50%; border:1px solid var(--mud-palette-lines-default); background:#fff" />
+                }
+                @if (_savedLogo is not null && _preview is null)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">Hosted</MudChip>
+                }
+            </div>
+            @if (_fixes.Count > 0)
+            {
+                <MudText Typo="Typo.body2" Class="mt-2">Made it BIMI-ready: @string.Join("; ", _fixes).</MudText>
+            }
+            @foreach (var problem in _problems)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@problem</MudAlert>
+            }
+            @if (_preview is not null)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="_busy" OnClick="SaveLogoAsync">Save and host this logo</MudButton>
+            }
+
+            <MudText Typo="Typo.h6" Class="mt-4">2. Mark certificate (optional)</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                Gmail and Apple Mail only show the logo with a VMC or CMC from DigiCert, Sectigo or GlobalSign. Without one it shows in Yahoo, Fastmail and others.
+            </MudText>
+            <div class="d-flex align-center flex-wrap" style="gap:12px">
+                <MudFileUpload T="IBrowserFile" FilesChanged="CertificateChosenAsync" Accept=".pem,.crt,.cer" Disabled="@(_savedLogo is null)">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.VerifiedUser" Disabled="@(_savedLogo is null || _busy)" OnClick="@context.OpenFilePickerAsync">@(_hasCertificate ? "Replace the certificate" : "Upload the certificate (PEM)")</MudButton>
+                    </CustomContent>
+                    <SelectedTemplate></SelectedTemplate>
+                </MudFileUpload>
+                @if (_hasCertificate)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">Hosted</MudChip>
+                }
+            </div>
+
+            @if (_savedLogo is not null)
+            {
+                <MudText Typo="Typo.h6" Class="mt-4">3. DNS record</MudText>
+                <MudText Typo="Typo.body2">TXT at <code>default._bimi.@Domain.Name</code>:</MudText>
+                <div class="d-flex align-center" style="gap:4px">
+                    <code style="word-break:break-all">@BimiHosting.Record(_host, Domain.Name, _hasCertificate)</code>
+                </div>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_savedLogo is not null)
+        {
+            <MudButton Color="Color.Error" Variant="Variant.Text" Disabled="_busy" OnClick="RemoveAsync">Stop hosting</MudButton>
+            <MudSpacer />
+        }
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Close</MudButton>
+        @if (_savedLogo is not null)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => MudDialog.Close(DialogResult.Ok("publish")))">Publish the record</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter, EditorRequired] public Domain Domain { get; set; } = null!;
+    [Parameter] public string? SuggestedTitle { get; set; }
+
+    private string? _host;
+    private bool _loaded;
+    private bool _busy;
+    private string _title = "";
+    private byte[]? _original;
+    private byte[]? _preview;
+    private byte[]? _savedLogo;
+    private bool _hasCertificate;
+    private IReadOnlyList<string> _fixes = [];
+    private IReadOnlyList<string> _problems = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _host = MtaStsOptions.Value.HostingHostname;
+        _title = SuggestedTitle ?? Domain.Name;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var asset = await db.BimiAssets.AsNoTracking().SingleOrDefaultAsync(row => row.DomainId == Domain.Id);
+        _savedLogo = asset is null ? null : System.Text.Encoding.UTF8.GetBytes(asset.LogoSvg);
+        _hasCertificate = asset?.CertificatePem is not null;
+        _loaded = true;
+    }
+
+    private async Task LogoChosenAsync(IBrowserFile file)
+    {
+        var bytes = await ReadAsync(file, 512 * 1024);
+        if (bytes is null)
+        {
+            return;
+        }
+
+        _original = bytes;
+        var result = SvgTinyPs.Prepare(bytes, TitleOrDomain);
+        _preview = result.Svg;
+        _fixes = result.Fixed;
+        _problems = result.Problems;
+    }
+
+    private async Task SaveLogoAsync()
+    {
+        _busy = true;
+        try
+        {
+            // Prepared again so a company name changed after choosing the file is the one saved.
+            var prepared = SvgTinyPs.Prepare(_original!, TitleOrDomain).Svg ?? _preview!;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (await BimiHosting.SaveLogoAsync(db, await AuditActorAccessor.GetAsync(), Domain, prepared) is { } refusal)
+            {
+                Snackbar.Add(refusal, Severity.Error);
+                return;
+            }
+
+            _savedLogo = prepared;
+            _preview = null;
+            _fixes = [];
+            Snackbar.Add("Logo saved. dotMARC is hosting it now.", Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CertificateChosenAsync(IBrowserFile file)
+    {
+        var bytes = await ReadAsync(file, BimiChecker.MaxCertificateBytes);
+        if (bytes is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (await BimiHosting.SaveCertificateAsync(db, await AuditActorAccessor.GetAsync(), Domain, bytes, TimeProvider.GetUtcNow()) is { } refusal)
+            {
+                Snackbar.Add(refusal, Severity.Error);
+                return;
+            }
+
+            _hasCertificate = true;
+            Snackbar.Add("Certificate saved. Publish the record again so it includes the certificate.", Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveAsync()
+    {
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await BimiHosting.RemoveAsync(db, await AuditActorAccessor.GetAsync(), Domain);
+            _savedLogo = null;
+            _hasCertificate = false;
+            Snackbar.Add($"dotMARC no longer hosts {Domain.Name}'s BIMI files. Remove its default._bimi record too.", Severity.Info);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task<byte[]?> ReadAsync(IBrowserFile file, int maxBytes)
+    {
+        if (file.Size > maxBytes)
+        {
+            Snackbar.Add($"That file is too large ({file.Size / 1024} KB).", Severity.Error);
+            return null;
+        }
+
+        await using var stream = file.OpenReadStream(maxBytes);
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer);
+        return buffer.ToArray();
+    }
+
+    private string TitleOrDomain => string.IsNullOrWhiteSpace(_title) ? Domain.Name : _title.Trim();
+
+    private static string DataUri(byte[] svg) => "data:image/svg+xml;base64," + Convert.ToBase64String(svg);
+}
