@@ -16,6 +16,10 @@
             @ActionContent
         }
     </div>
+    @if (Below is not null)
+    {
+        <div style="grid-column: 2 / -1;">@Below</div>
+    }
 </div>
 
 @code {
@@ -25,4 +29,7 @@
     [Parameter] public DateTimeOffset? CheckedUtc { get; set; }
     [Parameter] public string? Detail { get; set; }
     [Parameter] public RenderFragment? ActionContent { get; set; }
+
+    /// <summary>More about the check, on its own line under the row.</summary>
+    [Parameter] public RenderFragment? Below { get; set; }
 }

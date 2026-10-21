@@ -15,6 +15,7 @@ public static class KnownSenders
         new("google", "Google Workspace", ["google.com", "googlemail.com", "1e100.net"], []),
         new("amazonses", "Amazon SES", ["amazonses.com"], []),
         new("mailchimp", "Mailchimp", ["mcsv.net", "mcdlv.net", "rsgsv.net", "mandrillapp.com"], ["Rocket Science Group"]),
+        new("smtp2go", "SMTP2GO", ["smtp2go.com", "smtp2go.net", "smtpcorp.com"], ["SMTP2GO", "Smtpcorp"]),
         new("sendgrid", "SendGrid", ["sendgrid.net"], ["SendGrid"]),
         new("mailgun", "Mailgun", ["mailgun.net", "mailgun.org"], ["Mailgun"]),
         new("postmark", "Postmark", ["mtasv.net"], ["Wildbit", "ActiveCampaign Postmark"]),

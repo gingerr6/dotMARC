@@ -14,6 +14,7 @@ public static class SpfIncludeCatalog
         ("Proton Mail", "_spf.protonmail.ch"),
         ("Mailchimp", "servers.mcsv.net"),
         ("SendGrid", "sendgrid.net"),
+        ("SMTP2GO", "spf.smtp2go.com"),
         ("Amazon SES", "amazonses.com"),
         ("Salesforce", "_spf.salesforce.com"),
     ];
@@ -28,10 +29,14 @@ public static class SpfIncludeCatalog
         ["ProtonMail"] = "_spf.protonmail.ch",
         ["Mailchimp"] = "servers.mcsv.net",
         ["SendGrid"] = "sendgrid.net",
+        ["SMTP2GO"] = "spf.smtp2go.com",
         ["Amazon SES"] = "amazonses.com",
         ["Salesforce"] = "_spf.salesforce.com",
     };
 
-    public static IReadOnlyList<string> SuggestedIncludes(IEnumerable<DetectedMailService> detected) =>
-        detected.Select(service => IncludeByDetectedName.GetValueOrDefault(service.ProviderName)).OfType<string>().Distinct().ToList();
+    /// <summary>The includes for the services found in DNS, and for the recognised services (DotMarc.Senders.KnownSenders
+    /// names) that the domain's reports show sending its mail.</summary>
+    public static IReadOnlyList<string> SuggestedIncludes(IEnumerable<DetectedMailService> detected, IEnumerable<string>? reportedSenders = null) =>
+        detected.Select(service => service.ProviderName).Concat(reportedSenders ?? [])
+            .Select(name => IncludeByDetectedName.GetValueOrDefault(name)).OfType<string>().Distinct().ToList();
 }

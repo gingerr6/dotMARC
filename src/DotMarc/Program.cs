@@ -279,6 +279,12 @@ builder.Services.AddHttpClient<DotMarc.DnsPush.IDnsProviderDetector, DotMarc.Dns
     client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
 });
 
+builder.Services.AddHttpClient<DotMarc.Dns.ICnameLookup, DotMarc.Dns.CnameLookup>(client =>
+{
+    client.BaseAddress = new Uri("https://cloudflare-dns.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
+});
+
 builder.Services.AddHttpClient<DotMarc.DnsPush.IDmarcTxtLookup, DotMarc.DnsPush.DmarcTxtLookup>(client =>
 {
     client.BaseAddress = new Uri("https://cloudflare-dns.com/");
