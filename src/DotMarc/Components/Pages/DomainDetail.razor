@@ -71,66 +71,6 @@ else
                 <MudItem xs="4"><MudText>Volume (30d): <b>@_totalVolume</b></MudText></MudItem>
                 <MudItem xs="4"><MudText>Sources: <b>@_sourceCount</b></MudText></MudItem>
             </MudGrid>
-            @if (_enforcement is { } enforcement)
-            {
-                <MudPaper Class="pa-4 my-3" Elevation="1">
-                    <div class="d-flex align-center flex-wrap" style="gap:8px">
-                        <MudText Typo="Typo.h6">Enforcement</MudText>
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                 Color="@(enforcement.Enforced ? Color.Success : enforcement.Stage == EnforcementStage.NoRecord ? Color.Error : Color.Warning)">@EnforcementReadiness.Describe(enforcement.Stage)</MudChip>
-                        @if (enforcement.StuckMonitoring)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Warning">On p=none for over 30 days</MudChip>
-                        }
-                        <MudSpacer />
-                        <MudLink Href="/enforcement" Typo="Typo.body2">All domains</MudLink>
-                    </div>
-                    @if (enforcement.Enforced)
-                    {
-                        <MudText Typo="Typo.body2" Class="mt-2">Fully enforced: receivers reject mail that fails DMARC, so the domain can't be spoofed.</MudText>
-                    }
-                    else if (enforcement.NextPolicy is { } nextPolicy)
-                    {
-                        var nextName = nextPolicy == DmarcPolicyLevel.Reject ? "reject" : "quarantine";
-                        @if (enforcement.Ready)
-                        {
-                            <MudText Typo="Typo.body2" Class="mt-2">
-                                <b>Ready for p=@nextName.</b> Over the last @EnforcementReadiness.DaysNeeded days every sender with real volume has been reviewed, and approved senders pass DMARC@(enforcement.ApprovedPassRate is { } rate ? $" ({rate:P1})" : "").
-                                @(nextPolicy == DmarcPolicyLevel.Reject ? "Mail failing DMARC will then be refused outright." : "Mail failing DMARC will then go to junk.")
-                            </MudText>
-                        }
-                        else
-                        {
-                            <MudText Typo="Typo.body2" Class="mt-2">Not ready for p=@nextName yet:</MudText>
-                            <ul class="mt-1 mb-1" style="padding-left:20px">
-                                @foreach (var blocker in enforcement.Blockers)
-                                {
-                                    <li><MudText Typo="Typo.body2"><b>@blocker.Title.</b> @blocker.Detail</MudText></li>
-                                }
-                            </ul>
-                        }
-                        <AuthorizeView Policy="DomainsEdit" Context="enforcementAuthState">
-                            <div class="d-flex mt-2" style="gap:8px">
-                                @if (enforcement.Ready && _mayPush)
-                                {
-                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="@(() => PushPolicyAsync(nextPolicy))">Move to p=@nextName</MudButton>
-                                }
-                                <MudButton Variant="@(enforcement.Ready && !_mayPush ? Variant.Filled : Variant.Text)" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy"
-                                           OnClick="@(() => ShowRecordsAsync("dmarc-policy", $"DMARC record for p={nextName}", nextName))">@(enforcement.Ready ? "Show record" : "Show the record anyway")</MudButton>
-                            </div>
-                        </AuthorizeView>
-                    }
-                    else
-                    {
-                        <ul class="mt-1 mb-1" style="padding-left:20px">
-                            @foreach (var blocker in enforcement.Blockers)
-                            {
-                                <li><MudText Typo="Typo.body2"><b>@blocker.Title.</b> @blocker.Detail</MudText></li>
-                            }
-                        </ul>
-                    }
-                </MudPaper>
-            }
             <MudText Typo="Typo.subtitle2" Class="mt-2">Messages a day, by what receivers did with them (30 days to yesterday)</MudText>
             <MudChart ChartType="ChartType.Line" ChartSeries="@_series" ChartLabels="@_xAxisLabels" ChartOptions="@_chartOptions" Width="100%" Height="260px" />
             @if (_reasonBreakdown is { Total: > 0 } breakdown)
@@ -203,6 +143,46 @@ else
                         </AuthorizeView>
                     </ActionContent>
                 </DomainHealthCheckRow>
+
+                @if (_enforcement is { } enforcement)
+                {
+                    var nextName = enforcement.NextPolicy is { } next ? next.ToString().ToLowerInvariant() : null;
+                    <DomainHealthCheckRow Title="DMARC enforcement"
+                                          StatusColor="@(enforcement.Enforced ? Color.Success : enforcement.Ready ? Color.Info : enforcement.Stage == EnforcementStage.NoRecord ? Color.Error : Color.Warning)"
+                                          StatusLabel="@EnforcementReadiness.Describe(enforcement.Stage)"
+                                          CheckedUtc="_domain.DmarcCheckedUtc"
+                                          Detail="@EnforcementSummary(enforcement)">
+                        <ActionContent>
+                            @if (enforcement.Blockers.Count > 0)
+                            {
+                                <MudTooltip>
+                                    <ChildContent><MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" Style="cursor:help" /></ChildContent>
+                                    <TooltipContent>
+                                        @foreach (var blocker in enforcement.Blockers)
+                                        {
+                                            <div style="max-width:420px; text-align:left" class="my-1"><b>@blocker.Title.</b> @blocker.Detail</div>
+                                        }
+                                    </TooltipContent>
+                                </MudTooltip>
+                            }
+                            @if (nextName is not null)
+                            {
+                                <AuthorizeView Policy="DomainsEdit" Context="enforcementAuthState">
+                                    @if (enforcement.Ready && _mayPush)
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="@(() => PushPolicyAsync(enforcement.NextPolicy!.Value))">Move to p=@nextName</MudButton>
+                                    }
+                                    else
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="@($"Show the p={nextName} record")"
+                                                       OnClick="@(() => ShowRecordsAsync("dmarc-policy", $"DMARC record for p={nextName}", nextName))" />
+                                    }
+                                </AuthorizeView>
+                            }
+                            <MudLink Href="/enforcement" Typo="Typo.body2">All domains</MudLink>
+                        </ActionContent>
+                    </DomainHealthCheckRow>
+                }
 
                 <DomainHealthCheckRow Title="DMARC authorization record"
                                       StatusColor="@DmarcAuthorizationStatusPresentation.GetColor(_domain.DmarcAuthorizationCheckStatus)"
@@ -1150,6 +1130,25 @@ else
 
     /// <summary>Enforcement readiness's next step: pushes the DMARC record with the stricter policy, after showing the
     /// change.</summary>
+    /// <summary>One line for the enforcement row; the full reasons are in its tooltip.</summary>
+    private static string EnforcementSummary(EnforcementAssessment enforcement)
+    {
+        if (enforcement.Enforced)
+        {
+            return "Fully enforced: mail failing DMARC is rejected.";
+        }
+        var next = enforcement.NextPolicy is { } policy ? $"p={policy.ToString().ToLowerInvariant()}" : null;
+        if (enforcement.Ready)
+        {
+            return $"Ready for {next}.";
+        }
+        var reasons = string.Join("; ", enforcement.Blockers.Select(blocker => blocker.Title == "Not enough reports yet" && enforcement.Volume > 0
+            ? $"{enforcement.DaysOfData} of the {EnforcementReadiness.DaysNeeded} days of reports needed"
+            : blocker.Title.ToLowerInvariant()));
+        var stuck = enforcement.StuckMonitoring ? " On p=none for over 30 days." : "";
+        return next is null ? $"{enforcement.Blockers.FirstOrDefault()?.Detail}" : $"Not ready for {next}: {reasons}.{stuck}";
+    }
+
     private async Task PushPolicyAsync(DmarcPolicyLevel policy)
     {
         var providerKey = _domain!.DnsProvider.ToProviderKey();

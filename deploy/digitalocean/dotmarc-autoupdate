@@ -1,9 +1,34 @@
 #!/bin/sh
 # Keeps dotMARC on the newest image published under the tag in /opt/dotmarc/.env (DOTMARC_VERSION, normally edge).
-# Run by cron every 15 minutes. When the registry has a newer image than the one running, it backs up the database,
-# then restarts dotMARC on the new image. Nothing happens when there's nothing new. Log: /var/log/dotmarc-autoupdate.log
+# Run by cron (see install-updater.sh) in two ways:
+#   every 15 minutes, with no arguments: when the registry has a newer image than the one running, it backs up the
+#     database, then restarts dotMARC on the new image. Nothing happens when there's nothing new.
+#   every minute, with --if-requested: tells dotMARC the updater is running, and installs as above only when someone
+#     pressed "Install now" in dotMARC's control panel. The request and the outcome go through the ServerUpdater table.
+# Log: /var/log/dotmarc-autoupdate.log
 set -eu
 cd /opt/dotmarc
+
+# One run at a time: a request arriving during the 15-minute run waits for the next minute.
+exec 9>/var/lock/dotmarc-autoupdate
+flock -n 9 || exit 0
+
+sql() { docker compose exec -T postgres psql -U dotmarc -d dotmarc -tAq -v ON_ERROR_STOP=1 -c "$1"; }
+
+# Writes the outcome where dotMARC's control panel shows it. Only this script's own fixed messages are passed in.
+report() { sql "UPDATE \"ServerUpdater\" SET \"LastResult\" = '$1', \"LastResultUtc\" = now() WHERE \"Id\" = 1" > /dev/null 2>&1 || true; }
+
+requested=false
+if [ "${1:-}" = "--if-requested" ]; then
+    # An older image has no ServerUpdater table yet; there's nothing to do until it's updated by the 15-minute run.
+    answer=$(sql 'UPDATE "ServerUpdater" AS updater SET "LastSeenUtc" = now(), "RequestedUtc" = NULL
+                  FROM (SELECT "RequestedUtc" FROM "ServerUpdater" WHERE "Id" = 1 FOR UPDATE) AS old
+                  WHERE updater."Id" = 1 RETURNING old."RequestedUtc" IS NOT NULL' 2>/dev/null) || exit 0
+    [ "$answer" = "t" ] || exit 0
+    requested=true
+    echo "$(date -Is) install requested from the control panel"
+    trap '[ $? -eq 0 ] || report "The update failed on the server. See /var/log/dotmarc-autoupdate.log."' EXIT
+fi
 
 # The image dotMARC runs, as docker-compose.yml and .env resolve it.
 image=$(docker compose config | awk '/^  app:/ { in_app = 1; next } in_app && /^  [^ ]/ { exit } in_app && /^    image:/ { print $2; exit }')
@@ -13,10 +38,17 @@ docker pull -q "$image" > /dev/null
 latest=$(docker image inspect --format '{{.Id}}' "$image")
 container=$(docker compose ps -q app)
 running=$( [ -n "$container" ] && docker inspect --format '{{.Image}}' "$container" || echo none)
-[ "$latest" = "$running" ] && exit 0
+if [ "$latest" = "$running" ]; then
+    $requested && report "Already up to date: nothing newer has been published. A change merged in the last 10 minutes may still be building."
+    exit 0
+fi
 
 echo "$(date -Is) updating dotMARC to $image ($latest)"
 /usr/local/bin/dotmarc-backup
 docker compose up -d app
 docker image prune -f > /dev/null
 echo "$(date -Is) updated"
+$requested && report "Installed the newest version, after taking a backup."
+
+# Keep this script and its cron lines in step with the version just installed. A failed download changes nothing.
+[ -x /usr/local/bin/dotmarc-install-updater ] && /usr/local/bin/dotmarc-install-updater --quiet || true

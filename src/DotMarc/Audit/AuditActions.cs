@@ -62,6 +62,7 @@ public static class AuditActions
     public const string BackupSettingsSaved = "settings.backups.saved";
     public const string BackupRunManually = "backup.run_manually";
     public const string BackupRestored = "backup.restored";
+    public const string ServerUpdateRequested = "server.update_requested";
     public const string DnsPushed = "dns.pushed";
     public const string DnsPushFailed = "dns.push_failed";
     public const string HaloIntegrationTested = "halo.integration_tested";
@@ -136,6 +137,7 @@ public static class AuditActions
         (BackupSettingsSaved, "Backup settings saved"),
         (BackupRunManually, "Backup run by hand"),
         (BackupRestored, "Backup restored"),
+        (ServerUpdateRequested, "Server update requested"),
         (DnsPushed, "DNS records pushed"),
         (DnsPushFailed, "DNS push failed partway"),
         (HaloIntegrationTested, "HaloPSA integration tested"),
