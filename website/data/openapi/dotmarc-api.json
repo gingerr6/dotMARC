@@ -2257,6 +2257,7 @@
                   "settings.backups.saved",
                   "backup.run_manually",
                   "backup.restored",
+                  "server.update_requested",
                   "dns.pushed",
                   "dns.push_failed",
                   "halo.integration_tested",

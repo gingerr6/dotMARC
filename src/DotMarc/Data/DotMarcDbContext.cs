@@ -41,6 +41,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DomainDkimRecord> DomainDkimRecords => Set<DomainDkimRecord>();
     public DbSet<SenderApproval> SenderApprovals => Set<SenderApproval>();
     public DbSet<DotMarc.Backups.BackupSettings> BackupSettings => Set<DotMarc.Backups.BackupSettings>();
+    public DbSet<DotMarc.Updates.ServerUpdater> ServerUpdaters => Set<DotMarc.Updates.ServerUpdater>();
     public DbSet<DnsRecordSettings> DnsRecordSettings => Set<DnsRecordSettings>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<HaloPsaSettings> HaloPsaSettings => Set<HaloPsaSettings>();
@@ -446,6 +447,14 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(settings => settings.LastRunMessage).HasMaxLength(1000);
             entity.Property(settings => settings.LastBackupKey).HasMaxLength(1024);
             entity.HasData(new DotMarc.Backups.BackupSettings { Id = 1 });
+        });
+        // The server's updater script reads and writes this table by name with psql, so it's named explicitly.
+        modelBuilder.Entity<DotMarc.Updates.ServerUpdater>(entity =>
+        {
+            entity.ToTable("ServerUpdater");
+            entity.Property(updater => updater.RequestedBy).HasMaxLength(256);
+            entity.Property(updater => updater.LastResult).HasMaxLength(1000);
+            entity.HasData(new DotMarc.Updates.ServerUpdater { Id = 1 });
         });
         modelBuilder.Entity<CloudflareDnsSettings>().HasData(new CloudflareDnsSettings { Id = 1 });
         modelBuilder.Entity<AzureDnsSettings>().HasData(new AzureDnsSettings { Id = 1 });

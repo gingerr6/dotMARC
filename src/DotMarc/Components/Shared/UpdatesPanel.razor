@@ -1,6 +1,12 @@
 @* The Updates tab of the control panel (ControlPanel.razor): which merged changes this server runs, and which it doesn't yet. *@
 @using DotMarc.Updates
 @inject UpdateStatusService Updates
+@inject IDbContextFactory<DotMarc.Data.DotMarcDbContext> DbFactory
+@inject AuditActorAccessor AuditActorAccessor
+@inject TimeProvider TimeProvider
+@inject ISnackbar Snackbar
+@implements IDisposable
+@using Microsoft.EntityFrameworkCore
 
 <MudPaper Class="pa-4 mb-4">
     <div class="d-flex align-center mb-2" style="gap:8px; flex-wrap:wrap;">
@@ -32,6 +38,42 @@
             <MudAlert Severity="Severity.Warning" Class="mt-2">@problem</MudAlert>
         }
     }
+    @if (_updater is { } updater)
+    {
+        <MudDivider Class="my-3" />
+        @if (ServerUpdaterService.IsRunning(updater, TimeProvider.GetUtcNow()))
+        {
+            <div class="d-flex align-center flex-wrap" style="gap:12px">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.SystemUpdateAlt"
+                           Disabled="@(_requesting || updater.RequestedUtc is not null)" OnClick="InstallNowAsync">Install now</MudButton>
+                <MudText Typo="Typo.body2">
+                    @if (updater.RequestedUtc is { } requested)
+                    {
+                        <span>Requested at @DotMarc.Reporting.UkTime.Time(requested)@(updater.RequestedBy is { } by ? $" by {by}" : ""). The server picks it up within a minute, takes a backup, then restarts dotMARC on the new version; this page reloads by itself.</span>
+                    }
+                    else
+                    {
+                        <span>Installs the newest published version now instead of at the next 15-minute check, taking a backup first. dotMARC restarts, which takes under a minute.</span>
+                    }
+                </MudText>
+            </div>
+            @if (updater.LastResult is { } result && updater.LastResultUtc is { } at)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Last install now (@DotMarc.Reporting.UkTime.DateTime(at)): @result</MudText>
+            }
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info">
+                <div><b>Install now</b> needs the server's updater installed once. In your server's console (DigitalOcean: the Droplet's Console button), run this as root:</div>
+                <div class="d-flex align-center mt-2" style="gap:4px">
+                    <code style="word-break:break-all">@InstallCommand</code>
+                    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" Title="Copy" OnClick="CopyInstallCommandAsync" />
+                </div>
+                <div class="mt-2">This button appears within a minute of it running. From then on the updater keeps itself up to date.</div>
+            </MudAlert>
+        }
+    }
 </MudPaper>
 
 @if (_status is not null && _status.RunningCommit is null)
@@ -45,7 +87,7 @@ else if (_status is not null)
 {
     <MudPaper Class="pa-4 mb-4">
         <MudText Typo="Typo.h6">Waiting to be installed (@_status.Waiting.Count)</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Merged, but not on this server yet. After a merge the new version takes about 10 minutes to build, then the server installs it within 15 minutes, taking a backup first.</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Merged, but not on this server yet. After a merge the new version takes about 10 minutes to build, then the server installs it within 15 minutes, taking a backup first, or straight away with Install now.</MudText>
         <ChangeList Changes="_status.Waiting" Empty="Nothing waiting: this server is up to date." Color="Color.Warning" Label="Waiting" />
     </MudPaper>
 
@@ -63,8 +105,22 @@ else if (_status is not null)
 }
 
 @code {
+    [Inject] private IJSRuntime JS { get; set; } = null!;
+
     private UpdateStatus? _status;
+    private ServerUpdater? _updater;
     private bool _loading;
+    private bool _requesting;
+    private Timer? _poll;
+
+    private string InstallCommand
+    {
+        get
+        {
+            var repository = Updates.Repository ?? "<owner>/<repo>";
+            return $"curl -fsSL https://raw.githubusercontent.com/{repository}/main/deploy/digitalocean/install-updater.sh | sh -s {repository}";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -80,10 +136,54 @@ else if (_status is not null)
         try
         {
             _status = await Updates.GetAsync(refresh);
+            await LoadUpdaterAsync();
         }
         finally
         {
             _loading = false;
         }
     }
+
+    private async Task LoadUpdaterAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _updater = await ServerUpdaterService.GetAsync(db);
+        // Watch for the updater picking the request up and for it to come into use after the one-time install.
+        _poll ??= new Timer(_ => InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadUpdaterAsync();
+                StateHasChanged();
+            }
+            catch (Exception)
+            {
+                // The database can be briefly unreachable while dotMARC restarts on the new version.
+            }
+        }), null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    private async Task InstallNowAsync()
+    {
+        _requesting = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await ServerUpdaterService.RequestAsync(db, await AuditActorAccessor.GetAsync(), TimeProvider.GetUtcNow());
+            _updater = await ServerUpdaterService.GetAsync(db);
+            Snackbar.Add("Asked the server to install the newest version. It starts within a minute.", Severity.Success);
+        }
+        finally
+        {
+            _requesting = false;
+        }
+    }
+
+    private async Task CopyInstallCommandAsync()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", InstallCommand);
+        Snackbar.Add("Copied", Severity.Success);
+    }
+
+    public void Dispose() => _poll?.Dispose();
 }

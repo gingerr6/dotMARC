@@ -56,6 +56,18 @@ does nothing. With the workflow's default tag, `edge`, every change merged into 
 within about 15 minutes of its image being published. Pin `DOTMARC_VERSION` to a commit SHA or a release
 to stop that. What it did is in `/var/log/dotmarc-autoupdate.log`.
 
+To install without waiting, press **Install now** on the Updates tab of dotMARC's control panel. A second cron
+line runs `dotmarc-autoupdate --if-requested` every minute: it picks up the request through the database,
+installs as above, and reports the outcome back to the control panel. After each update the updater refreshes
+itself from the repository, so changes to it reach the server without logging in.
+
+A Droplet created before this existed needs the updater installed once, as root (the Updates tab shows the
+command with your repository filled in):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/deploy/digitalocean/install-updater.sh | sh -s <owner>/<repo>
+```
+
 ## Offsite backups
 
 Offsite backups are set up in dotMARC itself, under **Manage > Control panel > Backups**: the S3 bucket and keys, an encryption
