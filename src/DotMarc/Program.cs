@@ -737,7 +737,7 @@ app.MapGet("/dns-push/{provider}/start", async (
     await using (var context = await dbContextFactory.CreateDbContextAsync())
     {
         if (!await DotMarc.Api.ApiScope.From(httpContext.User).Domains(context.Domains.AsNoTracking()).AnyAsync(domain => domain.Id == domainId)
-            || !await GroupManagementService.MayPushDnsAsync(context, domainId))
+            || !await DnsPushAllowance.IsAllowedAsync(context, domainId))
         {
             return Results.Forbid();
         }

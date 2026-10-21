@@ -217,10 +217,6 @@ public static class GroupManagementService
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Whether dotMARC may push records for the domain: not when any of its Groups manages its own DNS.</summary>
-    public static Task<bool> MayPushDnsAsync(DotMarcDbContext context, int domainId, CancellationToken cancellationToken = default) =>
-        context.Domains.AsNoTracking().AnyAsync(domain => domain.Id == domainId && !domain.Groups.Any(group => group.ClientManagesDns), cancellationToken);
-
     public static Task<GroupBranding?> GetBrandingAsync(DotMarcDbContext context, int groupId, CancellationToken cancellationToken = default) =>
         context.GroupBrandings.AsNoTracking().SingleOrDefaultAsync(branding => branding.GroupId == groupId, cancellationToken);
 

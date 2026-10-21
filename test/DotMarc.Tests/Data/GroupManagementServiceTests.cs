@@ -515,11 +515,11 @@ public sealed class GroupManagementServiceTests : IAsyncLifetime
         context.Domains.AddRange(inGroup, other);
         await context.SaveChangesAsync();
 
-        Assert.True(await GroupManagementService.MayPushDnsAsync(context, inGroup.Id));
+        Assert.True(await DotMarc.DnsPush.DnsPushAllowance.IsAllowedAsync(context, inGroup.Id));
         await GroupManagementService.SetClientManagesDnsAsync(context, TestActors.Admin, group.Id, true);
 
-        Assert.False(await GroupManagementService.MayPushDnsAsync(context, inGroup.Id));
-        Assert.True(await GroupManagementService.MayPushDnsAsync(context, other.Id));
+        Assert.False(await DotMarc.DnsPush.DnsPushAllowance.IsAllowedAsync(context, inGroup.Id));
+        Assert.True(await DotMarc.DnsPush.DnsPushAllowance.IsAllowedAsync(context, other.Id));
         Assert.Contains(context.AuditEntries, entry => entry.Action == AuditActions.GroupDnsManagementChanged);
     }
 }
