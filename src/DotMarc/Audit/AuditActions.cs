@@ -63,6 +63,9 @@ public static class AuditActions
     public const string BackupRunManually = "backup.run_manually";
     public const string BackupRestored = "backup.restored";
     public const string ServerUpdateRequested = "server.update_requested";
+    public const string BimiLogoSaved = "bimi.logo_saved";
+    public const string BimiCertificateSaved = "bimi.certificate_saved";
+    public const string BimiRemoved = "bimi.removed";
     public const string DnsPushed = "dns.pushed";
     public const string DnsPushFailed = "dns.push_failed";
     public const string HaloIntegrationTested = "halo.integration_tested";
@@ -138,6 +141,9 @@ public static class AuditActions
         (BackupRunManually, "Backup run by hand"),
         (BackupRestored, "Backup restored"),
         (ServerUpdateRequested, "Server update requested"),
+        (BimiLogoSaved, "BIMI logo uploaded"),
+        (BimiCertificateSaved, "BIMI certificate uploaded"),
+        (BimiRemoved, "BIMI files removed"),
         (DnsPushed, "DNS records pushed"),
         (DnsPushFailed, "DNS push failed partway"),
         (HaloIntegrationTested, "HaloPSA integration tested"),

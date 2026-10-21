@@ -280,6 +280,7 @@ builder.Services.AddSingleton<DotMarc.DnsPush.IDnsPushProvider>(sp => sp.GetRequ
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.MtaStsChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.DmarcChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.DmarcPolicyChangeBuilder>();
+builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.BimiChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.DmarcAuthorizationChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.TlsrptChangeBuilder>();
 builder.Services.AddTransient<DotMarc.DnsPush.IDnsChangeBuilder, DotMarc.DnsPush.SpfChangeBuilder>();
@@ -652,6 +653,41 @@ if (demoOptions.Enabled)
 // hostname once DNS has actually been verified to point here, not the moment a customer merely
 // enables hosting (PendingDns) - otherwise a typo'd or not-yet-propagated CNAME would burn a
 // Let's Encrypt validation attempt against a hostname that doesn't resolve here yet.
+// The BIMI files dotMARC hosts for domains (see DotMarc.Bimi.BimiHosting): fetched by mailboxes, so anonymous. Served
+// under this app's own hostname, with a policy that stops the SVG doing anything even if opened directly.
+app.MapGet("/bimi/{domain}/logo.svg", async (string domain, HttpContext httpContext, IDbContextFactory<DotMarcDbContext> dbContextFactory) =>
+{
+    await using var db = await dbContextFactory.CreateDbContextAsync(httpContext.RequestAborted);
+    var logo = await db.BimiAssets.AsNoTracking()
+        .Where(asset => db.Domains.Any(d => d.Id == asset.DomainId && d.Name == domain.ToLower()))
+        .Select(asset => asset.LogoSvg).SingleOrDefaultAsync(httpContext.RequestAborted);
+    if (logo is null)
+    {
+        return Results.NotFound();
+    }
+
+    httpContext.Response.Headers.ContentSecurityPolicy = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+    httpContext.Response.Headers.XContentTypeOptions = "nosniff";
+    httpContext.Response.Headers.CacheControl = "public, max-age=3600";
+    return Results.Text(logo, "image/svg+xml", System.Text.Encoding.UTF8);
+}).AllowAnonymous();
+
+app.MapGet("/bimi/{domain}/certificate.pem", async (string domain, HttpContext httpContext, IDbContextFactory<DotMarcDbContext> dbContextFactory) =>
+{
+    await using var db = await dbContextFactory.CreateDbContextAsync(httpContext.RequestAborted);
+    var pem = await db.BimiAssets.AsNoTracking()
+        .Where(asset => asset.CertificatePem != null && db.Domains.Any(d => d.Id == asset.DomainId && d.Name == domain.ToLower()))
+        .Select(asset => asset.CertificatePem).SingleOrDefaultAsync(httpContext.RequestAborted);
+    if (pem is null)
+    {
+        return Results.NotFound();
+    }
+
+    httpContext.Response.Headers.XContentTypeOptions = "nosniff";
+    httpContext.Response.Headers.CacheControl = "public, max-age=3600";
+    return Results.Text(pem, "application/x-pem-file", System.Text.Encoding.ASCII);
+}).AllowAnonymous();
+
 app.MapGet("/.well-known/mta-sts-ask", async (string domain, IDbContextFactory<DotMarcDbContext> dbContextFactory) =>
 {
     const string prefix = "mta-sts.";

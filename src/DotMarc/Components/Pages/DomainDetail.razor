@@ -390,6 +390,7 @@ else
                         }
                         <AuthorizeView Policy="DomainsEdit" Context="bimiRecheckAuthState">
                             <Authorized>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Image" OnClick="SetUpBimiAsync">Set up logo</MudButton>
                                 @if (_isRecheckingBimi)
                                 {
                                     <MudProgressCircular Size="Size.Small" Indeterminate="true" />
@@ -1651,6 +1652,48 @@ else
         {
             _isRecheckingMx = false;
         }
+    }
+
+    /// <summary>Opens the BIMI setup (dotMARC hosts the logo), then publishes the record: pushed where this domain's DNS
+    /// can be pushed to, otherwise shown to add by hand.</summary>
+    private async Task SetUpBimiAsync()
+    {
+        var parameters = new DialogParameters<DotMarc.Components.Dialogs.BimiSetupDialog>
+        {
+            { dialog => dialog.Domain, _domain! },
+            { dialog => dialog.SuggestedTitle, _domain!.Groups.FirstOrDefault()?.Name },
+        };
+        var dialog = await DialogService.ShowAsync<DotMarc.Components.Dialogs.BimiSetupDialog>("BIMI logo", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: "publish" })
+        {
+            return;
+        }
+
+        var pushProvider = _mayPush ? await DnsPushProviders.FindConfiguredAsync(_domain.DnsProvider.ToProviderKey()) : null;
+        if (pushProvider is null)
+        {
+            await ShowRecordsAsync("bimi", "BIMI record");
+            return;
+        }
+
+        DnsChangePlan plan;
+        try
+        {
+            plan = await ChangeBuilders.Find("bimi")!.BuildAsync(new DnsPushRequest(_domain, pushProvider.ProviderKey, _domain.DnsZone ?? _domain.Name, null), CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            Snackbar.Add("Couldn't look up the current BIMI record. Try again.", Severity.Error);
+            return;
+        }
+
+        if (plan.Refusal is not null || plan.Changes.Count == 0)
+        {
+            Snackbar.Add(plan.Refusal is null ? "The BIMI record is already published. Press recheck to check it." : "The BIMI record can't be published from here.", Severity.Info);
+            return;
+        }
+
+        await OpenDnsPushPopupAsync(pushProvider.ProviderKey, _domain.Id, "bimi");
     }
 
     /// <summary>BIMI counterpart to RecheckDmarcAsync - see its remarks.</summary>
