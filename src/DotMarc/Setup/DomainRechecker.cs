@@ -19,7 +19,6 @@ public sealed class DomainRechecker(
     ISpfDnsChecker spfChecker,
     IMxDnsChecker mxChecker,
     IDkimDnsChecker dkimChecker,
-    IBimiChecker bimiChecker,
     IDnsProviderDetector dnsProviderDetector,
     IMtaStsDnsVerifier mtaStsDnsVerifier,
     IMtaStsServingVerifier mtaStsServingVerifier,
@@ -46,7 +45,6 @@ public sealed class DomainRechecker(
             await TryAsync(domain, "MX", () => PollingService.RunSingleMxCheckAsync(domain, mxChecker, cancellationToken)).ConfigureAwait(false);
             await TryAsync(domain, "DKIM", () => PollingService.RunSingleDkimCheckAsync(domain, dkimChecker, cancellationToken)).ConfigureAwait(false);
             await TryAsync(domain, "TLS reporting", () => PollingService.RunSingleTlsrptCheckAsync(domain, tlsrptChecker, graphOptions.Value.TlsReportingAddress, cancellationToken)).ConfigureAwait(false);
-            await TryAsync(domain, "BIMI", () => PollingService.RunSingleBimiCheckAsync(domain, bimiChecker, cancellationToken)).ConfigureAwait(false);
             await TryAsync(domain, "DNS provider", () => PollingService.RunSingleDnsProviderCheckAsync(domain, dnsProviderDetector, cancellationToken)).ConfigureAwait(false);
             if (domain.MtaStsEnabled && mtaStsOptions.Value.HostingHostname is { Length: > 0 } hostingHostname)
             {
