@@ -5,7 +5,7 @@
 <div class="dotmarc-health-row" style="display:grid; grid-template-columns: 220px 160px 180px 1fr; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--mud-palette-lines-default);">
     <MudText Typo="Typo.body1">@Title</MudText>
     <MudChip T="string" Color="@StatusColor" Size="Size.Small">@StatusLabel</MudChip>
-    <MudText Typo="Typo.caption">@(CheckedUtc is { } checkedUtc ? $"Checked: {checkedUtc:yyyy-MM-dd HH:mm:ss}" : "Not checked yet")</MudText>
+    <MudText Typo="Typo.caption">@(CheckedUtc is { } checkedUtc ? $"Checked: {DotMarc.Reporting.UkTime.DateTimeSeconds(checkedUtc)}" : "Not checked yet")</MudText>
     <div class="d-flex align-center flex-wrap" style="gap:8px;">
         @if (!string.IsNullOrWhiteSpace(Detail))
         {

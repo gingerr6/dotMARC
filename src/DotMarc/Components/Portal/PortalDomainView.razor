@@ -90,8 +90,8 @@ else
                     {
                         <tr>
                             <td>@alert.Title</td>
-                            <td>Raised @alert.CreatedUtc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)</td>
-                            <td>@(alert.IsResolved ? $"Resolved {alert.ResolvedUtc?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)}" : "Open")</td>
+                            <td>Raised @DotMarc.Reporting.UkTime.DateTime(alert.CreatedUtc)</td>
+                            <td>@(alert.IsResolved ? $"Resolved {(alert.ResolvedUtc is { } resolved ? DotMarc.Reporting.UkTime.DateTime(resolved) : "")}" : "Open")</td>
                         </tr>
                     }
                 </tbody>

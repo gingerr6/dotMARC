@@ -167,8 +167,8 @@ else
 
     private string ConnectionText => _settings switch
     {
-        { ConnectionLostUtc: { } lostUtc } => $"Connection lost on {lostUtc.ToLocalTime():d MMM yyyy HH:mm} ({_settings.ConnectionLostReason}). Reconnect to raise tickets again.",
-        { RefreshTokenConfigured: true } => $"Connected by {_settings.ConnectedBy} on {_settings.ConnectedUtc?.ToLocalTime():d MMM yyyy HH:mm}. Last refreshed {_settings.LastRefreshUtc?.ToLocalTime():d MMM yyyy HH:mm}.",
+        { ConnectionLostUtc: { } lostUtc } => $"Connection lost on {DotMarc.Reporting.UkTime.DateTime(lostUtc)} ({_settings.ConnectionLostReason}). Reconnect to raise tickets again.",
+        { RefreshTokenConfigured: true } => $"Connected by {_settings.ConnectedBy} on {(_settings.ConnectedUtc is { } connected ? DotMarc.Reporting.UkTime.DateTime(connected) : "")}. Last refreshed {(_settings.LastRefreshUtc is { } refreshed ? DotMarc.Reporting.UkTime.DateTime(refreshed) : "")}.",
         _ => "Not connected."
     };
 

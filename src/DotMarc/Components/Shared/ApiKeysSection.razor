@@ -85,9 +85,9 @@
                 <MudTd DataLabel="Key" Style="font-family: monospace">@context.Prefix...</MudTd>
                 <MudTd DataLabel="Role">@(context.Role?.Name ?? "(deleted role)")</MudTd>
                 <MudTd DataLabel="Groups">@(context.ScopedGroups.Count == 0 ? "All" : string.Join(", ", context.ScopedGroups.Select(group => group.Name)))</MudTd>
-                <MudTd DataLabel="Created">@context.CreatedUtc.ToString("yyyy-MM-dd") by @context.CreatedBy</MudTd>
+                <MudTd DataLabel="Created">@DotMarc.Reporting.UkTime.Date(context.CreatedUtc) by @context.CreatedBy</MudTd>
                 <MudTd DataLabel="Expires">
-                    @context.ExpiresUtc.ToString("yyyy-MM-dd")
+                    @DotMarc.Reporting.UkTime.Date(context.ExpiresUtc)
                     @if (context.RevokedUtc is not null)
                     {
                         <MudChip T="string" Size="Size.Small" Class="ml-1">Revoked</MudChip>
@@ -101,7 +101,7 @@
                         <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-1">Expires soon</MudChip>
                     }
                 </MudTd>
-                <MudTd DataLabel="Last used">@(context.LastUsedUtc?.ToString("yyyy-MM-dd HH:mm") ?? "Never")</MudTd>
+                <MudTd DataLabel="Last used">@(context.LastUsedUtc is { } lastUsed ? DotMarc.Reporting.UkTime.DateTime(lastUsed) : "Never")</MudTd>
                 <MudTd>
                     @if (context.RevokedUtc is null)
                     {

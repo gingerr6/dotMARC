@@ -20,7 +20,7 @@ else
     var entries = LogStore.Query(_minimumLevel, _search, MaxShown);
 
     <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
-        This instance (@Environment.MachineName) has @LogStore.Count recent entries in memory@(LogStore.OldestTimestampUtc is { } oldest ? $", the oldest from {oldest:yyyy-MM-dd HH:mm:ss} UTC" : "").
+        This instance (@Environment.MachineName) has @LogStore.Count recent entries in memory@(LogStore.OldestTimestampUtc is { } oldest ? $", the oldest from {DotMarc.Reporting.UkTime.DateTimeSeconds(oldest)}" : "").
         They reset when the app restarts or is redeployed, and other instances' entries aren't included.
         Warnings and errors are always kept, plus informational messages from dotMARC itself. Secrets in URLs and
         tokens are redacted.
@@ -56,7 +56,7 @@ else
                 <MudTh>Message</MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd Style="white-space:nowrap">@context.TimestampUtc.ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+                <MudTd Style="white-space:nowrap">@DotMarc.Reporting.UkTime.DateTimeSeconds(context.TimestampUtc)</MudTd>
                 <MudTd><MudChip T="string" Size="Size.Small" Color="LevelColor(context.Level)">@context.Level</MudChip></MudTd>
                 <MudTd Style="overflow-wrap:anywhere"><MudText Typo="Typo.caption">@context.Category</MudText></MudTd>
                 <MudTd Style="overflow-wrap:anywhere; white-space:pre-wrap">

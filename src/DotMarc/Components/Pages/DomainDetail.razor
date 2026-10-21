@@ -507,13 +507,13 @@ else
                     <MudTd>
                         @if (context.IsNewSource)
                         {
-                            <MudTooltip Text="@($"First seen {context.FirstSeenUtc:yyyy-MM-dd}")" Arrow="true">
+                            <MudTooltip Text="@($"First seen {(context.FirstSeenUtc is { } seen ? DotMarc.Reporting.UkTime.Date(seen) : "")}")" Arrow="true">
                                 <MudChip T="string" Color="Color.Info" Size="Size.Small">New</MudChip>
                             </MudTooltip>
                         }
                         else
                         {
-                            @(context.FirstSeenUtc is { } firstSeen ? firstSeen.ToString("yyyy-MM-dd") : "—")
+                            @(context.FirstSeenUtc is { } firstSeen ? DotMarc.Reporting.UkTime.Date(firstSeen) : "—")
                         }
                     </MudTd>
                     <MudTd>
@@ -636,7 +636,7 @@ else
     private static bool ContainsIgnoreCase(string? text, string? search) =>
         string.IsNullOrWhiteSpace(search) || (text ?? "").Contains(search, StringComparison.OrdinalIgnoreCase);
 
-    private static string FormatDateRange(DateTimeOffset beginUtc, DateTimeOffset endUtc) => $"{beginUtc:d} – {endUtc:d}";
+    private static string FormatDateRange(DateTimeOffset beginUtc, DateTimeOffset endUtc) => $"{DotMarc.Reporting.UkTime.Date(beginUtc)} – {DotMarc.Reporting.UkTime.Date(endUtc)}";
 
     private static string TlsrptPolicySummary(TlsrptReport report) =>
         string.Join(", ", report.Policies.Select(policy => $"{policy.PolicyType}: {policy.PolicyDomain}"));
@@ -919,7 +919,7 @@ else
     {
         var scope = identity.IsService ? $"Covers every {identity.Label} server sending this domain's mail." : "Covers this IP only.";
         return _senderApprovals.TryGetValue(identity.Key, out var approval)
-            ? $"{SenderApprovalService.Describe(approval.Status)} by {approval.DecidedBy} on {approval.DecidedUtc:yyyy-MM-dd}. {scope}"
+            ? $"{SenderApprovalService.Describe(approval.Status)} by {approval.DecidedBy} on {DotMarc.Reporting.UkTime.Date(approval.DecidedUtc)}. {scope}"
             : $"Nobody has reviewed this sender yet. {scope}";
     }
 

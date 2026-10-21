@@ -37,7 +37,7 @@ else
 
         @if (_settings.LastSuccessUtc is { } lastSuccess)
         {
-            <MudText>Last good backup: <b>@Ago(lastSuccess)</b> (@lastSuccess.ToString("yyyy-MM-dd HH:mm") UTC), @OffsiteBackupService.FormatSize(_settings.LastBackupSize ?? 0).</MudText>
+            <MudText>Last good backup: <b>@Ago(lastSuccess)</b> (@DotMarc.Reporting.UkTime.DateTime(lastSuccess)), @OffsiteBackupService.FormatSize(_settings.LastBackupSize ?? 0).</MudText>
         }
         else
         {
@@ -159,13 +159,13 @@ else
         {
             <MudTable Items="_stored" Dense="true" Hover="true" T="StoredBackup">
                 <HeaderContent>
-                    <MudTh>Taken (UTC)</MudTh>
+                    <MudTh>Taken</MudTh>
                     <MudTh>Size</MudTh>
                     <MudTh>File</MudTh>
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>@context.LastModifiedUtc.ToString("yyyy-MM-dd HH:mm")</MudTd>
+                    <MudTd>@DotMarc.Reporting.UkTime.DateTime(context.LastModifiedUtc)</MudTd>
                     <MudTd>@OffsiteBackupService.FormatSize(context.Size)</MudTd>
                     <MudTd><span style="font-family:monospace; font-size:12px;">@context.FileName</span></MudTd>
                     <MudTd Style="text-align:right">

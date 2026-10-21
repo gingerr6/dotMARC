@@ -15,7 +15,7 @@ else
                     <td style="width:110px"><MudChip T="string" Size="Size.Small" Color="Color" Variant="Variant.Outlined">@Label</MudChip></td>
                     <td><MudLink Href="@change.Url" Target="_blank">#@change.Number</MudLink> @change.Title</td>
                     <td style="white-space:nowrap" class="mud-text-secondary">
-                        @(change.MergedUtc is { } merged ? $"merged {merged:yyyy-MM-dd HH:mm}" : $"updated {change.UpdatedUtc:yyyy-MM-dd HH:mm}") UTC
+                        @(change.MergedUtc is { } merged ? $"merged {DotMarc.Reporting.UkTime.DateTime(merged)}" : $"updated {DotMarc.Reporting.UkTime.DateTime(change.UpdatedUtc)}")
                     </td>
                 </tr>
             }

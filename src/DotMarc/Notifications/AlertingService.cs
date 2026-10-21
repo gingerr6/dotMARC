@@ -590,7 +590,7 @@ public sealed class AlertingService : IAlertingService
             if (expiresSoon)
             {
                 await EnsureAlertAsync(db, settings, subject, AlertTypes.ApiKeyExpiring, "Warning", "API key expiring soon",
-                    $"The API key '{apiKey.Name}' ({apiKey.Prefix}...) expires on {apiKey.ExpiresUtc:yyyy-MM-dd}. Create a replacement on the Access page, switch whatever uses this key over to it, then revoke this one.",
+                    $"The API key '{apiKey.Name}' ({apiKey.Prefix}...) expires on {DotMarc.Reporting.UkTime.Date(apiKey.ExpiresUtc)}. Create a replacement on the Access page, switch whatever uses this key over to it, then revoke this one.",
                     cancellationToken, cooldown: ApiKeyExpiryWarning).ConfigureAwait(false);
             }
             else if (openSubjects.Contains(subject))
