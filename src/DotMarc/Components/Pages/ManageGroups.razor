@@ -15,6 +15,11 @@
 @inject ISnackbar Snackbar
 @inject PsaDirectory PsaDirectory
 @inject ILogger<ManageGroups> Logger
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthorizationService AuthorizationService
+@inject DotMarc.Graph.IEntraGuestInviter GuestInviter
+@inject DotMarc.Audit.AuditRecorder AuditRecorder
+@inject NavigationManager Navigation
 
 <PageTitle>dotMARC - Manage Groups</PageTitle>
 <MudButton Href="/dashboard" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Back</MudButton>
@@ -99,7 +104,13 @@
 }
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
-    <MudText Typo="Typo.h6" Class="mb-2">Groups</MudText>
+    <div class="d-flex align-center mb-2">
+        <MudText Typo="Typo.h6">Groups</MudText>
+        <MudSpacer />
+        <AuthorizeView Policy="GroupsAdd" Context="newClientAuthState">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" Disabled="_creatingClient" OnClick="NewClientAsync">New client</MudButton>
+        </AuthorizeView>
+    </div>
     <AuthorizeView Policy="GroupsAdd">
         <MudGrid>
             <MudItem xs="9">
@@ -133,6 +144,7 @@
                     {
                         <MudTh>Ticket rules</MudTh>
                     }
+                    <MudTh>Setup</MudTh>
                     <MudTh>
                         <MudTooltip Text="On for a client that changes its own DNS: dotMARC shows the records to add instead of pushing them." Arrow="true">
                             <span>Client manages DNS</span>
@@ -167,6 +179,7 @@
                             </MudSelect>
                         </MudTh>
                     }
+                    <MudTh></MudTh>
                     <MudTh></MudTh>
                     <MudTh></MudTh>
                     <AuthorizeView Policy="ReportsManage" Context="authState">
@@ -226,6 +239,18 @@
                         }
                     </MudTd>
                 }
+                <MudTd>
+                    @if (_setupProgress.TryGetValue(context.Id, out var setup) && setup.Total > 0)
+                    {
+                        <MudChip T="string" Size="Size.Small" Href="@($"/groups/{context.Id}/setup")" Variant="Variant.Outlined"
+                                 Color="@(setup.Done == setup.Total ? Color.Success : Color.Warning)"
+                                 Icon="@(setup.Done == setup.Total ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Checklist)">@setup.Done of @setup.Total</MudChip>
+                    }
+                    else
+                    {
+                        <MudLink Href="@($"/groups/{context.Id}/setup")" Typo="Typo.body2">Checklist</MudLink>
+                    }
+                </MudTd>
                 <MudTd>
                     <AuthorizeView Policy="GroupsRename" Context="authState">
                         <Authorized>
@@ -464,6 +489,7 @@
             .ToListAsync();
         _ticketRuleOverrideCounts = await AlertTicketRuleService.CountOverridesByGroupAsync(db);
         _brandedGroupIds = (await db.GroupBrandings.Select(branding => branding.GroupId).ToListAsync()).ToHashSet();
+        await LoadSetupProgressAsync(db);
         await LoadReportChipsAsync(db);
         _tags = await db.Tags
             .AsNoTracking()
@@ -767,6 +793,96 @@
             {
                 Snackbar.Add($"Failed to remove {row.Name}. Try again.", Severity.Error);
             }
+        }
+    }
+
+    private Dictionary<int, (int Done, int Total)> _setupProgress = [];
+    private bool _creatingClient;
+
+    /// <summary>Each Group's setup checklist progress, added up over its domains.</summary>
+    private async Task LoadSetupProgressAsync(DotMarcDbContext db)
+    {
+        var domains = await db.Domains.AsNoTracking().Include(domain => domain.Groups).Include(domain => domain.DkimRecords).AsSplitQuery().ToListAsync();
+        _setupProgress = domains
+            .SelectMany(domain => domain.Groups.Select(group => (GroupId: group.Id, Progress: DotMarc.Setup.DomainChecklist.Progress(domain))))
+            .GroupBy(item => item.GroupId)
+            .ToDictionary(group => group.Key, group => (group.Sum(item => item.Progress.Done), group.Sum(item => item.Progress.Total)));
+    }
+
+    /// <summary>The New client wizard: creates the Group, adds its domains and portal users, then opens its setup
+    /// checklist, which checks the new domains' DNS straight away.</summary>
+    private async Task NewClientAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var mayGrantAccess = (await AuthorizationService.AuthorizeAsync(authState.User, "AccessManage")).Succeeded;
+        var mayAddDomains = (await AuthorizationService.AuthorizeAsync(authState.User, "DomainsAdd")).Succeeded;
+        if (!(await AuthorizationService.AuthorizeAsync(authState.User, "GroupsAdd")).Succeeded)
+        {
+            return;
+        }
+
+        var dialog = await DialogService.ShowAsync<NewClientDialog>("New client", new DialogParameters<NewClientDialog>
+        {
+            { x => x.CanGrantAccess, mayGrantAccess },
+            { x => x.CanInviteGuests, GuestInviter.IsAvailable },
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not NewClientDialog.Answers answers)
+        {
+            return;
+        }
+
+        var request = mayAddDomains ? answers.Request : answers.Request with { Domains = [] };
+        _creatingClient = true;
+        try
+        {
+            DotMarc.Setup.NewClientResult created;
+            await using (var db = await DbFactory.CreateDbContextAsync())
+            {
+                created = await DotMarc.Setup.ClientOnboarding.CreateAsync(db, await AuditActorAccessor.GetAsync(), request, mayGrantAccess);
+            }
+
+            if (created.Refusal is not null)
+            {
+                Snackbar.Add(created.Refusal, Severity.Warning);
+                return;
+            }
+
+            if (answers.InviteAsGuests && GuestInviter.IsAvailable)
+            {
+                foreach (var email in created.PortalUsers)
+                {
+                    var invite = await GuestInviter.InviteAsync(email, Navigation.BaseUri, CancellationToken.None);
+                    if (invite.Outcome == DotMarc.Graph.GuestInviteOutcome.Invited)
+                    {
+                        await AuditRecorder.RecordAsync(DotMarc.Audit.AuditLog.Create(await AuditActorAccessor.GetAsync(), DotMarc.Audit.AuditEntryKind.Change,
+                            DotMarc.Audit.AuditActions.GuestInvited, null, $"Added {email} to Entra as a guest"));
+                    }
+                    else if (invite.Outcome != DotMarc.Graph.GuestInviteOutcome.Refused)
+                    {
+                        Snackbar.Add($"{email} can use the portal, but adding them to Entra as a guest failed{(invite.Detail is null ? "" : $": {invite.Detail}")}. Invite them in Entra by hand.", Severity.Warning);
+                    }
+                }
+            }
+
+            if (!mayAddDomains && answers.Request.Domains.Count > 0)
+            {
+                Snackbar.Add("You can't add domains, so none were added. Someone who can should add them to this client.", Severity.Warning);
+            }
+
+            foreach (var problem in created.Problems)
+            {
+                Snackbar.Add(problem, Severity.Warning, config => config.RequireInteraction = true);
+            }
+
+            var summary = $"{request.Name.Trim()} created with {created.AddedDomains.Count + created.MovedDomains.Count} domain(s)"
+                + (created.PortalUsers.Count > 0 ? $" and {created.PortalUsers.Count} portal user(s)" : "") + ".";
+            Snackbar.Add(summary, Severity.Success);
+            Navigation.NavigateTo($"/groups/{created.GroupId}/setup?check=true");
+        }
+        finally
+        {
+            _creatingClient = false;
         }
     }
 

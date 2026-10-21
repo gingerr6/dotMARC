@@ -8,7 +8,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DotMarc.Portal;
 
-public sealed record PortalDomainSummary(string Name, PortalDomainStatus Status, double? PassRate, IReadOnlyList<double?> Trend, IReadOnlyList<AlertEvent> OpenAlerts);
+public sealed record PortalDomainSummary(string Name, PortalDomainStatus Status, double? PassRate, IReadOnlyList<double?> Trend, IReadOnlyList<AlertEvent> OpenAlerts)
+{
+    /// <summary>The domain's DNS setup checklist progress (see DotMarc.Setup.DomainChecklist).</summary>
+    public (int Done, int Total) Setup { get; init; }
+}
 
 public sealed record PortalDomainDetail(PortalDomainSummary Summary, Domain Domain, IReadOnlyList<SourceAggregate> TopSources, IReadOnlyList<AlertEvent> RecentAlerts);
 
@@ -75,6 +79,7 @@ public sealed class PortalData(IDbContextFactory<DotMarcDbContext> dbFactory, Ti
             .Where(domain => domain.IsMonitored && domain.Groups.Any(group => groupIds.Contains(group.Id)))
             .Include(domain => domain.Reports.Where(report => report.ReceivedUtc >= cutoff)).ThenInclude(report => report.Records).ThenInclude(record => record.OverrideReasons)
             .Include(domain => domain.Reports.Where(report => report.ReceivedUtc >= cutoff)).ThenInclude(report => report.Records).ThenInclude(record => record.AuthDetails)
+            .Include(domain => domain.DkimRecords)
             .AsSplitQuery();
     }
 
@@ -88,11 +93,12 @@ public sealed class PortalData(IDbContextFactory<DotMarcDbContext> dbFactory, Ti
     private PortalDomainSummary Summarise(Domain domain, IEnumerable<AlertEvent> openAlerts)
     {
         var alerts = openAlerts.ToList();
-        return new PortalDomainSummary(
+        var summary = new PortalDomainSummary(
             domain.Name,
             PortalStatus.For(domain, domain.LastReportReceivedUtc is not null, alerts),
             DomainStatistics.GetPassRate(domain.Reports),
             PortalTrend.DailyPassRates(domain.Reports, TrendDays, timeProvider.GetUtcNow()),
             alerts);
+        return summary with { Setup = DotMarc.Setup.DomainChecklist.Progress(domain) };
     }
 }

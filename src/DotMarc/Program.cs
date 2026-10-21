@@ -220,6 +220,7 @@ builder.Services.AddScoped<DotMarc.Psa.PsaDirectory>();
 // polled reports.
 builder.Services.AddHostedService<PinnedDomainHealthMonitor>();
 builder.Services.AddHostedService<DotMarc.Audit.AuditRetentionService>();
+builder.Services.AddScoped<DotMarc.Setup.DomainRechecker>();
 builder.Services.AddSingleton<DotMarc.Backups.IBackupStoreFactory, DotMarc.Backups.S3BackupStoreFactory>();
 // The public demo mustn't send its database anywhere, so backups are off there.
 builder.Services.AddSingleton<DotMarc.Backups.IDatabaseDumper>(demoOptions.Enabled

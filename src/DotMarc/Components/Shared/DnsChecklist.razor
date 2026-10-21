@@ -1,0 +1,139 @@
+@* The DNS records a domain needs, each ticked from dotMARC's own checks, with the record to add for anything missing.
+   Used on the domain page, the client's Setup page and in the client portal (ForClient), where records the MSP adds are
+   marked as theirs. Showing a record only reads DNS: nothing here changes it. *@
+@using DotMarc.Data
+@using DotMarc.DnsPush
+@using DotMarc.Setup
+@inject IEnumerable<IDnsChangeBuilder> ChangeBuilders
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@{
+    var items = DomainChecklist.For(Domain);
+    var (done, total) = DomainChecklist.Progress(items);
+}
+<div class="d-flex align-center mb-2" style="gap:12px">
+    <MudText Typo="Typo.body2"><b>@done of @total</b> done</MudText>
+    <MudProgressLinear Color="@(done == total ? Color.Success : Color.Primary)" Value="@(total == 0 ? 0 : 100.0 * done / total)" Rounded="true" Size="Size.Medium" Style="max-width:240px" />
+</div>
+<MudSimpleTable Dense="true" Elevation="0">
+    <tbody>
+        @foreach (var item in items)
+        {
+            <tr>
+                <td style="width:32px; vertical-align:top; padding-top:10px">
+                    @switch (item.State)
+                    {
+                        case ChecklistState.Done:
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" title="Done" />
+                            break;
+                        case ChecklistState.ToDo:
+                            <MudIcon Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small" title="To do" />
+                            break;
+                        case ChecklistState.Waiting:
+                            <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Small" title="Not checked yet" />
+                            break;
+                        default:
+                            <MudIcon Icon="@Icons.Material.Outlined.RadioButtonUnchecked" Size="Size.Small" title="Not started" />
+                            break;
+                    }
+                </td>
+                <td>
+                    <div><b>@item.Title</b>@(item.ByProvider && ForClient ? " · your IT provider adds this one" : item.ByProvider ? " · added by you, in dotMARC's mailbox domain" : "")</div>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.Why</MudText>
+                    @if (item.State is ChecklistState.ToDo or ChecklistState.NotStarted && !string.IsNullOrWhiteSpace(item.Detail))
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1">@item.Detail</MudText>
+                    }
+                    @if (item.State == ChecklistState.ToDo && item.Key == "spf" && ForClient)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1 mud-text-secondary">Your IT provider will send you this record: it lists the services that send your mail, so it's worked out for you.</MudText>
+                    }
+                    @if (item.State == ChecklistState.Waiting)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1 mud-text-secondary">dotMARC hasn't checked this yet.</MudText>
+                    }
+                    @if (_records.TryGetValue(item.Key, out var changes))
+                    {
+                        <MudSimpleTable Dense="true" Elevation="0" Class="mt-2" Style="background:transparent">
+                            <thead><tr><th>Type</th><th>Name</th><th>Value</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var change in changes)
+                                {
+                                    <tr>
+                                        <td>@change.RecordType</td>
+                                        <td><code style="overflow-wrap:anywhere">@change.Name</code></td>
+                                        <td><code style="overflow-wrap:anywhere">@change.DesiredValue</code></td>
+                                        <td><MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="Copy value" OnClick="@(() => CopyAsync(change.DesiredValue))" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    }
+                </td>
+                <td style="width:1%; white-space:nowrap; vertical-align:top; padding-top:6px; text-align:right">
+                    @if (item.State == ChecklistState.ToDo && item.ChangeTarget is { } target && !(item.ByProvider && ForClient) && !_records.ContainsKey(item.Key))
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy"
+                                   Disabled="@(_loading == item.Key)" OnClick="@(() => ShowRecordsAsync(item.Key, target))">Show record</MudButton>
+                    }
+                    else if (item.State == ChecklistState.ToDo && item.Key == "spf" && !ForClient)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Href="@($"/domains/{Uri.EscapeDataString(Domain.Name)}")">Open SPF editor</MudButton>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</MudSimpleTable>
+
+@code {
+    [Parameter, EditorRequired] public Domain Domain { get; set; } = default!;
+
+    /// <summary>Shown to the client, in the portal: wording for them, and no records the MSP adds.</summary>
+    [Parameter] public bool ForClient { get; set; }
+
+    private readonly Dictionary<string, IReadOnlyList<DnsRecordChange>> _records = [];
+    private string? _loading;
+
+    private async Task ShowRecordsAsync(string key, string target)
+    {
+        var builder = ChangeBuilders.Find(target);
+        if (builder is null)
+        {
+            return;
+        }
+
+        _loading = key;
+        try
+        {
+            var plan = await builder.BuildAsync(new DnsPushRequest(Domain, "", Domain.DnsZone ?? Domain.Name, null), CancellationToken.None);
+            if (plan.Refusal is not null)
+            {
+                Snackbar.Add("dotMARC can't work out this record yet.", Severity.Info);
+            }
+            else if (plan.Changes.Count == 0)
+            {
+                Snackbar.Add("DNS already has this record. It will tick at the next check.", Severity.Info);
+            }
+            else
+            {
+                _records[key] = plan.Changes;
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            Snackbar.Add("Couldn't look up the current DNS records. Try again.", Severity.Error);
+        }
+        finally
+        {
+            _loading = null;
+        }
+    }
+
+    private async Task CopyAsync(string value)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", value);
+        Snackbar.Add("Copied.", Severity.Success);
+    }
+}

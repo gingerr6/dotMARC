@@ -1,0 +1,153 @@
+@page "/groups/{GroupId:int}/setup"
+@attribute [Authorize(Policy = "DomainsView")]
+@using DotMarc.Components.Shared
+@using DotMarc.Data
+@using DotMarc.Setup
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject DomainRechecker Rechecker
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IAuthorizationService AuthorizationService
+
+<PageTitle>dotMARC - @(_group?.Name ?? "Client") setup</PageTitle>
+<MudButton Href="/groups" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">Groups</MudButton>
+
+@if (_group is null)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else
+{
+    var (done, total) = _domains.Aggregate((Done: 0, Total: 0), (sum, domain) =>
+    {
+        var progress = DomainChecklist.Progress(domain);
+        return (sum.Done + progress.Done, sum.Total + progress.Total);
+    });
+    <div class="d-flex align-center flex-wrap mb-1" style="gap:12px">
+        <MudText Typo="Typo.h4">@_group.Name setup</MudText>
+        <MudSpacer />
+        <AuthorizeView Policy="DomainsEdit" Context="editAuthState">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" Disabled="_checking" OnClick="CheckNowAsync">
+                @(_checking ? "Checking DNS…" : "Check now")
+            </MudButton>
+        </AuthorizeView>
+    </div>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        The DNS records each of @_group.Name's domains needs. Each ticks itself once dotMARC sees it in DNS: DNS is checked through the day, or press Check now after adding records.
+        @(_group.ClientManagesDns ? $"{_group.Name} manages its own DNS, so send them the records to add; they can see this list in their portal too." : "")
+    </MudText>
+    <div class="d-flex align-center mb-4" style="gap:12px">
+        <MudText><b>@done of @total</b> done across @_domains.Count domain@(_domains.Count == 1 ? "" : "s")</MudText>
+        <MudProgressLinear Color="@(done == total ? Color.Success : Color.Primary)" Value="@(total == 0 ? 0 : 100.0 * done / total)" Rounded="true" Size="Size.Large" Style="max-width:320px" />
+    </div>
+
+    @if (_domains.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">@_group.Name has no domains yet. Add them on the Domains page.</MudAlert>
+    }
+
+    <MudExpansionPanels MultiExpansion="true">
+        @foreach (var domain in _domains)
+        {
+            var (domainDone, domainTotal) = DomainChecklist.Progress(domain);
+            <MudExpansionPanel Expanded="@(domainDone < domainTotal)">
+                <TitleContent>
+                    <div class="d-flex align-center" style="gap:12px">
+                        <MudIcon Icon="@(domainDone == domainTotal ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Pending)"
+                                 Color="@(domainDone == domainTotal ? Color.Success : Color.Warning)" />
+                        <MudText><b>@domain.Name</b></MudText>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@domainDone of @domainTotal</MudChip>
+                        <MudLink Href="@($"/domains/{Uri.EscapeDataString(domain.Name)}")" Typo="Typo.body2">Open domain</MudLink>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    <DnsChecklist Domain="domain" />
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    [Parameter] public int GroupId { get; set; }
+
+    /// <summary>Set by the New client wizard, to check the new domains' DNS as soon as the page opens.</summary>
+    [SupplyParameterFromQuery(Name = "check")] public bool CheckOnOpen { get; set; }
+
+    private bool _checkedOnOpen;
+
+
+    private Group? _group;
+    private List<Domain> _domains = [];
+    private bool _checking;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+
+        // Off the render path, so the checklist shows straight away and fills in as the checks finish.
+        if (RendererInfo.IsInteractive && CheckOnOpen && !_checkedOnOpen && _domains.Count > 0)
+        {
+            _checkedOnOpen = true;
+            _ = InvokeAsync(async () =>
+            {
+                await CheckNowAsync();
+                StateHasChanged();
+            });
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var scopedGroupIds = authState.User.FindAll(DotMarc.Security.UserAccessClaimsTransformation.ScopedGroupClaimType).Select(claim => int.Parse(claim.Value)).ToList();
+        if (scopedGroupIds.Count > 0 && !scopedGroupIds.Contains(GroupId))
+        {
+            Navigation.NavigateTo("/AccessDenied");
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _group = await db.Groups.AsNoTracking().SingleOrDefaultAsync(group => group.Id == GroupId);
+        if (_group is null)
+        {
+            Navigation.NavigateTo("/groups");
+            return;
+        }
+
+        _domains = await db.Domains.AsNoTracking()
+            .Where(domain => domain.Groups.Any(group => group.Id == GroupId))
+            .Include(domain => domain.DkimRecords)
+            .Include(domain => domain.Groups)
+            .AsSplitQuery()
+            .OrderBy(domain => domain.Name)
+            .ToListAsync();
+    }
+
+    /// <summary>Runs every DNS check on the client's domains now. A recheck needs DomainsEdit, as on the domain page.</summary>
+    private async Task CheckNowAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (!(await AuthorizationService.AuthorizeAsync(authState.User, "DomainsEdit")).Succeeded)
+        {
+            return;
+        }
+
+        _checking = true;
+        StateHasChanged();
+        try
+        {
+            await Rechecker.RecheckAsync(_domains.Select(domain => domain.Id).ToList());
+            await LoadAsync();
+            Snackbar.Add("DNS checked.", Severity.Success);
+        }
+        finally
+        {
+            _checking = false;
+        }
+    }
+}

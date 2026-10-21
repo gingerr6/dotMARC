@@ -19,6 +19,12 @@
             </MudText>
             <PortalTrendLine Rates="Summary.Trend" />
         </div>
+        @if (Summary.Setup is { Total: > 0 } setup && setup.Done < setup.Total)
+        {
+            <MudText Typo="Typo.body2" Class="mt-2 d-block" Color="Color.Warning">
+                DNS setup: @setup.Done of @setup.Total done. <MudLink Href="@DomainHref" Typo="Typo.body2">See what's left</MudLink>
+            </MudText>
+        }
         @if (Summary.OpenAlerts.Count > 0)
         {
             <MudText Typo="Typo.caption" Class="mt-2 d-block">
