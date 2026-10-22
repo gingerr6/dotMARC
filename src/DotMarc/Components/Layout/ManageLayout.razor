@@ -1,11 +1,17 @@
 @inherits LayoutComponentBase
 @layout MainLayout
-@* The Manage section: its menu down the left, the page beside it. On a narrow screen the menu sits above the page. *@
+@inject NavigationManager Navigation
+@* The Manage section: its menu down the left, the page beside it, with a Back button to the overview (or, on a
+   sub-page, to its own page). On a phone the menu is hidden: the overview is the menu there. *@
 <div class="dotmarc-manage">
     <aside class="dotmarc-manage-nav">
         <ManageNav />
     </aside>
     <div class="dotmarc-manage-body">
+        @if (ManageItems.ParentOf(new Uri(Navigation.Uri).AbsolutePath) is { } parent)
+        {
+            <MudButton Href="@parent.Href" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2">@parent.Title</MudButton>
+        }
         @Body
     </div>
 </div>

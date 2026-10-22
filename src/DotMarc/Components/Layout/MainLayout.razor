@@ -19,6 +19,7 @@
 
 <MudLayout>
     <MudAppBar Elevation="1">
+        @* On a phone the top bar's links are icons only, so they fit. *@
         <div class="d-flex align-center">
             <a href="/dashboard">
                 <img src="@Assets["logo.svg"]" alt="dotMARC Logo" height="48" />
@@ -26,15 +27,18 @@
         </div>
         <AuthorizeView>
             <Authorized>
-                <MudButton Href="/dashboard" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Dashboard">Dashboard</MudButton>
+                <MudButton Href="/dashboard" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Dashboard">Dashboard</MudButton>
+                <MudIconButton Href="/dashboard" Color="Color.Inherit" Icon="@Icons.Material.Filled.Dashboard" Class="d-flex d-sm-none" title="Dashboard" />
             </Authorized>
         </AuthorizeView>
         <AuthorizeView Policy="AlertsView">
-            <MudButton Href="/alerts" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Notifications">Alerts</MudButton>
+            <MudButton Href="/alerts" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Notifications">Alerts</MudButton>
+            <MudIconButton Href="/alerts" Color="Color.Inherit" Icon="@Icons.Material.Filled.Notifications" Class="d-flex d-sm-none" title="Alerts" />
         </AuthorizeView>
         <AuthorizeView>
             <Authorized>
-                <MudButton Href="/manage" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Settings">Manage</MudButton>
+                <MudButton Href="/manage" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Settings">Manage</MudButton>
+                <MudIconButton Href="/manage" Color="Color.Inherit" Icon="@Icons.Material.Filled.Settings" Class="d-flex d-sm-none" title="Manage" />
             </Authorized>
         </AuthorizeView>
         @if (DemoOptions.Value.Enabled)

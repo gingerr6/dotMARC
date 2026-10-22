@@ -137,12 +137,11 @@ html {
 .dotmarc-manage-heading { display: block; padding: 12px 16px 0; color: var(--mud-palette-text-secondary); }
 .dotmarc-manage-card:hover { box-shadow: var(--mud-elevation-4); }
 .dotmarc-manage-nav .mud-nav-link:not(.active) .mud-nav-link-icon { color: var(--mud-palette-text-secondary); }
-/* On a narrow screen the menu becomes one row that scrolls sideways above the page, without the section headings. */
+/* A narrower menu on a small laptop or tablet; on a phone none, as the overview is the menu there. */
 @media (max-width: 960px) {
-    .dotmarc-manage { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-    .dotmarc-manage-nav { position: static; padding: 0; overflow-x: auto; }
-    .dotmarc-manage-nav .mud-navmenu { display: flex; flex-wrap: nowrap; }
-    .dotmarc-manage-nav .mud-nav-item { flex: 0 0 auto; width: auto; }
-    .dotmarc-manage-nav .mud-nav-link { white-space: nowrap; width: auto; padding-right: 16px; }
-    .dotmarc-manage-heading { display: none; }
+    .dotmarc-manage { grid-template-columns: 190px minmax(0, 1fr); gap: 16px; }
+}
+@media (max-width: 680px) {
+    .dotmarc-manage { grid-template-columns: minmax(0, 1fr); }
+    .dotmarc-manage-nav { display: none; }
 }
