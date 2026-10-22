@@ -130,7 +130,7 @@ else
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDmarcAsync" title="Recheck now" />
                                 }
-                                @if ((_domain.DmarcCheckStatus is DmarcCheckStatus.MissingOwnRecord or DmarcCheckStatus.Misconfigured) && !_mayPush)
+                                @if ((_domain.DmarcCheckStatus is DmarcCheckStatus.MissingOwnRecord or DmarcCheckStatus.Misconfigured) && !_canPushDomainZone)
                                 {
                                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("dmarc", "DMARC record"))">Show record to add</MudButton>
                                 }
@@ -177,7 +177,7 @@ else
                             @if (nextName is not null && enforcement.Ready)
                             {
                                 <AuthorizeView Policy="DomainsEdit" Context="enforcementAuthState">
-                                    @if (_mayPush)
+                                    @if (_canPushDomainZone)
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="@(() => PushPolicyAsync(enforcement.NextPolicy!.Value))">Move to p=@nextName</MudButton>
                                     }
@@ -209,7 +209,7 @@ else
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDmarcAuthorizationAsync" title="Recheck now" />
                                 }
-                                @if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing && !_mayPush)
+                                @if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing && !_canPushMailboxZone)
                                 {
                                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("dmarc-auth", "DMARC authorization record"))">Show record to add</MudButton>
                                 }
@@ -248,7 +248,7 @@ else
                                     {
                                         <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckTlsrptAsync" title="Recheck now" />
                                     }
-                                    @if ((_domain.TlsrptCheckStatus is TlsrptCheckStatus.MissingOwnRecord or TlsrptCheckStatus.Misconfigured) && !_mayPush)
+                                    @if ((_domain.TlsrptCheckStatus is TlsrptCheckStatus.MissingOwnRecord or TlsrptCheckStatus.Misconfigured) && !_canPushDomainZone)
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("tlsrpt", "TLS reporting record"))">Show record to add</MudButton>
                                     }
@@ -364,7 +364,7 @@ else
                                 }
                                 @if (_domain.DkimRecords.Count > 0 && _domain.DkimCheckStatus is DkimCheckStatus.Missing or DkimCheckStatus.Misconfigured)
                                 {
-                                    @if (_mayPush)
+                                    @if (_canPushDomainZone)
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="PushDkimRecordsAsync">Push DKIM records</MudButton>
                                     }
@@ -410,7 +410,7 @@ else
 
         <MudTabPanel Text="MTA-STS">
             <AuthorizeView Policy="MtaStsView" Context="viewAuthState">
-                <DomainMtaStsPanel Domain="_domain" OpenDnsPushPopup="OpenDnsPushPopupAsync" MayPush="_mayPush" />
+                <DomainMtaStsPanel Domain="_domain" OpenDnsPushPopup="OpenDnsPushPopupAsync" MayPush="_canPushDomainZone" />
             </AuthorizeView>
         </MudTabPanel>
 
@@ -732,6 +732,13 @@ else
     // Whether this person may push records for this domain from dotMARC: they need the DnsPush permission, and none of
     // the domain's Groups may be marked as managing its own DNS. Otherwise the push buttons show the records to copy.
     private bool _mayPush;
+
+    // Whether a push can actually reach the DNS a record lives in: this person may push, and that zone's provider is one
+    // dotMARC pushes to and is connected. Records in the domain's own zone use the first; the DMARC authorization record
+    // lives in the reports mailbox's domain, so it uses the second (worked out in the background, as it needs DNS lookups).
+    // Where a push can't reach, the row shows the record to add by hand.
+    private bool _canPushDomainZone;
+    private bool _canPushMailboxZone;
     private EnforcementAssessment? _enforcement;
     private bool _clientManagesDns;
     private string _noPushReason = "";
@@ -885,6 +892,7 @@ else
         _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
         _clientManagesDns = _domain.Groups.Any(group => group.ClientManagesDns);
         _mayPush = !_clientManagesDns && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.DnsPush))).Succeeded;
+        await RefreshDomainZonePushAsync();
         _noPushReason = _clientManagesDns
             ? $"{string.Join(", ", _domain.Groups.Where(group => group.ClientManagesDns).Select(group => group.Name))} manages its own DNS, so dotMARC doesn't push records for this domain."
             : "You don't have permission to push records to DNS from dotMARC.";
@@ -984,6 +992,7 @@ else
             }
 
             _ = DetectMailServicesInBackgroundAsync();
+            _ = DetectMailboxZonePushInBackgroundAsync();
         }
 
         // Bucket by day-received (of the report, not the record) rather than the record itself,
@@ -1149,6 +1158,33 @@ else
         {
             EnrichmentThrottle.Release();
             source.IsHostNamePending = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RefreshDomainZonePushAsync() =>
+        _canPushDomainZone = _mayPush && await DnsPushProviders.FindConfiguredAsync(_domain!.DnsProvider.ToProviderKey()) is not null;
+
+    private async Task DetectMailboxZonePushInBackgroundAsync()
+    {
+        if (!_mayPush)
+        {
+            return;
+        }
+
+        try
+        {
+            var mailbox = GraphOptions.Value.MailboxAddress;
+            var detected = await DnsProviderDetector.DetectAsync(mailbox[(mailbox.IndexOf('@') + 1)..], CancellationToken.None).ConfigureAwait(false);
+            _canPushMailboxZone = await DnsPushProviders.FindConfiguredAsync(detected.Provider.ToProviderKey()).ConfigureAwait(false) is not null;
+        }
+        catch (Exception ex)
+        {
+            // Leaves Show record in place of the push button; nothing else on the page depends on it.
+            Logger.LogWarning(ex, "Failed to detect the DNS provider of the reports mailbox's domain.");
+        }
+        finally
+        {
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -1676,6 +1712,7 @@ else
             _domain.DnsZone = domain.DnsZone;
             _domain.DnsProviderCheckedUtc = domain.DnsProviderCheckedUtc;
             _domain.DnsNameservers = domain.DnsNameservers;
+            await RefreshDomainZonePushAsync();
         }
         finally
         {
