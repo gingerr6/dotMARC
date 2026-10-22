@@ -172,17 +172,19 @@ else
                                     </TooltipContent>
                                 </MudTooltip>
                             }
-                            @if (nextName is not null)
+                            @* The next step's record only once the domain is ready for it: pushed where dotMARC can, shown to
+                               add by hand where it can't. Until then the tooltip says what's in the way. *@
+                            @if (nextName is not null && enforcement.Ready)
                             {
                                 <AuthorizeView Policy="DomainsEdit" Context="enforcementAuthState">
-                                    @if (enforcement.Ready && _mayPush)
+                                    @if (_mayPush)
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.CloudSync" OnClick="@(() => PushPolicyAsync(enforcement.NextPolicy!.Value))">Move to p=@nextName</MudButton>
                                     }
                                     else
                                     {
-                                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" title="@($"Show the p={nextName} record")"
-                                                       OnClick="@(() => ShowRecordsAsync("dmarc-policy", $"DMARC record for p={nextName}", nextName))" />
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.ContentCopy"
+                                                   OnClick="@(() => ShowRecordsAsync("dmarc-policy", $"DMARC record for p={nextName}", nextName))">Show p=@nextName record</MudButton>
                                     }
                                 </AuthorizeView>
                             }
