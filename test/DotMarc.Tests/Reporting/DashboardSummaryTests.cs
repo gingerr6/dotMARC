@@ -124,14 +124,24 @@ public class DashboardSummaryTests
     }
 
     [Fact]
-    public void Build_DoesNotMarkUnmonitoredDomainMissing_EvenWithNoReports()
+    public void Build_ShowsAnUnmonitoredDomainAsNotMonitored_NotMissingOrOk()
     {
         var domain = DomainWith("contoso.io", isMonitored: false, lastReportReceivedUtc: null);
 
         var (summary, rows) = DashboardSummary.Build([domain], parseFailureCount: 0);
 
-        Assert.Equal("OK", Assert.Single(rows).Status);
+        Assert.Equal(DashboardSummary.NotMonitored, Assert.Single(rows).Status);
         Assert.Equal(0, summary.MissingCount);
+    }
+
+    [Fact]
+    public void Build_CountsOnlyMonitoredDomains()
+    {
+        var (summary, rows) = DashboardSummary.Build(
+            [DomainWith("a.example", isMonitored: true, DateTimeOffset.UtcNow), DomainWith("b.example", isMonitored: false, null), DomainWith("c.example", isMonitored: false, null)],
+            parseFailureCount: 0);
+
+        Assert.Equal((1, 3), (summary.DomainCount, rows.Count));
     }
 
     [Fact]
