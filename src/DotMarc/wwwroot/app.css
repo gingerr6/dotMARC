@@ -145,3 +145,14 @@ html {
     .dotmarc-manage { grid-template-columns: minmax(0, 1fr); }
     .dotmarc-manage-nav { display: none; }
 }
+
+/* Domain health rows (DomainHealthCheckRow): check, status, when checked, then the detail and actions. Long record names
+   wrap rather than widen the page. Where there isn't room for four columns (a tablet or a folding phone), the check and
+   its status share a line and the rest goes under them. */
+.dotmarc-health-row { display: grid; grid-template-columns: 220px 160px 180px minmax(0, 1fr); gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.dotmarc-health-detail { min-width: 0; overflow-wrap: anywhere; }
+.dotmarc-health-below { grid-column: 2 / -1; min-width: 0; }
+@media (max-width: 1100px) {
+    .dotmarc-health-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; padding: 12px 0; }
+    .dotmarc-health-checked, .dotmarc-health-detail, .dotmarc-health-below { grid-column: 1 / -1; }
+}
