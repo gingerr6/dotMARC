@@ -1,0 +1,35 @@
+@page "/manage"
+@layout DotMarc.Components.Layout.ManageLayout
+@attribute [Authorize]
+@using DotMarc.Components.Layout
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@* The Manage section's landing page: every page in it this user may open, described, by section. *@
+<PageTitle>dotMARC - Manage</PageTitle>
+<MudText Typo="Typo.h4" Class="mb-1">Manage</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Set up clients, connections, people and the server. Everything here is also in the menu on the left.</MudText>
+
+@if (_items is { Count: 0 })
+{
+    <MudAlert Severity="Severity.Info">There's nothing here you have permission to change. Ask an admin if you need access.</MudAlert>
+}
+@foreach (var group in (_items ?? []).GroupBy(item => item.Section))
+{
+    <MudText Typo="Typo.overline" Class="d-block mt-4 mb-1 mud-text-secondary">@group.Key</MudText>
+    <MudGrid>
+        @foreach (var item in group)
+        {
+            <ManageCard Href="@item.Href" Icon="@item.Icon" Title="@item.Title" Text="@item.Text" />
+        }
+    </MudGrid>
+}
+
+@code {
+    private IReadOnlyList<ManageItem>? _items;
+
+    protected override async Task OnInitializedAsync() =>
+        _items = await ManageItems.VisibleToAsync(AuthorizationService, (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+}

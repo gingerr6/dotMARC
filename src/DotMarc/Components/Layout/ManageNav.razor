@@ -1,0 +1,34 @@
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IAuthorizationService AuthorizationService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+
+@* The Manage section's menu, down the left of every Manage page (see ManageLayout): only the pages this user may open,
+   under their section headings. *@
+<MudNavMenu Dense="true" Color="Color.Primary">
+    <MudNavLink Href="/manage" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Apps">Overview</MudNavLink>
+    @foreach (var group in _items.GroupBy(item => item.Section))
+    {
+        <MudText Typo="Typo.overline" Class="dotmarc-manage-heading">@group.Key</MudText>
+        @foreach (var item in group)
+        {
+            <MudNavLink Href="@item.Href" Match="NavLinkMatch.Prefix" Icon="@item.Icon">@item.Title</MudNavLink>
+        }
+    }
+</MudNavMenu>
+
+@code {
+    private IReadOnlyList<ManageItem> _items = [];
+
+    protected override async Task OnInitializedAsync() =>
+        _items = await ManageItems.VisibleToAsync(AuthorizationService, (await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && RendererInfo.IsInteractive)
+        {
+            await JS.InvokeVoidAsync("dotmarcShowActiveManageLink");
+        }
+    }
+}

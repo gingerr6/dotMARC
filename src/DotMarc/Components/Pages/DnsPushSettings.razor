@@ -1,5 +1,6 @@
 @* src/DotMarc/Components/Pages/DnsPushSettings.razor *@
 @page "/dns-push/settings"
+@layout DotMarc.Components.Layout.ManageLayout
 @attribute [Authorize(Policy = "DnsPushManage")]
 @using DotMarc.Data
 @using DotMarc.Components.Shared
