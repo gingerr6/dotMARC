@@ -97,6 +97,17 @@ public sealed class DnsChangeBuilderTests
     }
 
     [Fact]
+    public async Task DmarcAuthorization_ShowsTheRecordToAddByHand_WhereverTheMailboxDomainIs()
+    {
+        var detector = new FakeDnsProviderDetector { Result = new(DetectedDnsProvider.AzureDns, "dotmarc.example", []) };
+
+        var plan = await new DmarcAuthorizationChangeBuilder(new FakeDmarcAuthorizationTxtLookup(), detector, Graph()).BuildAsync(Request(""), CancellationToken.None);
+
+        var change = Assert.Single(plan.Changes);
+        Assert.Equal(("contoso.com._report._dmarc.dotmarc.example", "v=DMARC1;"), (change.Name, change.DesiredValue));
+    }
+
+    [Fact]
     public async Task MtaSts_CreatesTheCname()
     {
         var builder = new MtaStsChangeBuilder(Options.Create(new MtaStsOptions { HostingHostname = "mta-sts.dotmarc.example" }), new FakeMtaStsCnameLookup(), new FakeMtaStsHostProvisioner(), new FakeTxtRecordLookup());
