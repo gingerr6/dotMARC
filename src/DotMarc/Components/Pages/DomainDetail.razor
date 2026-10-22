@@ -209,20 +209,19 @@ else
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDmarcAuthorizationAsync" title="Recheck now" />
                                 }
-                                @if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing && !_canPushMailboxZone)
+                                @* The record lives in the reports mailbox's domain, not this one, so both buttons say so: the
+                                   record to add is always there, and a push where that domain's DNS can take one. *@
+                                @if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing)
                                 {
-                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("dmarc-auth", "DMARC authorization record"))">Show record to add</MudButton>
-                                }
-                                else if (_domain.DmarcAuthorizationCheckStatus == DmarcAuthorizationCheckStatus.Missing)
-                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="@(() => ShowRecordsAsync("dmarc-auth", $"DMARC authorization record (in {MailboxDomain}'s DNS)"))">Show record to add</MudButton>
                                     @if (_isPushingDmarcAuthRecord)
                                     {
                                         <MudProgressCircular Size="Size.Small" Indeterminate="true" />
                                     }
-                                    else
+                                    else if (_canPushMailboxZone)
                                     {
                                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CloudSync"
-                                                   OnClick="PushDmarcAuthorizationRecordAsync">Push authorization record via your DNS provider</MudButton>
+                                                   OnClick="PushDmarcAuthorizationRecordAsync">Push to @MailboxDomain</MudButton>
                                     }
                                 }
                             </Authorized>
@@ -1161,6 +1160,9 @@ else
             await InvokeAsync(StateHasChanged);
         }
     }
+
+    /// <summary>The reports mailbox's domain: where every monitored domain's DMARC authorization record lives.</summary>
+    private string MailboxDomain => GraphOptions.Value.MailboxAddress[(GraphOptions.Value.MailboxAddress.IndexOf('@') + 1)..];
 
     private async Task RefreshDomainZonePushAsync() =>
         _canPushDomainZone = _mayPush && await DnsPushProviders.FindConfiguredAsync(_domain!.DnsProvider.ToProviderKey()) is not null;
