@@ -46,4 +46,25 @@ public static class ManageItems
 
         return visible;
     }
+
+    /// <summary>Where a Manage page's Back button goes: a sub-page back to its own page, every other page to the overview.
+    /// Null on the overview itself.</summary>
+    public static (string Href, string Title)? ParentOf(string path)
+    {
+        path = "/" + path.Trim('/');
+        if (path == "/manage")
+        {
+            return null;
+        }
+        if (path.StartsWith("/groups/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/setup", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("/groups", "Groups");
+        }
+        if (path.Equals("/domains/import", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("/domains", "Domains");
+        }
+
+        return ("/manage", "Manage");
+    }
 }
