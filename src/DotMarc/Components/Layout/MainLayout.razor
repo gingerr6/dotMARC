@@ -18,51 +18,53 @@
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="1">
-        @* On a phone the top bar's links are icons only, so they fit. *@
-        <div class="d-flex align-center">
-            <a href="/dashboard">
-                <img src="@Assets["logo.svg"]" alt="dotMARC Logo" height="48" />
-            </a>
-        </div>
-        <AuthorizeView>
-            <Authorized>
-                <MudButton Href="/dashboard" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Dashboard">Dashboard</MudButton>
-                <MudIconButton Href="/dashboard" Color="Color.Inherit" Icon="@Icons.Material.Filled.Dashboard" Class="d-flex d-sm-none" title="Dashboard" />
-            </Authorized>
-        </AuthorizeView>
-        <AuthorizeView Policy="AlertsView">
-            <MudButton Href="/alerts" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Notifications">Alerts</MudButton>
-            <MudIconButton Href="/alerts" Color="Color.Inherit" Icon="@Icons.Material.Filled.Notifications" Class="d-flex d-sm-none" title="Alerts" />
-        </AuthorizeView>
-        <AuthorizeView>
-            <Authorized>
-                <MudButton Href="/manage" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Settings">Manage</MudButton>
-                <MudIconButton Href="/manage" Color="Color.Inherit" Icon="@Icons.Material.Filled.Settings" Class="d-flex d-sm-none" title="Manage" />
-            </Authorized>
-        </AuthorizeView>
-        @if (DemoOptions.Value.Enabled)
-        {
+    <MudAppBar Elevation="1" Gutters="false">
+        @* The same width as the page below, so the bar lines up with it. On a phone its links are icons only, so they fit. *@
+        <MudContainer MaxWidth="MaxWidth.Large" Class="d-flex align-center">
+            <div class="d-flex align-center">
+                <a href="/dashboard">
+                    <img src="@Assets["logo.svg"]" alt="dotMARC Logo" height="48" />
+                </a>
+            </div>
             <AuthorizeView>
                 <Authorized>
-                    <MudMenu Label="Demo" Color="Color.Warning" EndIcon="@Icons.Material.Filled.ExpandMore">
-                        <MudMenuItem Disabled="true">Viewing as @context.User.Identity?.Name</MudMenuItem>
-                        <MudMenuItem Href="/demo" Icon="@Icons.Material.Filled.SwitchAccount">Switch persona</MudMenuItem>
-                    </MudMenu>
+                    <MudButton Href="/dashboard" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Dashboard">Dashboard</MudButton>
+                    <MudIconButton Href="/dashboard" Color="Color.Inherit" Icon="@Icons.Material.Filled.Dashboard" Class="d-flex d-sm-none" title="Dashboard" />
                 </Authorized>
             </AuthorizeView>
-        }
-        <MudSpacer />
-        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                       Color="Color.Inherit" OnClick="ToggleDarkModeAsync" title="Toggle dark mode" />
-        <AuthorizeView>
-            <Authorized>
-                <form method="post" action="/signout" class="d-inline">
-                    <AntiforgeryToken />
-                    <MudIconButton ButtonType="ButtonType.Submit" Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" title="Sign out" />
-                </form>
-            </Authorized>
-        </AuthorizeView>
+            <AuthorizeView Policy="AlertsView">
+                <MudButton Href="/alerts" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Notifications">Alerts</MudButton>
+                <MudIconButton Href="/alerts" Color="Color.Inherit" Icon="@Icons.Material.Filled.Notifications" Class="d-flex d-sm-none" title="Alerts" />
+            </AuthorizeView>
+            <AuthorizeView>
+                <Authorized>
+                    <MudButton Href="/manage" Color="Color.Inherit" Class="d-none d-sm-flex" StartIcon="@Icons.Material.Filled.Settings">Manage</MudButton>
+                    <MudIconButton Href="/manage" Color="Color.Inherit" Icon="@Icons.Material.Filled.Settings" Class="d-flex d-sm-none" title="Manage" />
+                </Authorized>
+            </AuthorizeView>
+            @if (DemoOptions.Value.Enabled)
+            {
+                <AuthorizeView>
+                    <Authorized>
+                        <MudMenu Label="Demo" Color="Color.Warning" EndIcon="@Icons.Material.Filled.ExpandMore">
+                            <MudMenuItem Disabled="true">Viewing as @context.User.Identity?.Name</MudMenuItem>
+                            <MudMenuItem Href="/demo" Icon="@Icons.Material.Filled.SwitchAccount">Switch persona</MudMenuItem>
+                        </MudMenu>
+                    </Authorized>
+                </AuthorizeView>
+            }
+            <MudSpacer />
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit" OnClick="ToggleDarkModeAsync" title="Toggle dark mode" />
+            <AuthorizeView>
+                <Authorized>
+                    <form method="post" action="/signout" class="d-inline">
+                        <AntiforgeryToken />
+                        <MudIconButton ButtonType="ButtonType.Submit" Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" title="Sign out" />
+                    </form>
+                </Authorized>
+            </AuthorizeView>
+        </MudContainer>
     </MudAppBar>
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="my-4">
