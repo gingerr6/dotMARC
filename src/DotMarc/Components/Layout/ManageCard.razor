@@ -1,0 +1,19 @@
+@* One tile on the Manage overview. *@
+<MudItem xs="12" sm="6" md="4">
+    <MudPaper Class="pa-4 dotmarc-manage-card" Elevation="1" Style="height:100%">
+        <MudLink Href="@Href" Underline="Underline.None" Style="display:block">
+            <div class="d-flex align-center mb-1" style="gap:8px">
+                <MudIcon Icon="@Icon" Color="Color.Primary" />
+                <MudText Typo="Typo.h6">@Title</MudText>
+            </div>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@Text</MudText>
+        </MudLink>
+    </MudPaper>
+</MudItem>
+
+@code {
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+}

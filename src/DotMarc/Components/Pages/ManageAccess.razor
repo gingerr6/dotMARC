@@ -1,5 +1,6 @@
 @page "/access"
 @page "/access/{Tab}"
+@layout DotMarc.Components.Layout.ManageLayout
 @attribute [Authorize(Policy = "AccessManage")]
 @using DotMarc.Components.Shared
 @using DotMarc.Data

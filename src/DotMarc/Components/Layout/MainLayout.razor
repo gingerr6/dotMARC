@@ -32,43 +32,11 @@
         <AuthorizeView Policy="AlertsView">
             <MudButton Href="/alerts" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Notifications">Alerts</MudButton>
         </AuthorizeView>
-        <MudMenu Label="Manage" Color="Color.Inherit" EndIcon="@Icons.Material.Filled.ExpandMore">
-            <AuthorizeView Policy="DomainsWrite">
-                <MudMenuItem Href="/domains" Icon="@Icons.Material.Filled.Language">Domains</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="DomainsView">
-                <MudMenuItem Href="/enforcement" Icon="@Icons.Material.Filled.Shield">Enforcement</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="ReportsManage">
-                <MudMenuItem Href="/client-reports" Icon="@Icons.Material.Filled.Assessment">Client reports</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="GroupsOrTagsWrite">
-                <MudMenuItem Href="/groups" Icon="@Icons.Material.Filled.GroupWork">Groups</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="DnsPushManage">
-                <MudMenuItem Href="/dns-push/settings" Icon="@Icons.Material.Filled.CloudSync">DNS push settings</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="UnlimitedAlertsManage">
-                <MudMenuItem Href="/alerts/settings" Icon="@Icons.Material.Filled.NotificationsActive">Alert settings</MudMenuItem>
-                <MudMenuItem Href="/psa/settings" Icon="@Icons.Material.Filled.ConfirmationNumber">PSA settings</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="AccessManage">
-                <MudMenuItem Href="/access" Icon="@Icons.Material.Filled.ManageAccounts">Access</MudMenuItem>
-                <MudMenuItem Href="/branding/settings" Icon="@Icons.Material.Filled.Palette">Branding</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="LogsView">
-                <MudMenuItem Href="/logs" Icon="@Icons.Material.Filled.Article">Server logs</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="UnlimitedAuditView">
-                <MudMenuItem Href="/audit" Icon="@Icons.Material.Filled.History">Audit log</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="UnlimitedReportsManage">
-                <MudMenuItem Href="/reports/settings" Icon="@Icons.Material.Filled.Email">Email &amp; reports</MudMenuItem>
-            </AuthorizeView>
-            <AuthorizeView Policy="ServerManage">
-                <MudMenuItem Href="/control-panel" Icon="@Icons.Material.Filled.Tune">Control panel</MudMenuItem>
-            </AuthorizeView>
-        </MudMenu>
+        <AuthorizeView>
+            <Authorized>
+                <MudButton Href="/manage" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Settings">Manage</MudButton>
+            </Authorized>
+        </AuthorizeView>
         @if (DemoOptions.Value.Enabled)
         {
             <AuthorizeView>

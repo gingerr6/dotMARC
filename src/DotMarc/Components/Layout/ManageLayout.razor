@@ -1,0 +1,11 @@
+@inherits LayoutComponentBase
+@layout MainLayout
+@* The Manage section: its menu down the left, the page beside it. On a narrow screen the menu sits above the page. *@
+<div class="dotmarc-manage">
+    <aside class="dotmarc-manage-nav">
+        <ManageNav />
+    </aside>
+    <div class="dotmarc-manage-body">
+        @Body
+    </div>
+</div>

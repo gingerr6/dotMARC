@@ -26,6 +26,11 @@
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
     <script>
+        // Where the Manage menu is a sideways-scrolling strip (narrow screens), bring the current page's item into view.
+        window.dotmarcShowActiveManageLink = () =>
+            document.querySelector('.dotmarc-manage-nav .mud-nav-link.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    </script>
+    <script>
         // When the connection to the server can't be resumed (dotMARC restarted, usually for an update), reload the page
         // as soon as the server answers again, rather than leaving a box asking the user to. "rejected" means the server
         // is back but no longer knows this page; "failed" means Blazor gave up retrying while it was still down.
