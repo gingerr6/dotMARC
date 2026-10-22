@@ -34,8 +34,10 @@ public sealed class DmarcAuthorizationChangeBuilder(
             return DnsChangePlan.Refuse("error");
         }
 
+        // A push has to go through the provider hosting the mailbox's domain. Showing the record to add by hand
+        // (no provider) needs no such match.
         var mailboxProviderKey = mailboxZoneDetection.Provider.ToProviderKey();
-        if (!string.Equals(mailboxProviderKey, request.Provider, StringComparison.OrdinalIgnoreCase))
+        if (request.Provider.Length > 0 && !string.Equals(mailboxProviderKey, request.Provider, StringComparison.OrdinalIgnoreCase))
         {
             return DnsChangePlan.Refuse("zone-not-found");
         }
