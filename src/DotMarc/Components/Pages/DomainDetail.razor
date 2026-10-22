@@ -1233,7 +1233,7 @@ else
         var pushProvider = await DnsPushProviders.FindConfiguredAsync(providerKey);
         if (pushProvider is null)
         {
-            Snackbar.Add("There's no DNS push for this domain's DNS provider. Use Show record and add it by hand.", Severity.Warning);
+            Snackbar.Add(_domain!.DnsProvider.NoPushReason(DomainName), Severity.Warning);
             return;
         }
 
@@ -1276,9 +1276,7 @@ else
             var pushProvider = await DnsPushProviders.FindConfiguredAsync(providerKey);
             if (pushProvider is null)
             {
-                Snackbar.Add(_domain!.DnsProvider == DetectedDnsProvider.NotChecked
-                    ? "This domain's DNS provider hasn't been checked yet - try the recheck button on the Overview tab, then push again."
-                    : "Couldn't find a configured DNS push option for this domain - add the record manually.", Severity.Warning);
+                Snackbar.Add(_domain!.DnsProvider.NoPushReason(DomainName), Severity.Warning);
                 return;
             }
 
@@ -1358,7 +1356,7 @@ else
             var pushProvider = await DnsPushProviders.FindConfiguredAsync(providerKey);
             if (pushProvider is null)
             {
-                Snackbar.Add($"Couldn't find a configured DNS push option for {mailboxDomain} - add the record manually.", Severity.Warning);
+                Snackbar.Add(detected.Provider.NoPushReason(mailboxDomain), Severity.Warning);
                 return;
             }
 
@@ -1407,9 +1405,7 @@ else
         var pushProvider = await DnsPushProviders.FindConfiguredAsync(providerKey);
         if (pushProvider is null)
         {
-            Snackbar.Add(_domain!.DnsProvider == DetectedDnsProvider.NotChecked
-                ? "This domain's DNS provider hasn't been checked yet - try the recheck button on the Overview tab, then push again."
-                : "Couldn't find a configured DNS push option for this domain - add the record manually.", Severity.Warning);
+            Snackbar.Add(_domain!.DnsProvider.NoPushReason(DomainName), Severity.Warning);
             return;
         }
 
@@ -1775,7 +1771,7 @@ else
         var pushProvider = await DnsPushProviders.FindConfiguredAsync(_domain!.DnsProvider.ToProviderKey());
         if (pushProvider is null)
         {
-            Snackbar.Add("Couldn't find a configured DNS push option for this domain - add the records manually.", Severity.Warning);
+            Snackbar.Add(_domain!.DnsProvider.NoPushReason(DomainName, "the records"), Severity.Warning);
             return;
         }
 
