@@ -10,10 +10,18 @@ namespace DotMarc.Reporting;
 /// split as <see cref="DomainStatistics"/>.</summary>
 public sealed record DashboardSummary(int DomainCount, double OverallPassRate, int WarningCount, int MissingCount, int ParseFailureCount, int SourceCount, ReasonBreakdown ReasonBreakdown)
 {
-    /// <summary>The dashboard's per-domain status: Missing when a monitored domain that sends mail has had no report for
-    /// two days, Warning when its pass rate is under 95%, otherwise OK. Shared with the API's summary.</summary>
+    public const string NotMonitored = "Not monitored";
+
+    /// <summary>The dashboard's per-domain status: Not monitored when it's switched off, Missing when a monitored domain
+    /// that sends mail has had no report for two days, Warning when its pass rate is under 95%, otherwise OK. Shared with
+    /// the API's summary.</summary>
     public static string StatusOf(Domain domain, double? passRate)
     {
+        if (!domain.IsMonitored)
+        {
+            return NotMonitored;
+        }
+
         var isNullRouted = domain.SpfCheckStatus == SpfCheckStatus.NullSpf;
         var missingReport = domain.IsMonitored && !isNullRouted && (domain.LastReportReceivedUtc is null || domain.LastReportReceivedUtc < DateTimeOffset.UtcNow.AddDays(-2));
         return missingReport ? "Missing" : passRate is null or >= 0.95 ? "OK" : "Warning";
@@ -29,7 +37,7 @@ public sealed record DashboardSummary(int DomainCount, double OverallPassRate, i
                 var passRate = DomainStatistics.GetPassRate(d.Reports);
 
                 var status = StatusOf(d, passRate);
-                var color = status switch { "Missing" => Color.Error, "Warning" => Color.Warning, _ => Color.Success };
+                var color = status switch { "Missing" => Color.Error, "Warning" => Color.Warning, NotMonitored => Color.Default, _ => Color.Success };
 
                 return new DashboardDomainRow(d.Id, d.Name, status, color, passRate, d.LastReportReceivedUtc, d.IsMonitored, d.DmarcCheckStatus, d.DmarcAuthorizationCheckStatus, d.MtaStsStatus, d.SpfCheckStatus) { MtaStsMode = d.MtaStsMode, Setup = DotMarc.Setup.DomainChecklist.Progress(d), Score = DotMarc.Scoring.SecurityScoreData.For(d, d.Reports) };
             })
@@ -38,7 +46,7 @@ public sealed record DashboardSummary(int DomainCount, double OverallPassRate, i
         var sourceCount = domains.SelectMany(d => d.Reports).Select(r => r.ReportingOrg).Distinct().Count();
 
         var summary = new DashboardSummary(
-            rows.Count,
+            rows.Count(r => r.IsMonitored),
             DomainStatistics.GetOverallPassRate(domains.Select(d => (IEnumerable<Report>)d.Reports)),
             rows.Count(r => r.Status == "Warning"),
             rows.Count(r => r.Status == "Missing"),

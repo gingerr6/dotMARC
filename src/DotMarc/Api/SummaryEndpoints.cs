@@ -46,7 +46,7 @@ public static class SummaryEndpoints
         var breakdown = DomainStatistics.GetReasonBreakdown(actedOn);
         var mayCountParseFailures = !scope.IsScoped && user.HasClaim(UserAccessClaimsTransformation.PermissionClaimType, nameof(Permission.DomainsEdit));
         return TypedResults.Ok(new ApiSummary(
-            domains.Count,
+            domains.Count(domain => domain.IsMonitored),
             totals is { Total: > 0 } ? (double)totals.Passing / totals.Total : 0,
             statuses.Count(status => status == "Warning"),
             statuses.Count(status => status == "Missing"),
