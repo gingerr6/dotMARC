@@ -25,6 +25,7 @@ public sealed class OffsiteBackupServiceTests : IAsyncLifetime
     private readonly FakeDumper _dumper = new();
     private readonly RecordingAlerts _alerts = new();
     private readonly FakeLifetime _lifetime = new();
+    private readonly RecordingSender _email = new();
 
     public OffsiteBackupServiceTests(PostgresContainerFixture fixture) => _fixture = fixture;
 
@@ -56,14 +57,19 @@ public sealed class OffsiteBackupServiceTests : IAsyncLifetime
             ["MtaSts:HostingHostname"] = "dmarc.example.com",
         }).Build();
         return new OffsiteBackupService(new FakeDbContextFactory(_connectionString), _secrets, new FakeStoreFactory(_store), _dumper, _alerts,
+            new BackupNotifier(new FixedSenderFactory(_email), configuration, NullLogger<BackupNotifier>.Instance),
             configuration, _lifetime, NullLogger<OffsiteBackupService>.Instance);
     }
 
-    private async Task ConfigureAsync()
+    private async Task ConfigureAsync(bool notifyOnSuccess = true)
     {
         await using var context = CreateContext();
         await BackupSettingsService.SaveAsync(context, TestActors.Admin, _secrets,
-            new BackupSettings { Enabled = true, Bucket = "bucket", Region = "eu-west-2", Prefix = "/dotmarc-backups/", AccessKeyId = "AKIA1" },
+            new BackupSettings
+            {
+                Enabled = true, Bucket = "bucket", Region = "eu-west-2", Prefix = "/dotmarc-backups/", AccessKeyId = "AKIA1",
+                NotifyRecipients = ["ops@example.com"], NotifyOnSuccess = notifyOnSuccess,
+            },
             newSecretAccessKey: "secret", newPassphrase: Passphrase);
     }
 
@@ -199,6 +205,79 @@ public sealed class OffsiteBackupServiceTests : IAsyncLifetime
         }
 
         return entries;
+    }
+
+    [Fact]
+    public async Task ASuccessfulBackup_EmailsItsFigures()
+    {
+        await ConfigureAsync();
+        _store.Add("dotmarc-backups/dotmarc-backup-2026-10-19_031500.tar.gz.enc", DateTimeOffset.UtcNow.AddDays(-1));
+
+        await CreateService().BackUpAsync();
+
+        var email = Assert.Single(_email.Sent);
+        Assert.Equal(["ops@example.com"], email.To);
+        Assert.StartsWith("Backup succeeded: dotMARC dmarc.example.com", email.Subject);
+        Assert.Contains("Started:", email.TextBody);
+        Assert.Contains("(started by hand)", email.TextBody);
+        Assert.Contains("Saved to: bucket/dotmarc-backups/dotmarc-backup-", email.TextBody);
+        Assert.Contains("Backups stored: 2,", email.TextBody);
+        Assert.Contains("Next scheduled backup:", email.TextBody);
+        Assert.Contains("https://dmarc.example.com/control-panel/backups", email.HtmlBody);
+    }
+
+    [Fact]
+    public async Task AFailure_IsEmailedOnce_NotOnEveryRetry_AndTheRecoveryIsEmailed()
+    {
+        await ConfigureAsync(notifyOnSuccess: false);
+        _dumper.Fail = true;
+
+        await CreateService().BackUpAsync();
+        await CreateService().BackUpAsync();
+
+        var failure = Assert.Single(_email.Sent);
+        Assert.StartsWith("Backup FAILED", failure.Subject);
+        Assert.Contains("Failed while: dumping the database", failure.TextBody);
+        Assert.Contains("Last good backup: None yet", failure.TextBody);
+
+        _dumper.Fail = false;
+        await CreateService().BackUpAsync();
+        Assert.Equal(2, _email.Sent.Count);
+        Assert.StartsWith("Backups working again", _email.Sent[1].Subject);
+
+        await CreateService().BackUpAsync();
+        Assert.Equal(2, _email.Sent.Count);
+    }
+
+    [Fact]
+    public async Task NoRecipients_NoEmail()
+    {
+        await ConfigureAsync();
+        await using (var context = CreateContext())
+        {
+            (await BackupSettingsService.GetAsync(context)).NotifyRecipients = [];
+            await context.SaveChangesAsync();
+        }
+
+        await CreateService().BackUpAsync();
+
+        Assert.Empty(_email.Sent);
+    }
+
+    private sealed class RecordingSender : DotMarc.Email.IEmailSender
+    {
+        public List<DotMarc.Email.EmailMessage> Sent { get; } = [];
+
+        public Task SendAsync(DotMarc.Email.EmailMessage message, CancellationToken cancellationToken)
+        {
+            Sent.Add(message);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FixedSenderFactory(DotMarc.Email.IEmailSender sender) : DotMarc.Email.IEmailSenderFactory
+    {
+        public Task<DotMarc.Email.IEmailSender?> GetAsync(CancellationToken cancellationToken) => Task.FromResult<DotMarc.Email.IEmailSender?>(sender);
     }
 
     private sealed class FakeDumper : IDatabaseDumper

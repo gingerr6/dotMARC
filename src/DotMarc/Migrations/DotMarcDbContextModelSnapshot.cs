@@ -35,7 +35,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("ScopedGroupsId");
 
-                    b.ToTable("ApiKeyScopedGroups");
+                    b.ToTable("ApiKeyScopedGroups", (string)null);
                 });
 
             modelBuilder.Entity("DomainGroup", b =>
@@ -50,7 +50,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("GroupsId");
 
-                    b.ToTable("DomainGroup");
+                    b.ToTable("DomainGroup", (string)null);
                 });
 
             modelBuilder.Entity("DomainTag", b =>
@@ -65,7 +65,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("TagsId");
 
-                    b.ToTable("DomainTag");
+                    b.ToTable("DomainTag", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Audit.AuditEntry", b =>
@@ -133,7 +133,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("TargetType", "TargetId");
 
-                    b.ToTable("AuditEntries");
+                    b.ToTable("AuditEntries", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Audit.AuditSettings", b =>
@@ -155,7 +155,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AuditSettings");
+                    b.ToTable("AuditSettings", (string)null);
 
                     b.HasData(
                         new
@@ -197,6 +197,9 @@ namespace DotMarc.Migrations
                     b.Property<long?>("LastBackupSize")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTimeOffset?>("LastFailureEmailUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("LastRunMessage")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -209,6 +212,13 @@ namespace DotMarc.Migrations
 
                     b.Property<DateTimeOffset?>("LastSuccessUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("NotifyOnSuccess")
+                        .HasColumnType("boolean");
+
+                    b.PrimitiveCollection<List<string>>("NotifyRecipients")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<bool>("PassphraseConfigured")
                         .HasColumnType("boolean");
@@ -233,13 +243,15 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("BackupSettings");
+                    b.ToTable("BackupSettings", (string)null);
 
                     b.HasData(
                         new
                         {
                             Id = 1,
                             Enabled = false,
+                            NotifyOnSuccess = true,
+                            NotifyRecipients = new List<string>(),
                             PassphraseConfigured = false,
                             Prefix = "dotmarc-backups",
                             RetentionDays = 30,
@@ -265,7 +277,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("DomainId");
 
-                    b.ToTable("BimiAssets");
+                    b.ToTable("BimiAssets", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.ApiKey", b =>
@@ -322,7 +334,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("ApiKeys");
+                    b.ToTable("ApiKeys", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.Domain", b =>
@@ -483,7 +495,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Domains");
+                    b.ToTable("Domains", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.DomainAlertState", b =>
@@ -520,7 +532,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("DomainId", "Item")
                         .IsUnique();
 
-                    b.ToTable("DomainAlertStates");
+                    b.ToTable("DomainAlertStates", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.DomainDkimRecord", b =>
@@ -554,7 +566,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("DomainId", "Selector")
                         .IsUnique();
 
-                    b.ToTable("DomainDkimRecords");
+                    b.ToTable("DomainDkimRecords", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.Group", b =>
@@ -577,7 +589,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Groups");
+                    b.ToTable("Groups", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.IpHostName", b =>
@@ -595,7 +607,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Ip");
 
-                    b.ToTable("IpHostNames");
+                    b.ToTable("IpHostNames", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.IpInfo", b =>
@@ -619,7 +631,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Ip");
 
-                    b.ToTable("IpInfos");
+                    b.ToTable("IpInfos", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.IpRange", b =>
@@ -643,7 +655,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("RangeStart", "RangeEnd");
 
-                    b.ToTable("IpRanges");
+                    b.ToTable("IpRanges", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.ParseFailure", b =>
@@ -680,7 +692,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("GraphMessageId")
                         .IsUnique();
 
-                    b.ToTable("ParseFailures");
+                    b.ToTable("ParseFailures", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.PollCycle", b =>
@@ -713,7 +725,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("PolledUtc");
 
-                    b.ToTable("PollCycles");
+                    b.ToTable("PollCycles", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.PollCycleDailySummary", b =>
@@ -750,7 +762,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("Date")
                         .IsUnique();
 
-                    b.ToTable("PollCycleDailySummaries");
+                    b.ToTable("PollCycleDailySummaries", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.ProcessedMessage", b =>
@@ -773,7 +785,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("GraphMessageId")
                         .IsUnique();
 
-                    b.ToTable("ProcessedMessages");
+                    b.ToTable("ProcessedMessages", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.Report", b =>
@@ -815,7 +827,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("DomainId", "ReportingOrg", "ReportId")
                         .IsUnique();
 
-                    b.ToTable("Reports");
+                    b.ToTable("Reports", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.ReportRawXml", b =>
@@ -873,7 +885,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("SourceIp");
 
-                    b.ToTable("ReportRecords");
+                    b.ToTable("ReportRecords", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.ReportRecordAuthDetail", b =>
@@ -912,7 +924,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("ReportRecordId");
 
-                    b.ToTable("ReportRecordAuthDetails");
+                    b.ToTable("ReportRecordAuthDetails", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.ReportRecordPolicyOverrideReason", b =>
@@ -937,7 +949,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("ReportRecordId");
 
-                    b.ToTable("ReportRecordPolicyOverrideReasons");
+                    b.ToTable("ReportRecordPolicyOverrideReasons", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.Role", b =>
@@ -967,7 +979,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Roles");
+                    b.ToTable("Roles", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.SenderApproval", b =>
@@ -1003,7 +1015,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("DomainId", "SenderKey")
                         .IsUnique();
 
-                    b.ToTable("SenderApprovals");
+                    b.ToTable("SenderApprovals", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.Tag", b =>
@@ -1027,7 +1039,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Tags");
+                    b.ToTable("Tags", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.TlsrptFailureDetail", b =>
@@ -1061,7 +1073,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("TlsrptReportPolicyId");
 
-                    b.ToTable("TlsrptFailureDetails");
+                    b.ToTable("TlsrptFailureDetails", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.TlsrptReport", b =>
@@ -1101,7 +1113,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("DomainId", "ReportingOrg", "ReportId")
                         .IsUnique();
 
-                    b.ToTable("TlsrptReports");
+                    b.ToTable("TlsrptReports", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.TlsrptReportPolicy", b =>
@@ -1133,7 +1145,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("TlsrptReportId");
 
-                    b.ToTable("TlsrptReportPolicies");
+                    b.ToTable("TlsrptReportPolicies", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Data.UserAccess", b =>
@@ -1164,7 +1176,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("UserAccesses");
+                    b.ToTable("UserAccesses", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Email.EmailSettings", b =>
@@ -1209,7 +1221,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("EmailSettings");
+                    b.ToTable("EmailSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1263,7 +1275,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("DomainName", "AlertType", "CreatedUtc");
 
-                    b.ToTable("AlertEvents");
+                    b.ToTable("AlertEvents", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Notifications.AlertTicketRule", b =>
@@ -1298,7 +1310,7 @@ namespace DotMarc.Migrations
                         .IsUnique()
                         .HasFilter("\"GroupId\" IS NOT NULL");
 
-                    b.ToTable("AlertTicketRules");
+                    b.ToTable("AlertTicketRules", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Notifications.AzureDnsSettings", b =>
@@ -1317,7 +1329,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AzureDnsSettings");
+                    b.ToTable("AzureDnsSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1343,7 +1355,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CloudflareDnsSettings");
+                    b.ToTable("CloudflareDnsSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1368,7 +1380,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DnsRecordSettings");
+                    b.ToTable("DnsRecordSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1389,7 +1401,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Key");
 
-                    b.ToTable("EncryptedSecrets");
+                    b.ToTable("EncryptedSecrets", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Notifications.GoogleCloudDnsSettings", b =>
@@ -1408,7 +1420,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GoogleCloudDnsSettings");
+                    b.ToTable("GoogleCloudDnsSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1473,7 +1485,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("HaloPsaSettings");
+                    b.ToTable("HaloPsaSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1574,7 +1586,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NotificationSettings");
+                    b.ToTable("NotificationSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1626,7 +1638,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("BrandingImages");
+                    b.ToTable("BrandingImages", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Portal.BrandingSettings", b =>
@@ -1700,7 +1712,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("BrandingSettings");
+                    b.ToTable("BrandingSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1745,7 +1757,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("GroupId");
 
-                    b.ToTable("GroupBrandings");
+                    b.ToTable("GroupBrandings", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Psa.AlertTicket", b =>
@@ -1785,7 +1797,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("Psa", "TicketId");
 
-                    b.ToTable("AlertTickets");
+                    b.ToTable("AlertTickets", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Psa.Autotask.AutotaskSettings", b =>
@@ -1840,7 +1852,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AutotaskSettings");
+                    b.ToTable("AutotaskSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1911,7 +1923,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ConnectWiseSettings");
+                    b.ToTable("ConnectWiseSettings", (string)null);
 
                     b.HasData(
                         new
@@ -1986,7 +1998,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NinjaOneSettings");
+                    b.ToTable("NinjaOneSettings", (string)null);
 
                     b.HasData(
                         new
@@ -2044,7 +2056,7 @@ namespace DotMarc.Migrations
                     b.HasIndex("Psa", "GroupId")
                         .IsUnique();
 
-                    b.ToTable("PsaCompanyLinks", t =>
+                    b.ToTable("PsaCompanyLinks", null, t =>
                         {
                             t.HasCheckConstraint("CK_PsaCompanyLinks_OneOwner", "(\"GroupId\" IS NULL) <> (\"DomainId\" IS NULL)");
                         });
@@ -2107,7 +2119,7 @@ namespace DotMarc.Migrations
                         .IsUnique()
                         .HasFilter("\"Kind\" = 'Scheduled'");
 
-                    b.ToTable("ClientReportDeliveries");
+                    b.ToTable("ClientReportDeliveries", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Reporting.ClientReports.GroupReportSchedule", b =>
@@ -2129,7 +2141,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("GroupId");
 
-                    b.ToTable("GroupReportSchedules");
+                    b.ToTable("GroupReportSchedules", (string)null);
                 });
 
             modelBuilder.Entity("DotMarc.Reporting.ClientReports.ReportSettings", b =>
@@ -2157,7 +2169,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ReportSettings");
+                    b.ToTable("ReportSettings", (string)null);
 
                     b.HasData(
                         new
@@ -2221,7 +2233,7 @@ namespace DotMarc.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("DataProtectionKeys");
+                    b.ToTable("DataProtectionKeys", (string)null);
                 });
 
             modelBuilder.Entity("UserAccessScopedGroups", b =>
@@ -2236,7 +2248,7 @@ namespace DotMarc.Migrations
 
                     b.HasIndex("UserAccessId");
 
-                    b.ToTable("UserAccessScopedGroups");
+                    b.ToTable("UserAccessScopedGroups", (string)null);
                 });
 
             modelBuilder.Entity("ApiKeyScopedGroups", b =>

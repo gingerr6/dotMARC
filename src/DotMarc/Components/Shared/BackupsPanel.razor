@@ -121,6 +121,16 @@ else
                     <MudNumericField T="int" Label="Days kept" @bind-Value="_settings.RetentionDays" Min="1" Max="3650" Variant="Variant.Outlined" />
                 </FieldWithHelp>
             </MudItem>
+            <MudItem xs="12" md="8">
+                <DotMarc.Components.Reports.RecipientsField Label="Email each backup's result to" Recipients="_settings.NotifyRecipients"
+                    RecipientsChanged="@(recipients => _settings.NotifyRecipients = recipients.ToList())" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    Failures are always emailed: on the first, then every 6 hours while it keeps failing. Uses the email set up on Email &amp; reports.
+                </MudText>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSwitch T="bool" @bind-Value="_settings.NotifyOnSuccess" Color="Color.Primary" Label="Email when it works too" Disabled="@(_settings.NotifyRecipients.Count == 0)" />
+            </MudItem>
         </MudGrid>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Disabled="_busy" OnClick="SaveAsync">Save</MudButton>
 
