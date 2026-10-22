@@ -238,6 +238,7 @@ builder.Services.AddSingleton<DotMarc.Backups.IBackupStoreFactory, DotMarc.Backu
 builder.Services.AddSingleton<DotMarc.Backups.IDatabaseDumper>(demoOptions.Enabled
     ? new DotMarc.Backups.DisabledDatabaseDumper("Backups are turned off in the demo.")
     : new DotMarc.Backups.PgDatabaseDumper(builder.Configuration.GetConnectionString("DotMarc") ?? ""));
+builder.Services.AddSingleton<DotMarc.Backups.BackupNotifier>();
 builder.Services.AddSingleton<DotMarc.Backups.OffsiteBackupService>();
 builder.Services.AddHostedService<DotMarc.Backups.OffsiteBackupScheduler>();
 builder.Services.TryAddSingleton(TimeProvider.System);

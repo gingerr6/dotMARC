@@ -450,6 +450,12 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(settings => settings.AccessKeyId).HasMaxLength(128);
             entity.Property(settings => settings.LastRunMessage).HasMaxLength(1000);
             entity.Property(settings => settings.LastBackupKey).HasMaxLength(1024);
+            // Compared by content: the seeded row's empty list would otherwise differ from itself on every model build.
+            entity.Property(settings => settings.NotifyRecipients).Metadata.SetValueComparer(
+                new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>>(
+                    (left, right) => left!.SequenceEqual(right!),
+                    list => list.Aggregate(0, (hash, item) => HashCode.Combine(hash, item.GetHashCode())),
+                    list => list.ToList()));
             entity.HasData(new DotMarc.Backups.BackupSettings { Id = 1 });
         });
         modelBuilder.Entity<DotMarc.Bimi.BimiAsset>(entity =>

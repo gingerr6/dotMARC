@@ -22,6 +22,7 @@ public sealed class OffsiteBackupService(
     IBackupStoreFactory storeFactory,
     IDatabaseDumper dumper,
     IAlertingService alerting,
+    BackupNotifier notifier,
     IConfiguration configuration,
     IHostApplicationLifetime lifetime,
     ILogger<OffsiteBackupService> logger)
@@ -35,7 +36,8 @@ public sealed class OffsiteBackupService(
     public string? WhyNot(BackupSettings settings) =>
         dumper.Unavailable ?? (settings.IsComplete ? null : "Fill in the bucket, region, access keys and passphrase first.");
 
-    public async Task<BackupOutcome> BackUpAsync(CancellationToken cancellationToken = default)
+    /// <summary>Takes a backup now. Trigger says who asked, for its email ("scheduled" or "started by hand").</summary>
+    public async Task<BackupOutcome> BackUpAsync(CancellationToken cancellationToken = default, string trigger = "started by hand")
     {
         if (!await _gate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
         {
@@ -44,7 +46,7 @@ public sealed class OffsiteBackupService(
 
         try
         {
-            return await BackUpCoreAsync(suffix: "", cancellationToken).ConfigureAwait(false);
+            return await BackUpCoreAsync(suffix: "", trigger, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -113,7 +115,7 @@ public sealed class OffsiteBackupService(
                 return new BackupOutcome(false, "Couldn't decrypt that backup. Is the passphrase the one it was made with?");
             }
 
-            var safety = await BackUpCoreAsync(suffix: "-before-restore", cancellationToken).ConfigureAwait(false);
+            var safety = await BackUpCoreAsync(suffix: "-before-restore", "before a restore", cancellationToken).ConfigureAwait(false);
             if (!safety.Succeeded)
             {
                 return new BackupOutcome(false, $"Didn't restore: the backup of the current data, taken first in case, failed. {safety.Message}");
@@ -147,27 +149,41 @@ public sealed class OffsiteBackupService(
         }
     }
 
-    private async Task<BackupOutcome> BackUpCoreAsync(string suffix, CancellationToken cancellationToken)
+    private async Task<BackupOutcome> BackUpCoreAsync(string suffix, string trigger, CancellationToken cancellationToken)
     {
         var work = Directory.CreateTempSubdirectory("dotmarc-backup-");
+        var started = DateTimeOffset.UtcNow;
+        var step = "reading the backup settings";
+        string? destination = null, key = null;
+        long? databaseBytes = null, encryptedBytes = null;
+        var pruned = 0;
+        IBackupStore? store = null;
+        BackupSettings? settings = null;
         BackupOutcome outcome;
         try
         {
-            var (settings, store, passphrase) = await OpenAsync(cancellationToken).ConfigureAwait(false);
+            (settings, store, var passphrase) = await OpenAsync(cancellationToken).ConfigureAwait(false);
+            destination = $"{settings.Bucket}/{settings.Prefix}";
             var dump = Path.Combine(work.FullName, "dotmarc.dump");
+            step = "dumping the database";
             await dumper.DumpAsync(dump, cancellationToken).ConfigureAwait(false);
+            databaseBytes = new FileInfo(dump).Length;
 
             var payload = Path.Combine(work.FullName, "payload.enc");
+            step = "compressing and encrypting";
             await WriteArchiveAsync(payload, dump, passphrase, cancellationToken).ConfigureAwait(false);
             var size = new FileInfo(payload).Length;
-            var key = $"{settings.Prefix}/{FilePrefix}{DateTimeOffset.UtcNow.ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture)}{suffix}.tar.gz.enc";
+            encryptedBytes = size;
+            key = $"{settings.Prefix}/{FilePrefix}{DateTimeOffset.UtcNow.ToString("yyyy-MM-dd_HHmmss", CultureInfo.InvariantCulture)}{suffix}.tar.gz.enc";
+            step = "uploading to S3";
             await store.UploadAsync(key, payload, cancellationToken).ConfigureAwait(false);
-            await PruneAsync(store, settings, cancellationToken).ConfigureAwait(false);
+            step = "removing old backups";
+            pruned = await PruneAsync(store, settings, cancellationToken).ConfigureAwait(false);
             outcome = new BackupOutcome(true, $"Backed up {FormatSize(size)}.", key, size);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Offsite backup failed.");
+            logger.LogError(ex, "Offsite backup failed while {Step}.", step);
             outcome = new BackupOutcome(false, ex.Message);
         }
         finally
@@ -175,7 +191,34 @@ public sealed class OffsiteBackupService(
             work.Delete(recursive: true);
         }
 
-        await RecordOutcomeAsync(outcome, cancellationToken).ConfigureAwait(false);
+        // What's stored now, for the email. A listing that fails only leaves those figures out.
+        IReadOnlyList<StoredBackup>? stored = null;
+        if (outcome.Succeeded && store is not null && settings is not null)
+        {
+            try
+            {
+                stored = (await store.ListAsync(settings.Prefix + "/", cancellationToken).ConfigureAwait(false))
+                    .Where(item => item.FileName.StartsWith(FilePrefix, StringComparison.Ordinal)).ToList();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Listing the stored backups for the backup email failed.");
+            }
+        }
+
+        var before = await RecordOutcomeAsync(outcome, cancellationToken).ConfigureAwait(false);
+        var finished = DateTimeOffset.UtcNow;
+        var report = new BackupRunReport(outcome.Succeeded, trigger, started, finished, destination, key, databaseBytes, encryptedBytes, pruned,
+            stored?.Count, stored?.Sum(item => item.Size), stored?.Count > 0 ? stored.Min(item => item.LastModifiedUtc) : null,
+            outcome.Succeeded ? null : step, outcome.Succeeded ? null : outcome.Message, before.LastSuccessUtc,
+            before.Enabled ? OffsiteBackupScheduler.NextRunUtc(before, finished) : null);
+        if (BackupNotifier.ShouldSend(before, report) && await notifier.SendAsync(before, report, cancellationToken).ConfigureAwait(false) && !outcome.Succeeded)
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false);
+            (await BackupSettingsService.GetAsync(db, cancellationToken).ConfigureAwait(false)).LastFailureEmailUtc = finished;
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         return outcome;
     }
 
@@ -270,8 +313,9 @@ public sealed class OffsiteBackupService(
     }
 
     /// <summary>Deletes daily backups older than the settings' days kept. One taken on the 1st of a month is kept.</summary>
-    private static async Task PruneAsync(IBackupStore store, BackupSettings settings, CancellationToken cancellationToken)
+    private static async Task<int> PruneAsync(IBackupStore store, BackupSettings settings, CancellationToken cancellationToken)
     {
+        var pruned = 0;
         var cutoff = DateTimeOffset.UtcNow.AddDays(-settings.RetentionDays);
         foreach (var item in await store.ListAsync(settings.Prefix + "/", cancellationToken).ConfigureAwait(false))
         {
@@ -280,15 +324,27 @@ public sealed class OffsiteBackupService(
             if (stamp.Length > 0 && !isMonthly && item.LastModifiedUtc < cutoff)
             {
                 await store.DeleteAsync(item.Key, cancellationToken).ConfigureAwait(false);
+                pruned++;
             }
         }
+
+        return pruned;
     }
 
-    private async Task RecordOutcomeAsync(BackupOutcome outcome, CancellationToken cancellationToken)
+    /// <summary>Saves the run's result, raising or resolving the BackupFailed alert. Returns the settings as they were
+    /// before this run, for its email.</summary>
+    private async Task<BackupSettings> RecordOutcomeAsync(BackupOutcome outcome, CancellationToken cancellationToken)
     {
+        BackupSettings before;
         await using (var db = await dbFactory.CreateDbContextAsync(cancellationToken).ConfigureAwait(false))
         {
             var settings = await BackupSettingsService.GetAsync(db, cancellationToken).ConfigureAwait(false);
+            before = new BackupSettings
+            {
+                Enabled = settings.Enabled, RunHourUtc = settings.RunHourUtc, NotifyRecipients = [.. settings.NotifyRecipients],
+                NotifyOnSuccess = settings.NotifyOnSuccess, LastFailureEmailUtc = settings.LastFailureEmailUtc,
+                LastRunUtc = settings.LastRunUtc, LastRunSucceeded = settings.LastRunSucceeded, LastSuccessUtc = settings.LastSuccessUtc,
+            };
             settings.LastRunUtc = DateTimeOffset.UtcNow;
             settings.LastRunSucceeded = outcome.Succeeded;
             settings.LastRunMessage = outcome.Message.Length > 1000 ? outcome.Message[..1000] : outcome.Message;
@@ -310,6 +366,8 @@ public sealed class OffsiteBackupService(
         {
             await alerting.RaiseBackupFailedAsync(outcome.Message, cancellationToken).ConfigureAwait(false);
         }
+
+        return before;
     }
 
     public static string FormatSize(long bytes) => bytes switch

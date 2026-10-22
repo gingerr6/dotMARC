@@ -22,7 +22,7 @@ public sealed class OffsiteBackupScheduler(IDbContextFactory<DotMarcDbContext> d
                 var settings = await BackupSettingsService.GetAsync(db, stoppingToken).ConfigureAwait(false);
                 if (IsDue(settings, DateTimeOffset.UtcNow) && backups.WhyNot(settings) is null)
                 {
-                    await backups.BackUpAsync(stoppingToken).ConfigureAwait(false);
+                    await backups.BackUpAsync(stoppingToken, "scheduled").ConfigureAwait(false);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -31,6 +31,13 @@ public sealed class OffsiteBackupScheduler(IDbContextFactory<DotMarcDbContext> d
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
+    }
+
+    /// <summary>The next scheduled backup after the given time: the settings' hour (UTC), today or tomorrow.</summary>
+    public static DateTimeOffset NextRunUtc(BackupSettings settings, DateTimeOffset afterUtc)
+    {
+        var next = new DateTimeOffset(afterUtc.UtcDateTime.Date.AddHours(settings.RunHourUtc), TimeSpan.Zero);
+        return next > afterUtc ? next : next.AddDays(1);
     }
 
     /// <summary>Due when no backup has succeeded since the latest scheduled time, and nothing was tried in the last

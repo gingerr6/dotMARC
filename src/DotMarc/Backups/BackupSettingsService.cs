@@ -23,6 +23,8 @@ public static class BackupSettingsService
         var retention = Math.Clamp(updated.RetentionDays, 1, 3650);
         var hasNewSecret = !string.IsNullOrWhiteSpace(newSecretAccessKey);
         var hasNewPassphrase = !string.IsNullOrWhiteSpace(newPassphrase);
+        var recipients = updated.NotifyRecipients.Select(address => address.Trim()).Where(address => address.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         var existing = await context.BackupSettings.SingleAsync(cancellationToken).ConfigureAwait(false);
         var changes = new AuditChanges()
@@ -35,7 +37,9 @@ public static class BackupSettingsService
             .Secret("Secret access key", hasNewSecret)
             .Secret("Passphrase", hasNewPassphrase)
             .Field("Hour (UTC)", existing.RunHourUtc, runHour)
-            .Field("Days kept", existing.RetentionDays, retention);
+            .Field("Days kept", existing.RetentionDays, retention)
+            .Field("Email results to", string.Join(", ", existing.NotifyRecipients), string.Join(", ", recipients))
+            .Field("Email when it works", existing.NotifyOnSuccess, updated.NotifyOnSuccess);
         if (!changes.Any)
         {
             return;
@@ -49,6 +53,8 @@ public static class BackupSettingsService
         existing.AccessKeyId = accessKeyId;
         existing.RunHourUtc = runHour;
         existing.RetentionDays = retention;
+        existing.NotifyRecipients = recipients;
+        existing.NotifyOnSuccess = updated.NotifyOnSuccess;
         if (hasNewSecret)
         {
             await secretStore.SetSecretAsync(BackupSettings.SecretAccessKeyStoreKey, newSecretAccessKey!.Trim(), cancellationToken).ConfigureAwait(false);

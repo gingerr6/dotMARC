@@ -26,6 +26,13 @@ public sealed class BackupSettings
     /// <summary>How long daily backups are kept. A backup taken on the 1st of a month is kept until deleted by hand.</summary>
     public int RetentionDays { get; set; } = 30;
 
+    /// <summary>Who's emailed after each backup: always when it fails, and when it works too if NotifyOnSuccess.</summary>
+    public List<string> NotifyRecipients { get; set; } = [];
+    public bool NotifyOnSuccess { get; set; } = true;
+
+    /// <summary>When a failure was last emailed, so a backup that keeps failing isn't emailed every hourly retry.</summary>
+    public DateTimeOffset? LastFailureEmailUtc { get; set; }
+
     public DateTimeOffset? LastRunUtc { get; set; }
     public bool? LastRunSucceeded { get; set; }
     public string? LastRunMessage { get; set; }
