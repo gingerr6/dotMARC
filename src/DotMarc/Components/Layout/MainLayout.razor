@@ -11,6 +11,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject AuditRecorder AuditRecorder
+@inject DotMarc.Portal.PortalBrandLoader BrandLoader
 
 <MudThemeProvider Theme="_theme" IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
@@ -21,9 +22,17 @@
     <MudAppBar Elevation="1" Gutters="false">
         @* The same width as the page below, so the bar lines up with it. On a phone its links are icons only, so they fit. *@
         <MudContainer MaxWidth="MaxWidth.Large" Class="d-flex align-center">
+            @* Your brand from Manage > Branding, the same as the client portal's: its colours, and its logo where it has one. *@
             <div class="d-flex align-center">
                 <a href="/dashboard">
-                    <img src="@Assets["logo.svg"]" alt="dotMARC Logo" height="48" />
+                    @if (_brand is not null && DotMarc.Portal.PortalBranding.AppBarLogo(_brand, _isDarkMode) is { } logoId)
+                    {
+                        <img src="@($"/branding/logo/{logoId}")" alt="@_brand.ProductName" height="40" class="mr-2" />
+                    }
+                    else
+                    {
+                        <img src="@Assets["logo.svg"]" alt="dotMARC Logo" height="48" />
+                    }
                 </a>
             </div>
             <AuthorizeView>
@@ -84,7 +93,8 @@
 </MudLayout>
 
 @code {
-    private readonly MudTheme _theme = DotMarc.Portal.PortalTheme.Default;
+    private MudTheme _theme = DotMarc.Portal.PortalTheme.Default;
+    private DotMarc.Portal.ResolvedBrand? _brand;
 
     private bool _isDarkMode;
     private readonly int _currentYear = DateTime.UtcNow.Year;
@@ -109,7 +119,12 @@
 
     private string? _lastRecordedPath;
 
-    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        _brand = await BrandLoader.LoadAsync([]);
+        _theme = DotMarc.Portal.PortalTheme.For(_brand);
+    }
 
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs args) => await RecordPageViewAsync(args.Location);
 
