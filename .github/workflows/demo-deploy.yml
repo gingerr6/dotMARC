@@ -14,7 +14,8 @@ env:
 
 jobs:
   build-and-push:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Only the original project runs the public demo: a fork has no demo server or deploy secrets.
+    if: ${{ github.repository == 'homotechsual/dotMARC' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
