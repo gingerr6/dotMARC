@@ -48,6 +48,10 @@ public sealed class PollingService : BackgroundService
 
     internal const long BimiCheckLeaderLockKey = 84_200_027;
 
+    internal const long DanglingCnameCheckLeaderLockKey = 84_200_029;
+
+    internal const long CertificateCheckLeaderLockKey = 84_200_031;
+
     /// <summary>Arbitrary fixed key for this service's DKIM-check advisory lock. Runs on the same
     /// schedule as every other check even though most domains will have no selectors configured
     /// yet (RunSingleDkimCheckAsync short-circuits to NotConfigured in that case) - simpler than
@@ -169,6 +173,34 @@ public sealed class PollingService : BackgroundService
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "MX check cycle failed; will retry next interval.");
+                    }
+
+                    try
+                    {
+                        context.ChangeTracker.Clear();
+                        var danglingCnameChecker = scope.ServiceProvider.GetRequiredService<IDanglingCnameChecker>();
+                        await RunDailyCheckCycleAsync(context, DanglingCnameCheckLeaderLockKey, "dangling CNAME",
+                            (cutoff, nowUtc) => d => d.DanglingCnameCheckedUtc == null || d.DanglingCnameCheckedUtc < cutoff
+                                || d.AlertStates.Any(state => state.Item == DnsHealthItems.DanglingCname && state.RecheckDueUtc <= nowUtc && d.DanglingCnameCheckedUtc < state.RecheckDueUtc),
+                            domain => RunSingleDanglingCnameCheckAsync(domain, danglingCnameChecker, stoppingToken), stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Dangling CNAME check cycle failed; will retry next interval.");
+                    }
+
+                    try
+                    {
+                        context.ChangeTracker.Clear();
+                        var certificateChecker = scope.ServiceProvider.GetRequiredService<ICertificateChecker>();
+                        await RunDailyCheckCycleAsync(context, CertificateCheckLeaderLockKey, "certificate",
+                            (cutoff, nowUtc) => d => d.CertificateCheckedUtc == null || d.CertificateCheckedUtc < cutoff
+                                || d.AlertStates.Any(state => state.Item == DnsHealthItems.Certificate && state.RecheckDueUtc <= nowUtc && d.CertificateCheckedUtc < state.RecheckDueUtc),
+                            domain => RunSingleCertificateCheckAsync(domain, certificateChecker, stoppingToken), stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Certificate check cycle failed; will retry next interval.");
                     }
 
 
@@ -514,6 +546,81 @@ public sealed class PollingService : BackgroundService
         domain.MxCheckStatus = result.Status;
         domain.MxCheckedUtc = DateTimeOffset.UtcNow;
         domain.MxCheckDetail = result.Detail;
+    }
+
+    internal static async Task RunSingleDanglingCnameCheckAsync(Domain domain, IDanglingCnameChecker checker, CancellationToken cancellationToken)
+    {
+        var result = await checker.CheckAsync(domain.Name, cancellationToken).ConfigureAwait(false);
+        domain.DanglingCnameStatus = result.Status;
+        domain.DanglingCnameCheckedUtc = DateTimeOffset.UtcNow;
+        domain.DanglingCnameDetail = result.Detail;
+    }
+
+    internal static async Task RunSingleCertificateCheckAsync(Domain domain, ICertificateChecker checker, CancellationToken cancellationToken)
+    {
+        var result = await checker.CheckAsync(domain.Name, cancellationToken).ConfigureAwait(false);
+        domain.CertificateStatus = result.Status;
+        domain.CertificateCheckedUtc = DateTimeOffset.UtcNow;
+        domain.CertificateDetail = result.Detail;
+        domain.CertificateExpiresUtc = result.EarliestExpiryUtc;
+    }
+
+    /// <summary>Runs one check for every monitored domain the filter says is due (its last run missing or over 24 hours
+    /// old, or a failing alert due a confirming recheck): the same shape as RunMxCheckCycleAsync, for the checks that
+    /// only look at monitored domains, since they make network calls to the domain's own hosts. The filter is given the
+    /// 24-hour cutoff and the time now. The advisory lock keeps two instances from checking at once.</summary>
+    private async Task RunDailyCheckCycleAsync(DotMarcDbContext context, long lockKey, string checkName,
+        Func<DateTimeOffset, DateTimeOffset, System.Linq.Expressions.Expression<Func<Domain, bool>>> due, Func<Domain, Task> check, CancellationToken cancellationToken)
+    {
+        var connectionString = context.Database.GetConnectionString()
+            ?? throw new InvalidOperationException("DotMarcDbContext has no connection string configured.");
+
+        await using var lockConnection = new NpgsqlConnection(connectionString);
+        await lockConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        await using var lockTransaction = await lockConnection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+        bool acquired;
+        await using (var lockCommand = new NpgsqlCommand("SELECT pg_try_advisory_xact_lock(@key)", lockConnection, lockTransaction))
+        {
+            lockCommand.Parameters.AddWithValue("key", lockKey);
+            acquired = (bool)(await lockCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+        }
+
+        if (!acquired)
+        {
+            _logger.LogDebug("Another instance already holds the {Check}-check lock for this cycle; skipping.", checkName);
+            return;
+        }
+
+        try
+        {
+            var nowUtc = DateTimeOffset.UtcNow;
+            var staleDomains = await context.Domains.Where(domain => domain.IsMonitored).Where(due(nowUtc.AddHours(-24), nowUtc))
+                .ToListAsync(cancellationToken).ConfigureAwait(false);
+
+            var anyUpdated = false;
+            foreach (var domain in staleDomains)
+            {
+                try
+                {
+                    await check(domain).ConfigureAwait(false);
+                    anyUpdated = true;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning(ex, "The {Check} check failed for {Domain}; will retry next cycle.", checkName, domain.Name);
+                }
+            }
+
+            if (anyUpdated)
+            {
+                await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await lockTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>DKIM is opt-in: with no selectors configured, this short-circuits to NotConfigured

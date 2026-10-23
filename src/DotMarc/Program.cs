@@ -329,6 +329,14 @@ builder.Services.AddHttpClient<DotMarc.Dns.IMxDnsChecker, DotMarc.Dns.MxDnsCheck
     client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
 });
 
+builder.Services.AddHttpClient<DotMarc.Dns.IDanglingCnameChecker, DotMarc.Dns.DanglingCnameChecker>(client =>
+{
+    client.BaseAddress = new Uri("https://cloudflare-dns.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
+});
+builder.Services.AddSingleton<DotMarc.Dns.ITlsCertificateProbe, DotMarc.Dns.TlsCertificateProbe>();
+builder.Services.AddScoped<DotMarc.Dns.ICertificateChecker, DotMarc.Dns.CertificateChecker>();
+
 builder.Services.AddHttpClient<DotMarc.Dns.IDkimDnsChecker, DotMarc.Dns.DkimDnsChecker>(client =>
 {
     client.BaseAddress = new Uri("https://cloudflare-dns.com/");

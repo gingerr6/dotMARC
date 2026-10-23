@@ -76,6 +76,10 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(d => d.DmarcAuthorizationCheckStatus).HasConversion<string>();
             entity.Property(d => d.SpfCheckStatus).HasConversion<string>();
             entity.Property(d => d.MxCheckStatus).HasConversion<string>();
+            entity.Property(d => d.DanglingCnameStatus).HasConversion<string>().HasMaxLength(20);
+            entity.Property(d => d.DanglingCnameDetail).HasMaxLength(4000);
+            entity.Property(d => d.CertificateStatus).HasConversion<string>().HasMaxLength(20);
+            entity.Property(d => d.CertificateDetail).HasMaxLength(2000);
             entity.Property(d => d.DkimCheckStatus).HasConversion<string>();
             entity.Property(d => d.BimiCheckStatus).HasConversion<string>();
             entity.Property(d => d.BimiCheckDetail).HasMaxLength(2000);
@@ -399,6 +403,8 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(settings => settings.MxAlertMode).HasConversion<string>().HasMaxLength(20);
             entity.Property(settings => settings.DkimAlertMode).HasConversion<string>().HasMaxLength(20);
             entity.Property(settings => settings.MtaStsAlertMode).HasConversion<string>().HasMaxLength(20);
+            entity.Property(settings => settings.DanglingCnameAlertMode).HasConversion<string>().HasMaxLength(20);
+            entity.Property(settings => settings.CertificateAlertMode).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<EncryptedSecret>(entity =>

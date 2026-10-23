@@ -47,6 +47,8 @@ public static class NotificationSettingsService
             .Field("MX alerts", saved.MxAlertMode, updated.MxAlertMode)
             .Field("DKIM alerts", saved.DkimAlertMode, updated.DkimAlertMode)
             .Field("MTA-STS alerts", saved.MtaStsAlertMode, updated.MtaStsAlertMode)
+            .Field("Dangling CNAME alerts", saved.DanglingCnameAlertMode, updated.DanglingCnameAlertMode)
+            .Field("Certificate alerts", saved.CertificateAlertMode, updated.CertificateAlertMode)
             .Field("DMARC policy weakened alerts", saved.DmarcPolicyWeakenedEnabled, updated.DmarcPolicyWeakenedEnabled)
             .Field("Nameservers changed alerts", saved.NameserversChangedEnabled, updated.NameserversChangedEnabled)
             .Field("Close policy and nameserver alerts after (days)", saved.AcknowledgeableAutoCloseDays, updated.AcknowledgeableAutoCloseDays);
@@ -76,6 +78,8 @@ public static class NotificationSettingsService
         existing.MxAlertMode = updated.MxAlertMode;
         existing.DkimAlertMode = updated.DkimAlertMode;
         existing.MtaStsAlertMode = updated.MtaStsAlertMode;
+        existing.DanglingCnameAlertMode = updated.DanglingCnameAlertMode;
+        existing.CertificateAlertMode = updated.CertificateAlertMode;
         existing.DmarcPolicyWeakenedEnabled = updated.DmarcPolicyWeakenedEnabled;
         existing.NameserversChangedEnabled = updated.NameserversChangedEnabled;
         existing.AcknowledgeableAutoCloseDays = updated.AcknowledgeableAutoCloseDays;

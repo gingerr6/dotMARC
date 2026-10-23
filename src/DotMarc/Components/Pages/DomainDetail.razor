@@ -34,6 +34,8 @@
 @inject ITlsrptDnsChecker TlsrptDnsChecker
 @inject ISpfDnsChecker SpfDnsChecker
 @inject IMxDnsChecker MxDnsChecker
+@inject IDanglingCnameChecker DanglingCnameChecker
+@inject ICertificateChecker CertificateChecker
 @inject IDkimDnsChecker DkimDnsChecker
 @inject IMailServiceDetector MailServiceDetector
 @inject ITxtRecordLookup TxtRecordLookup
@@ -344,6 +346,51 @@ else
                         </AuthorizeView>
                     </ActionContent>
                 </DomainHealthCheckRow>
+
+                @if (_domain.IsMonitored)
+                {
+                    <DomainHealthCheckRow Title="Dangling CNAME"
+                                          StatusColor="@DanglingCnameStatusPresentation.GetColor(_domain.DanglingCnameStatus)"
+                                          StatusLabel="@DanglingCnameStatusPresentation.GetLabel(_domain.DanglingCnameStatus)"
+                                          CheckedUtc="_domain.DanglingCnameCheckedUtc"
+                                          Detail="@_domain.DanglingCnameDetail">
+                        <ActionContent>
+                            <AuthorizeView Policy="DomainsEdit" Context="danglingCnameRecheckAuthState">
+                                <Authorized>
+                                    @if (_isRecheckingDanglingCname)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                    }
+                                    else
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDanglingCnameAsync" title="Recheck now" />
+                                    }
+                                </Authorized>
+                            </AuthorizeView>
+                        </ActionContent>
+                    </DomainHealthCheckRow>
+
+                    <DomainHealthCheckRow Title="Website certificates"
+                                          StatusColor="@CertificateStatusPresentation.GetColor(_domain.CertificateStatus)"
+                                          StatusLabel="@CertificateStatusPresentation.GetLabel(_domain.CertificateStatus)"
+                                          CheckedUtc="_domain.CertificateCheckedUtc"
+                                          Detail="@_domain.CertificateDetail">
+                        <ActionContent>
+                            <AuthorizeView Policy="DomainsEdit" Context="certificateRecheckAuthState">
+                                <Authorized>
+                                    @if (_isRecheckingCertificate)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                    }
+                                    else
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckCertificateAsync" title="Recheck now" />
+                                    }
+                                </Authorized>
+                            </AuthorizeView>
+                        </ActionContent>
+                    </DomainHealthCheckRow>
+                }
 
                 <DomainHealthCheckRow Title="DKIM"
                                       StatusColor="@DkimStatusPresentation.GetColor(_domain.DkimCheckStatus)"
@@ -747,6 +794,8 @@ else
     private bool _isRecheckingDmarcAuth;
     private bool _isRecheckingSpf;
     private bool _isRecheckingMx;
+    private bool _isRecheckingDanglingCname;
+    private bool _isRecheckingCertificate;
     private bool _isRecheckingDkim;
     private bool _isRecheckingDnsProvider;
     private DotNetObjectReference<DomainDetail>? _dotNetRef;
@@ -1659,6 +1708,65 @@ else
         finally
         {
             _isRecheckingMx = false;
+        }
+    }
+
+    /// <summary>Dangling CNAME counterpart to RecheckMxAsync.</summary>
+    private async Task RecheckDanglingCnameAsync()
+    {
+        _isRecheckingDanglingCname = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var domain = await db.Domains.SingleAsync(d => d.Id == _domain!.Id);
+            try
+            {
+                await PollingService.RunSingleDanglingCnameCheckAsync(domain, DanglingCnameChecker, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add($"Failed to check {DomainName}'s CNAME records. Try again.", Severity.Error);
+                return;
+            }
+            await db.SaveChangesAsync();
+
+            _domain!.DanglingCnameStatus = domain.DanglingCnameStatus;
+            _domain.DanglingCnameCheckedUtc = domain.DanglingCnameCheckedUtc;
+            _domain.DanglingCnameDetail = domain.DanglingCnameDetail;
+        }
+        finally
+        {
+            _isRecheckingDanglingCname = false;
+        }
+    }
+
+    /// <summary>Certificate counterpart to RecheckMxAsync.</summary>
+    private async Task RecheckCertificateAsync()
+    {
+        _isRecheckingCertificate = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var domain = await db.Domains.SingleAsync(d => d.Id == _domain!.Id);
+            try
+            {
+                await PollingService.RunSingleCertificateCheckAsync(domain, CertificateChecker, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add($"Failed to check {DomainName}'s certificates. Try again.", Severity.Error);
+                return;
+            }
+            await db.SaveChangesAsync();
+
+            _domain!.CertificateStatus = domain.CertificateStatus;
+            _domain.CertificateCheckedUtc = domain.CertificateCheckedUtc;
+            _domain.CertificateDetail = domain.CertificateDetail;
+            _domain.CertificateExpiresUtc = domain.CertificateExpiresUtc;
+        }
+        finally
+        {
+            _isRecheckingCertificate = false;
         }
     }
 

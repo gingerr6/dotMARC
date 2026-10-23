@@ -19,6 +19,8 @@ public static class AlertTypes
     public const string MxRecordBroken = "MxRecordBroken";
     public const string DkimRecordBroken = "DkimRecordBroken";
     public const string MtaStsFailing = "MtaStsFailing";
+    public const string DanglingCname = "DanglingCname";
+    public const string CertificateExpiring = "CertificateExpiring";
     public const string DmarcPolicyWeakened = "DmarcPolicyWeakened";
     public const string NameserversChanged = "NameserversChanged";
     public const string ApiKeyExpiring = "ApiKeyExpiring";
@@ -40,6 +42,8 @@ public static class AlertTypes
         new(MxRecordBroken, "MX broken", "The domain has no MX record, or its mail server's name doesn't resolve."),
         new(DkimRecordBroken, "DKIM broken", "A DKIM selector set for the domain is missing or broken."),
         new(MtaStsFailing, "MTA-STS failing", "dotMARC stopped being able to serve the domain's MTA-STS policy."),
+        new(DanglingCname, "Dangling CNAME", "A subdomain points at a name that no longer exists, so whoever claims that name controls the subdomain."),
+        new(CertificateExpiring, "Certificate expiring or invalid", "The certificate on the domain's website or mta-sts host has expired, expires within 14 days, or isn't valid for it."),
         new(DmarcPolicyWeakened, "DMARC policy weakened", "The domain's DMARC policy, subdomain policy or percentage went down."),
         new(NameserversChanged, "Nameservers changed", "The domain's nameservers changed, often the start of a DNS migration.", CreatesTicketByDefault: false),
         new(ApiKeyExpiring, "API key expiring", "An API key expires within 14 days. Make a replacement before whatever uses it stops working.", CreatesTicketByDefault: false),
@@ -54,7 +58,7 @@ public static class AlertTypes
     public static IReadOnlyList<string> DnsHealth { get; } =
     [
         DmarcRecordBroken, DmarcAuthorizationBroken, TlsrptRecordBroken, SpfRecordBroken, MxRecordBroken, DkimRecordBroken,
-        MtaStsFailing, DmarcPolicyWeakened, NameserversChanged
+        MtaStsFailing, DanglingCname, CertificateExpiring, DmarcPolicyWeakened, NameserversChanged
     ];
 
     public static AlertTypeInfo? Find(string key) => All.FirstOrDefault(alertType => alertType.Key == key);
