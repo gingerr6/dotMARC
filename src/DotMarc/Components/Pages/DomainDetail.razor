@@ -36,6 +36,7 @@
 @inject IMxDnsChecker MxDnsChecker
 @inject IDanglingCnameChecker DanglingCnameChecker
 @inject ICertificateChecker CertificateChecker
+@inject IDomainExpiryChecker DomainExpiryChecker
 @inject IDkimDnsChecker DkimDnsChecker
 @inject IMailServiceDetector MailServiceDetector
 @inject ITxtRecordLookup TxtRecordLookup
@@ -385,6 +386,27 @@ else
                                     else
                                     {
                                         <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckCertificateAsync" title="Recheck now" />
+                                    }
+                                </Authorized>
+                            </AuthorizeView>
+                        </ActionContent>
+                    </DomainHealthCheckRow>
+
+                    <DomainHealthCheckRow Title="Domain registration"
+                                          StatusColor="@DomainExpiryStatusPresentation.GetColor(_domain.DomainExpiryStatus)"
+                                          StatusLabel="@DomainExpiryStatusPresentation.GetLabel(_domain.DomainExpiryStatus)"
+                                          CheckedUtc="_domain.DomainExpiryCheckedUtc"
+                                          Detail="@_domain.DomainExpiryDetail">
+                        <ActionContent>
+                            <AuthorizeView Policy="DomainsEdit" Context="domainExpiryRecheckAuthState">
+                                <Authorized>
+                                    @if (_isRecheckingDomainExpiry)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                    }
+                                    else
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDomainExpiryAsync" title="Recheck now" />
                                     }
                                 </Authorized>
                             </AuthorizeView>
@@ -796,6 +818,7 @@ else
     private bool _isRecheckingMx;
     private bool _isRecheckingDanglingCname;
     private bool _isRecheckingCertificate;
+    private bool _isRecheckingDomainExpiry;
     private bool _isRecheckingDkim;
     private bool _isRecheckingDnsProvider;
     private DotNetObjectReference<DomainDetail>? _dotNetRef;
@@ -1767,6 +1790,37 @@ else
         finally
         {
             _isRecheckingCertificate = false;
+        }
+    }
+
+    /// <summary>Domain registration counterpart to RecheckMxAsync.</summary>
+    private async Task RecheckDomainExpiryAsync()
+    {
+        _isRecheckingDomainExpiry = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var domain = await db.Domains.SingleAsync(d => d.Id == _domain!.Id);
+            try
+            {
+                await PollingService.RunSingleDomainExpiryCheckAsync(domain, DomainExpiryChecker, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add($"Failed to look up {DomainName}'s registration. Try again.", Severity.Error);
+                return;
+            }
+            await db.SaveChangesAsync();
+
+            _domain!.DomainExpiryStatus = domain.DomainExpiryStatus;
+            _domain.DomainExpiryCheckedUtc = domain.DomainExpiryCheckedUtc;
+            _domain.DomainExpiryDetail = domain.DomainExpiryDetail;
+            _domain.DomainExpiresUtc = domain.DomainExpiresUtc;
+            _domain.DomainRegistrar = domain.DomainRegistrar;
+        }
+        finally
+        {
+            _isRecheckingDomainExpiry = false;
         }
     }
 

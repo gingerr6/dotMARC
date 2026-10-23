@@ -168,6 +168,7 @@ else
         new("MTA-STS", "Alerts when dotMARC stops being able to serve the domain's MTA-STS policy. Only for domains with MTA-STS hosting on.", settings => settings.MtaStsAlertMode, (settings, mode) => settings.MtaStsAlertMode = mode),
         new("Dangling CNAME", "Alerts when a common subdomain (www, autodiscover, shop and so on) points at a name that no longer exists, so whoever claims it controls the subdomain. Monitored domains only.", settings => settings.DanglingCnameAlertMode, (settings, mode) => settings.DanglingCnameAlertMode = mode),
         new("Website certificates", "Alerts when the certificate on the domain's website, www or mta-sts host has expired, expires within 14 days or isn't valid for it. Monitored domains only.", settings => settings.CertificateAlertMode, (settings, mode) => settings.CertificateAlertMode = mode),
+        new("Domain registration", "Alerts when the domain's registration expires within 30 days, or has expired. Monitored domains only.", settings => settings.DomainExpiryAlertMode, (settings, mode) => settings.DomainExpiryAlertMode = mode),
     ];
 
     private NotificationSettings? _settings;

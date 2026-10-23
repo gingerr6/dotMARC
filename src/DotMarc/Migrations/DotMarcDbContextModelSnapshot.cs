@@ -447,6 +447,25 @@ namespace DotMarc.Migrations
                     b.Property<string>("DnsZone")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("DomainExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DomainExpiryCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DomainExpiryDetail")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("DomainExpiryStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("DomainRegistrar")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTimeOffset>("FirstSeenUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1565,6 +1584,11 @@ namespace DotMarc.Migrations
                     b.Property<bool>("DmarcPolicyWeakenedEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("DomainExpiryAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
 
@@ -1637,6 +1661,7 @@ namespace DotMarc.Migrations
                             DmarcAlertMode = "WhenItBreaks",
                             DmarcAuthorizationAlertMode = "WhenItBreaks",
                             DmarcPolicyWeakenedEnabled = true,
+                            DomainExpiryAlertMode = "WhenItBreaks",
                             Enabled = true,
                             GenericWebhookEnabled = false,
                             MissingReportThresholdDays = 2,

@@ -12,6 +12,7 @@ public static class DnsHealthItems
     public const string MtaSts = "MtaSts";
     public const string DanglingCname = "DanglingCname";
     public const string Certificate = "Certificate";
+    public const string DomainExpiry = "DomainExpiry";
     public const string DmarcPolicy = "DmarcPolicy";
     public const string Nameservers = "Nameservers";
 }

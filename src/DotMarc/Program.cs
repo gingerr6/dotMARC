@@ -335,6 +335,13 @@ builder.Services.AddHttpClient<DotMarc.Dns.IDanglingCnameChecker, DotMarc.Dns.Da
     client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
 });
 builder.Services.AddSingleton<DotMarc.Dns.ITlsCertificateProbe, DotMarc.Dns.TlsCertificateProbe>();
+builder.Services.AddHttpClient<DotMarc.Dns.IDomainExpiryChecker, DotMarc.Dns.DomainExpiryChecker>(client =>
+{
+    client.BaseAddress = new Uri("https://rdap.org/");
+    // rdap.org's WAF refuses requests without one; see RdapIpInfoLookup.
+    client.DefaultRequestHeaders.Add("User-Agent", "dotMARC (+https://github.com/homotechsual/dotMARC)");
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
 builder.Services.AddScoped<DotMarc.Dns.ICertificateChecker, DotMarc.Dns.CertificateChecker>();
 
 builder.Services.AddHttpClient<DotMarc.Dns.IDkimDnsChecker, DotMarc.Dns.DkimDnsChecker>(client =>

@@ -113,6 +113,16 @@ public static class DnsHealthChecks
             },
             domain => domain.CertificateCheckedUtc, domain => domain.CertificateStatus.ToString(), domain => domain.CertificateDetail,
             settings => settings.CertificateAlertMode),
+        new(DnsHealthItems.DomainExpiry, AlertTypes.DomainExpiring, "Domain registration",
+            domain => domain.DomainExpiryStatus switch
+            {
+                DomainExpiryStatus.Ok => DnsCheckHealth.Passing,
+                DomainExpiryStatus.ExpiringSoon or DomainExpiryStatus.Expired => DnsCheckHealth.Failing,
+                // Not checked yet, or no registration to check (a subdomain).
+                _ => DnsCheckHealth.Ignored
+            },
+            domain => domain.DomainExpiryCheckedUtc, domain => domain.DomainExpiryStatus.ToString(), domain => domain.DomainExpiryDetail,
+            settings => settings.DomainExpiryAlertMode),
     ];
 
     public static DnsHealthCheck For(string item) => All.Single(check => check.Item == item);

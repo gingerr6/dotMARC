@@ -52,6 +52,8 @@ public sealed class PollingService : BackgroundService
 
     internal const long CertificateCheckLeaderLockKey = 84_200_031;
 
+    internal const long DomainExpiryCheckLeaderLockKey = 84_200_033;
+
     /// <summary>Arbitrary fixed key for this service's DKIM-check advisory lock. Runs on the same
     /// schedule as every other check even though most domains will have no selectors configured
     /// yet (RunSingleDkimCheckAsync short-circuits to NotConfigured in that case) - simpler than
@@ -201,6 +203,20 @@ public sealed class PollingService : BackgroundService
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Certificate check cycle failed; will retry next interval.");
+                    }
+
+                    try
+                    {
+                        context.ChangeTracker.Clear();
+                        var domainExpiryChecker = scope.ServiceProvider.GetRequiredService<IDomainExpiryChecker>();
+                        await RunDailyCheckCycleAsync(context, DomainExpiryCheckLeaderLockKey, "domain registration",
+                            (cutoff, nowUtc) => d => d.DomainExpiryCheckedUtc == null || d.DomainExpiryCheckedUtc < cutoff
+                                || d.AlertStates.Any(state => state.Item == DnsHealthItems.DomainExpiry && state.RecheckDueUtc <= nowUtc && d.DomainExpiryCheckedUtc < state.RecheckDueUtc),
+                            domain => RunSingleDomainExpiryCheckAsync(domain, domainExpiryChecker, stoppingToken), stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Domain registration check cycle failed; will retry next interval.");
                     }
 
 
@@ -563,6 +579,16 @@ public sealed class PollingService : BackgroundService
         domain.CertificateCheckedUtc = DateTimeOffset.UtcNow;
         domain.CertificateDetail = result.Detail;
         domain.CertificateExpiresUtc = result.EarliestExpiryUtc;
+    }
+
+    internal static async Task RunSingleDomainExpiryCheckAsync(Domain domain, IDomainExpiryChecker checker, CancellationToken cancellationToken)
+    {
+        var result = await checker.CheckAsync(domain.Name, cancellationToken).ConfigureAwait(false);
+        domain.DomainExpiryStatus = result.Status;
+        domain.DomainExpiryCheckedUtc = DateTimeOffset.UtcNow;
+        domain.DomainExpiryDetail = result.Detail;
+        domain.DomainExpiresUtc = result.ExpiresUtc;
+        domain.DomainRegistrar = result.Registrar;
     }
 
     /// <summary>Runs one check for every monitored domain the filter says is due (its last run missing or over 24 hours
