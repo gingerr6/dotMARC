@@ -10,6 +10,8 @@ public static class DnsHealthItems
     public const string Mx = "Mx";
     public const string Dkim = "Dkim";
     public const string MtaSts = "MtaSts";
+    public const string DanglingCname = "DanglingCname";
+    public const string Certificate = "Certificate";
     public const string DmarcPolicy = "DmarcPolicy";
     public const string Nameservers = "Nameservers";
 }

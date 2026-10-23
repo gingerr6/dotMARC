@@ -45,6 +45,17 @@ public sealed class Domain
     public DateTimeOffset? MxCheckedUtc { get; set; }
     public string? MxCheckDetail { get; set; }
 
+    public DanglingCnameStatus DanglingCnameStatus { get; set; }
+    public DateTimeOffset? DanglingCnameCheckedUtc { get; set; }
+    public string? DanglingCnameDetail { get; set; }
+
+    public CertificateCheckStatus CertificateStatus { get; set; }
+    public DateTimeOffset? CertificateCheckedUtc { get; set; }
+    public string? CertificateDetail { get; set; }
+
+    /// <summary>When the soonest-expiring certificate of the hosts checked expires.</summary>
+    public DateTimeOffset? CertificateExpiresUtc { get; set; }
+
     public List<string> DkimSelectors { get; set; } = [];
     public DkimCheckStatus DkimCheckStatus { get; set; }
     public DateTimeOffset? DkimCheckedUtc { get; set; }

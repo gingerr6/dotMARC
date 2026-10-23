@@ -11,7 +11,7 @@ public enum DnsCheckHealth
     Ignored
 }
 
-/// <summary>One of the seven DNS health checks, as the alerts see it: which status passes or fails, when it last
+/// <summary>One of the DNS health checks, as the alerts see it: which status passes or fails, when it last
 /// ran, and which setting controls it.</summary>
 public sealed record DnsHealthCheck(
     string Item,
@@ -94,6 +94,25 @@ public static class DnsHealthChecks
                 },
             domain => domain.MtaStsCheckedUtc, domain => domain.MtaStsStatus.ToString(), domain => domain.MtaStsCheckDetail,
             settings => settings.MtaStsAlertMode),
+        new(DnsHealthItems.DanglingCname, AlertTypes.DanglingCname, "Dangling CNAME",
+            domain => domain.DanglingCnameStatus switch
+            {
+                DanglingCnameStatus.Ok => DnsCheckHealth.Passing,
+                DanglingCnameStatus.Dangling => DnsCheckHealth.Failing,
+                _ => DnsCheckHealth.Ignored
+            },
+            domain => domain.DanglingCnameCheckedUtc, domain => domain.DanglingCnameStatus.ToString(), domain => domain.DanglingCnameDetail,
+            settings => settings.DanglingCnameAlertMode),
+        new(DnsHealthItems.Certificate, AlertTypes.CertificateExpiring, "Website certificates",
+            domain => domain.CertificateStatus switch
+            {
+                CertificateCheckStatus.Ok => DnsCheckHealth.Passing,
+                CertificateCheckStatus.ExpiringSoon or CertificateCheckStatus.Expired or CertificateCheckStatus.Invalid => DnsCheckHealth.Failing,
+                // Not checked yet, or nothing on HTTPS to check.
+                _ => DnsCheckHealth.Ignored
+            },
+            domain => domain.CertificateCheckedUtc, domain => domain.CertificateStatus.ToString(), domain => domain.CertificateDetail,
+            settings => settings.CertificateAlertMode),
     ];
 
     public static DnsHealthCheck For(string item) => All.Single(check => check.Item == item);

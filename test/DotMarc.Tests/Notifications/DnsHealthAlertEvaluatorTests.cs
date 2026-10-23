@@ -21,6 +21,8 @@ public sealed class DnsHealthAlertEvaluatorTests
         MxCheckStatus = MxCheckStatus.Ok, MxCheckedUtc = Now.AddHours(-1),
         DkimSelectors = ["selector1"], DkimCheckStatus = DkimCheckStatus.Ok, DkimCheckedUtc = Now.AddHours(-1),
         MtaStsEnabled = true, MtaStsStatus = MtaStsStatus.Active, MtaStsCheckedUtc = Now.AddHours(-1),
+        DanglingCnameStatus = DanglingCnameStatus.Ok, DanglingCnameCheckedUtc = Now.AddHours(-1),
+        CertificateStatus = CertificateCheckStatus.Ok, CertificateCheckedUtc = Now.AddHours(-1),
         DmarcPolicy = DmarcPolicyLevel.Reject, DmarcSubdomainPolicy = DmarcPolicyLevel.Reject, DmarcPercent = 100,
         DnsNameservers = ["ns1.example.net", "ns2.example.net"], DnsProviderCheckedUtc = Now.AddHours(-1),
     };
@@ -56,6 +58,8 @@ public sealed class DnsHealthAlertEvaluatorTests
             case DnsHealthItems.Mx: domain.MxCheckStatus = Enum.Parse<MxCheckStatus>(status); break;
             case DnsHealthItems.Dkim: domain.DkimCheckStatus = Enum.Parse<DkimCheckStatus>(status); break;
             case DnsHealthItems.MtaSts: domain.MtaStsStatus = Enum.Parse<MtaStsStatus>(status); break;
+            case DnsHealthItems.DanglingCname: domain.DanglingCnameStatus = Enum.Parse<DanglingCnameStatus>(status); break;
+            case DnsHealthItems.Certificate: domain.CertificateStatus = Enum.Parse<CertificateCheckStatus>(status); break;
         }
 
         return domain;
@@ -118,7 +122,7 @@ public sealed class DnsHealthAlertEvaluatorTests
         var actions = Run(HealthyDomain(), states);
 
         Assert.Empty(Raised(actions));
-        Assert.Equal(9, states.Count);
+        Assert.Equal(11, states.Count);
         Assert.All(states, state => Assert.Equal(7, state.DomainId));
         Assert.All(DnsHealthChecks.All, check => Assert.True(State(states, check.Item).HasPassed));
         Assert.Equal("p=reject; sp=reject; pct=100", State(states, DnsHealthItems.DmarcPolicy).Baseline);
