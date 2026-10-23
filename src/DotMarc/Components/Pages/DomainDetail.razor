@@ -540,7 +540,7 @@ else
         <MudTabPanel Text="Sources">
             <MudTable Items="_sources" Hover="true" T="SourceRow" CustomHeader="true" Filter="SourceMatchesFilters">
                 <ToolBarContent>
-                    @{ var unreviewed = _sources.Select(s => s.Identity).DistinctBy(identity => identity.Key).Count(identity => !_senderApprovals.ContainsKey(identity.Key)); }
+                    @{ var unreviewed = _sources.Select(s => s.Identity).DistinctBy(identity => identity.Key).Count(identity => !_senderApprovals.ContainsKey(identity.Key) && !identity.IsForwarder); }
                     @if (_senderApprovals.Count == 0)
                     {
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">Approve the services and servers that send this domain's mail, and dotMARC alerts you when anything else starts passing DMARC.</MudText>
@@ -576,6 +576,7 @@ else
                                 <MudSelectItem T="string" Value="@("Approved")">Approved</MudSelectItem>
                                 <MudSelectItem T="string" Value="@("Not ours")">Not ours</MudSelectItem>
                                 <MudSelectItem T="string" Value="@UnreviewedFilter">Unreviewed</MudSelectItem>
+                                <MudSelectItem T="string" Value="@("Forwarder")">Forwarder</MudSelectItem>
                             </MudSelect>
                         </MudTh>
                         <MudTh><MudNumericField T="int?" @bind-Value="_sourceMinVolumeFilter" Placeholder="Min" Margin="Margin.Dense" Min="0" /></MudTh>
@@ -646,7 +647,7 @@ else
                         <div class="d-flex align-center" style="gap:4px;">
                             <MudTooltip Text="@ApprovalTooltip(identity)" Arrow="true">
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                         Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => Color.Default })">@SenderApprovalService.Describe(status)</MudChip>
+                                         Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => identity.IsForwarder ? Color.Info : Color.Default })">@ApprovalLabel(context)</MudChip>
                             </MudTooltip>
                             <AuthorizeView Policy="DomainsEdit" Context="senderAuthState">
                                 <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@($"Review {identity.Label}")">
@@ -1151,14 +1152,17 @@ else
     private SenderApprovalStatus? ApprovalStatus(SourceRow source) =>
         _senderApprovals.TryGetValue(source.Identity.Key, out var approval) ? approval.Status : null;
 
-    private string ApprovalLabel(SourceRow source) => SenderApprovalService.Describe(ApprovalStatus(source));
+    private string ApprovalLabel(SourceRow source) =>
+        ApprovalStatus(source) is null && source.Identity.IsForwarder ? "Forwarder" : SenderApprovalService.Describe(ApprovalStatus(source));
 
     private string ApprovalTooltip(SenderIdentity identity)
     {
         var scope = identity.IsService ? $"Covers every {identity.Label} server sending this domain's mail." : "Covers this IP only.";
         return _senderApprovals.TryGetValue(identity.Key, out var approval)
             ? $"{SenderApprovalService.Describe(approval.Status)} by {approval.DecidedBy} on {DotMarc.Reporting.UkTime.Date(approval.DecidedUtc)}. {scope}"
-            : $"Nobody has reviewed this sender yet. {scope}";
+            : identity.IsForwarder
+                ? $"A mail forwarder: someone this domain emailed has their address pass mail on through {identity.Label}. It isn't the domain's own sender, so there's nothing to review. {scope}"
+                : $"Nobody has reviewed this sender yet. {scope}";
     }
 
     /// <summary>Approves a sender, marks it not ours, or clears that (null). The menu only shows for DomainsEdit, but a

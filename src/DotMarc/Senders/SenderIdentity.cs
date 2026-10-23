@@ -1,14 +1,15 @@
 namespace DotMarc.Senders;
 
 /// <summary>Who a source is, for approving it: a recognised service (every IP it sends from at once), or else the one
-/// IP. Key is what SenderApproval stores.</summary>
-public sealed record SenderIdentity(string Key, string Label, bool IsService)
+/// IP. Key is what SenderApproval stores. A forwarder (see KnownSender.IsForwarder) counts as reviewed until someone
+/// decides otherwise.</summary>
+public sealed record SenderIdentity(string Key, string Label, bool IsService, bool IsForwarder = false)
 {
     private const string IpPrefix = "ip:";
 
     public static SenderIdentity For(string ip, string? hostName, string? organization) =>
         KnownSenders.Recognise(hostName, organization) is { } service
-            ? new SenderIdentity(service.Key, service.Name, IsService: true)
+            ? new SenderIdentity(service.Key, service.Name, IsService: true, service.IsForwarder)
             : new SenderIdentity(IpPrefix + ip, ip, IsService: false);
 
     /// <summary>A label for a stored key, for the audit log and alerts.</summary>

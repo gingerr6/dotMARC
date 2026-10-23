@@ -1,7 +1,9 @@
 namespace DotMarc.Senders;
 
-/// <summary>A mail service dotMARC recognises. Key is stored on SenderApproval, so it must never change once shipped.</summary>
-public sealed record KnownSender(string Key, string Name, string[] HostSuffixes, string[] OrganizationKeywords);
+/// <summary>A mail service dotMARC recognises. Key is stored on SenderApproval, so it must never change once shipped.
+/// A forwarder only passes on mail someone else sent (a recipient's address that forwards elsewhere), so it's never the
+/// domain's own sender and needs no review.</summary>
+public sealed record KnownSender(string Key, string Name, string[] HostSuffixes, string[] OrganizationKeywords, bool IsForwarder = false);
 
 /// <summary>Recognises the mail services behind source IPs, so a domain's senders can be approved a service at a time
 /// rather than an IP at a time. A source's forward-confirmed reverse DNS name (see ReverseDnsLookup) is trusted first.
@@ -31,6 +33,16 @@ public static class KnownSenders
         new("zoho", "Zoho Mail", ["zoho.com", "zoho.eu", "zohomail.com"], []),
         new("constantcontact", "Constant Contact", ["constantcontact.com", "confirmedcc.com"], ["Constant Contact"]),
         new("campaignmonitor", "Campaign Monitor", ["createsend.com", "cmail1.com", "cmail2.com", "cmail19.com", "cmail20.com"], []),
+
+        // Forwarding-only services. Google's and Microsoft's own forwarding comes from the same servers as their
+        // customers' mail, so it can't be told apart here and stays with those services.
+        new("cloudflare-email-routing", "Cloudflare Email Routing", ["cloudflare-email.net"], [], IsForwarder: true),
+        new("improvmx", "ImprovMX", ["improvmx.com"], [], IsForwarder: true),
+        new("forwardemail", "Forward Email", ["forwardemail.net"], [], IsForwarder: true),
+        new("simplelogin", "SimpleLogin", ["simplelogin.co", "simplelogin.com"], [], IsForwarder: true),
+        new("addy", "addy.io", ["anonaddy.me", "addy.io"], [], IsForwarder: true),
+        new("duckduckgo-email", "DuckDuckGo Email Protection", ["duck.com"], [], IsForwarder: true),
+        new("pobox", "Pobox", ["pobox.com"], [], IsForwarder: true),
     ];
 
     /// <summary>The service behind a source, or null when it isn't one dotMARC knows.</summary>

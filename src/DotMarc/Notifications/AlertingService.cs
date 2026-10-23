@@ -249,7 +249,8 @@ public sealed class AlertingService : IAlertingService
 
                 owners.TryGetValue(ip, out var owner);
                 var identity = SenderIdentity.For(ip, hostName, owner?.Organization);
-                if (decisions.TryGetValue(identity.Key, out var status) && status == SenderApprovalStatus.Approved)
+                var decided = decisions.TryGetValue(identity.Key, out var status);
+                if ((decided && status == SenderApprovalStatus.Approved) || (!decided && identity.IsForwarder))
                 {
                     continue;
                 }

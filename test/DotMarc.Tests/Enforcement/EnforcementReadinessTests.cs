@@ -97,4 +97,14 @@ public sealed class EnforcementReadinessTests
         Assert.False(result.Ready);
         Assert.Empty(result.Blockers);
     }
+
+    [Fact]
+    public void Assess_DoesNotWaitOnAForwarderNobodyReviewed()
+    {
+        var forwarder = new SenderIdentity("cloudflare-email-routing", "Cloudflare Email Routing", true, IsForwarder: true);
+
+        var result = Assess(Domain(), [new(Microsoft, 1000, 995), new(forwarder, 300, 280)], new() { [Microsoft.Key] = SenderApprovalStatus.Approved });
+
+        Assert.True(result.Ready);
+    }
 }
