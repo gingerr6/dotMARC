@@ -42,7 +42,8 @@ jobs:
       group: website-publish-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref }}
       cancel-in-progress: true
 
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+    # Only the original project publishes dotmarc.app: a fork has no Cloudflare credentials for it.
+    if: ${{ github.repository == 'homotechsual/dotMARC' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) }}
 
     steps:
       - name: Checkout
