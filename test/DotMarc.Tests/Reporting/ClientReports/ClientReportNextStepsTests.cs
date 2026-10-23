@@ -103,4 +103,23 @@ public sealed class ClientReportNextStepsTests
         Assert.Equal(["No DMARC reports arrived for aurora-retail.example. Check its DMARC record's reporting address."],
             ClientReportNextSteps.For([Healthy()], [Row("aurora-retail.example", 0)]));
     }
+
+    [Fact]
+    public void ATakeoverRiskAWebsiteCertificateAndAnExpiringRegistration_AreEachNextSteps()
+    {
+        var domain = Healthy();
+        domain.DanglingCnameStatus = DanglingCnameStatus.Dangling;
+        domain.CertificateStatus = CertificateCheckStatus.Invalid;
+        domain.DomainExpiryStatus = DomainExpiryStatus.ExpiringSoon;
+        domain.DomainExpiresUtc = new DateTimeOffset(2026, 11, 10, 12, 0, 0, TimeSpan.Zero);
+
+        var steps = ClientReportNextSteps.For([domain], [Row("aurora-retail.example", 100)]);
+
+        Assert.Equal(
+        [
+            "The registration for aurora-retail.example expires on 10/11/2026. Make sure it renews.",
+            "aurora-retail.example has subdomain records pointing at names that no longer exist, which someone could take over. Remove them.",
+            "The website certificate for aurora-retail.example doesn't cover all its addresses (such as www), so some visitors see a security warning. Fix it with the web host.",
+        ], steps);
+    }
 }

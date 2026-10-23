@@ -1889,6 +1889,7 @@
                   "MtaStsFailing",
                   "DanglingCname",
                   "CertificateExpiring",
+                  "DomainExpiring",
                   "DmarcPolicyWeakened",
                   "NameserversChanged",
                   "ApiKeyExpiring",

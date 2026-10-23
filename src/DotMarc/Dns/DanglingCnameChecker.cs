@@ -27,6 +27,12 @@ public sealed class DanglingCnameChecker(HttpClient http) : IDanglingCnameChecke
         "assets", "images", "files", "docs", "help", "support", "status", "dev", "test", "staging", "beta", "mta-sts",
     ];
 
+    /// <summary>Providers' own domains, where nobody but the provider can create a name: a target under one of these
+    /// that no longer exists is a dead record, not a takeover risk. Cloud hosting domains (azurewebsites.net,
+    /// cloudapp.net, s3 and so on) are deliberately not here: anyone can create a name under those.</summary>
+    public static IReadOnlyList<string> UnclaimableDomains { get; } =
+        ["lync.com", "outlook.com", "office.com", "office365.com", "microsoft.com", "microsoftonline.com", "live.com"];
+
     private const int MaxChainLength = 8;
     private const int NxDomain = 3;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -34,6 +40,7 @@ public sealed class DanglingCnameChecker(HttpClient http) : IDanglingCnameChecke
     public async Task<DanglingCnameResult> CheckAsync(string domainName, CancellationToken cancellationToken)
     {
         var dangling = new List<string>();
+        var old = new List<string>();
         var cnames = 0;
         foreach (var label in Labels)
         {
@@ -55,19 +62,28 @@ public sealed class DanglingCnameChecker(HttpClient http) : IDanglingCnameChecke
 
             if (await StatusAsync(target, cancellationToken).ConfigureAwait(false) == NxDomain)
             {
-                dangling.Add($"{name} → {target}");
+                (IsUnclaimable(target) ? old : dangling).Add($"{name} → {target}");
             }
         }
 
+        var oldNote = old.Count == 0 ? "" : $" Also old records to remove, not a risk: {string.Join("; ", old)}.";
         if (dangling.Count > 0)
         {
             return new DanglingCnameResult(DanglingCnameStatus.Dangling,
-                $"Points at a name that no longer exists, so whoever claims it controls the subdomain: {string.Join("; ", dangling)}. Remove the record, or point it somewhere that's yours.");
+                $"Points at a name that no longer exists, so whoever claims it controls the subdomain: {string.Join("; ", dangling)}. Remove the record, or point it somewhere that's yours.{oldNote}");
+        }
+        if (old.Count > 0)
+        {
+            return new DanglingCnameResult(DanglingCnameStatus.OldRecords,
+                $"Points at a provider name that no longer exists, such as Microsoft's retired Skype for Business hosts. Nobody else can claim those, so it isn't a takeover risk, but the record does nothing: remove it. {string.Join("; ", old)}.");
         }
 
         return new DanglingCnameResult(DanglingCnameStatus.Ok,
             cnames == 0 ? $"No CNAME records on the {Labels.Count} common subdomains checked." : $"{cnames} CNAME record(s) checked; every target exists.");
     }
+
+    private static bool IsUnclaimable(string target) => UnclaimableDomains.Any(domain =>
+        target.Equals(domain, StringComparison.OrdinalIgnoreCase) || target.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase));
 
     private async Task<string?> CnameTargetAsync(string name, CancellationToken cancellationToken)
     {

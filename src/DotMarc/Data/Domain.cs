@@ -56,6 +56,14 @@ public sealed class Domain
     /// <summary>When the soonest-expiring certificate of the hosts checked expires.</summary>
     public DateTimeOffset? CertificateExpiresUtc { get; set; }
 
+    public DomainExpiryStatus DomainExpiryStatus { get; set; }
+    public DateTimeOffset? DomainExpiryCheckedUtc { get; set; }
+    public string? DomainExpiryDetail { get; set; }
+
+    /// <summary>When the domain's registration expires, from the registry.</summary>
+    public DateTimeOffset? DomainExpiresUtc { get; set; }
+    public string? DomainRegistrar { get; set; }
+
     public List<string> DkimSelectors { get; set; } = [];
     public DkimCheckStatus DkimCheckStatus { get; set; }
     public DateTimeOffset? DkimCheckedUtc { get; set; }

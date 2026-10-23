@@ -60,6 +60,12 @@ public static class ClientReportNextSteps
     private static IEnumerable<string> CheckSteps(Domain domain)
     {
         var name = domain.Name;
+        switch (domain.DomainExpiryStatus)
+        {
+            case DomainExpiryStatus.Expired: yield return $"The registration for {name} has expired. Renew it now: its mail and website stop when the registry suspends it."; break;
+            case DomainExpiryStatus.ExpiringSoon when domain.DomainExpiresUtc is { } expires: yield return $"The registration for {name} expires on {UkTime.Date(expires)}. Make sure it renews."; break;
+        }
+
         var reportingStep = $"Add the record that lets {name}'s DMARC reports reach your reporting mailbox.";
         switch (domain.DmarcCheckStatus)
         {
@@ -98,5 +104,14 @@ public static class ClientReportNextSteps
 
         if (domain.MtaStsStatus == MtaStsStatus.Failed) yield return $"MTA-STS for {name} is failing. Check its policy host.";
         if (domain.MtaStsStatus == MtaStsStatus.PendingPolicyRecord) yield return $"MTA-STS for {name} needs its _mta-sts TXT record before senders will use it.";
+
+        if (domain.DanglingCnameStatus == DanglingCnameStatus.Dangling) yield return $"{name} has subdomain records pointing at names that no longer exist, which someone could take over. Remove them.";
+
+        switch (domain.CertificateStatus)
+        {
+            case CertificateCheckStatus.Expired: yield return $"The website certificate for {name} has expired, so visitors see a security warning. Renew it."; break;
+            case CertificateCheckStatus.ExpiringSoon: yield return $"The website certificate for {name} expires within 14 days and hasn't renewed. Check its renewal."; break;
+            case CertificateCheckStatus.Invalid: yield return $"The website certificate for {name} doesn't cover all its addresses (such as www), so some visitors see a security warning. Fix it with the web host."; break;
+        }
     }
 }

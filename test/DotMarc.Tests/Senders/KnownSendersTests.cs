@@ -60,4 +60,18 @@ public sealed class KnownSendersTests
     [InlineData("return.smtp2go.net")]
     public void Recognise_Smtp2Go(string hostName) =>
         Assert.Equal("SMTP2GO", KnownSenders.Recognise(hostName, null)?.Name);
+
+    [Fact]
+    public void Recognise_KnowsCloudflareEmailRouting_AsAForwarder()
+    {
+        var identity = SenderIdentity.For("104.30.8.177", "i-bhh.cloudflare-email.net", "Cloudflare, Inc.");
+
+        Assert.Equal(("cloudflare-email-routing", "Cloudflare Email Routing", true, true), (identity.Key, identity.Label, identity.IsService, identity.IsForwarder));
+    }
+
+    [Fact]
+    public void Recognise_DoesNotCallASendingServiceAForwarder()
+    {
+        Assert.False(SenderIdentity.For("192.0.2.1", "mail-db8eur05on2101.outbound.protection.outlook.com", null).IsForwarder);
+    }
 }

@@ -94,4 +94,30 @@ public sealed class DanglingCnameCheckerTests
         Assert.Equal(DanglingCnameStatus.Ok, result.Status);
         Assert.Contains("No CNAME records", result.Detail);
     }
+
+    [Fact]
+    public async Task Retired_microsoft_names_are_old_records_not_a_takeover_risk()
+    {
+        var (checker, dns) = Create();
+        dns.Cname("lyncdiscover.contoso.com", "webdir.online.lync.com");
+        dns.Cname("sip.contoso.com", "sipdir.online.lync.com");
+
+        var result = await checker.CheckAsync("contoso.com", CancellationToken.None);
+
+        Assert.Equal(DanglingCnameStatus.OldRecords, result.Status);
+        Assert.Contains("lyncdiscover.contoso.com → webdir.online.lync.com", result.Detail);
+    }
+
+    [Fact]
+    public async Task A_takeover_risk_wins_over_old_records_and_mentions_them()
+    {
+        var (checker, dns) = Create();
+        dns.Cname("sip.contoso.com", "sipdir.online.lync.com");
+        dns.Cname("shop.contoso.com", "contoso-shop.azurewebsites.net");
+
+        var result = await checker.CheckAsync("contoso.com", CancellationToken.None);
+
+        Assert.Equal(DanglingCnameStatus.Dangling, result.Status);
+        Assert.Contains("old records to remove, not a risk: sip.contoso.com", result.Detail);
+    }
 }

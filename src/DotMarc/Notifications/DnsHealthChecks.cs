@@ -97,7 +97,8 @@ public static class DnsHealthChecks
         new(DnsHealthItems.DanglingCname, AlertTypes.DanglingCname, "Dangling CNAME",
             domain => domain.DanglingCnameStatus switch
             {
-                DanglingCnameStatus.Ok => DnsCheckHealth.Passing,
+                // Old records are worth tidying, not alerting on: nobody else can take them over.
+                DanglingCnameStatus.Ok or DanglingCnameStatus.OldRecords => DnsCheckHealth.Passing,
                 DanglingCnameStatus.Dangling => DnsCheckHealth.Failing,
                 _ => DnsCheckHealth.Ignored
             },
@@ -113,6 +114,16 @@ public static class DnsHealthChecks
             },
             domain => domain.CertificateCheckedUtc, domain => domain.CertificateStatus.ToString(), domain => domain.CertificateDetail,
             settings => settings.CertificateAlertMode),
+        new(DnsHealthItems.DomainExpiry, AlertTypes.DomainExpiring, "Domain registration",
+            domain => domain.DomainExpiryStatus switch
+            {
+                DomainExpiryStatus.Ok => DnsCheckHealth.Passing,
+                DomainExpiryStatus.ExpiringSoon or DomainExpiryStatus.Expired => DnsCheckHealth.Failing,
+                // Not checked yet, or no registration to check (a subdomain).
+                _ => DnsCheckHealth.Ignored
+            },
+            domain => domain.DomainExpiryCheckedUtc, domain => domain.DomainExpiryStatus.ToString(), domain => domain.DomainExpiryDetail,
+            settings => settings.DomainExpiryAlertMode),
     ];
 
     public static DnsHealthCheck For(string item) => All.Single(check => check.Item == item);

@@ -102,7 +102,7 @@ public static class EnforcementReadiness
 
             bool Matters(SenderVolume sender) => sender.Volume >= MinVolumeToMatter || (volume > 0 && (double)sender.Volume / volume >= MinShareToMatter);
 
-            var unreviewed = senders.Where(sender => !approvals.ContainsKey(sender.Identity.Key) && Matters(sender)).OrderByDescending(sender => sender.Volume).ToList();
+            var unreviewed = senders.Where(sender => !approvals.ContainsKey(sender.Identity.Key) && !sender.Identity.IsForwarder && Matters(sender)).OrderByDescending(sender => sender.Volume).ToList();
             if (unreviewed.Count > 0)
             {
                 blockers.Add(new($"{unreviewed.Count} sender{(unreviewed.Count == 1 ? "" : "s")} not reviewed",

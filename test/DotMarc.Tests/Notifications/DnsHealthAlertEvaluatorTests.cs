@@ -23,6 +23,7 @@ public sealed class DnsHealthAlertEvaluatorTests
         MtaStsEnabled = true, MtaStsStatus = MtaStsStatus.Active, MtaStsCheckedUtc = Now.AddHours(-1),
         DanglingCnameStatus = DanglingCnameStatus.Ok, DanglingCnameCheckedUtc = Now.AddHours(-1),
         CertificateStatus = CertificateCheckStatus.Ok, CertificateCheckedUtc = Now.AddHours(-1),
+        DomainExpiryStatus = DomainExpiryStatus.Ok, DomainExpiryCheckedUtc = Now.AddHours(-1),
         DmarcPolicy = DmarcPolicyLevel.Reject, DmarcSubdomainPolicy = DmarcPolicyLevel.Reject, DmarcPercent = 100,
         DnsNameservers = ["ns1.example.net", "ns2.example.net"], DnsProviderCheckedUtc = Now.AddHours(-1),
     };
@@ -60,6 +61,7 @@ public sealed class DnsHealthAlertEvaluatorTests
             case DnsHealthItems.MtaSts: domain.MtaStsStatus = Enum.Parse<MtaStsStatus>(status); break;
             case DnsHealthItems.DanglingCname: domain.DanglingCnameStatus = Enum.Parse<DanglingCnameStatus>(status); break;
             case DnsHealthItems.Certificate: domain.CertificateStatus = Enum.Parse<CertificateCheckStatus>(status); break;
+            case DnsHealthItems.DomainExpiry: domain.DomainExpiryStatus = Enum.Parse<DomainExpiryStatus>(status); break;
         }
 
         return domain;
@@ -122,7 +124,7 @@ public sealed class DnsHealthAlertEvaluatorTests
         var actions = Run(HealthyDomain(), states);
 
         Assert.Empty(Raised(actions));
-        Assert.Equal(11, states.Count);
+        Assert.Equal(12, states.Count);
         Assert.All(states, state => Assert.Equal(7, state.DomainId));
         Assert.All(DnsHealthChecks.All, check => Assert.True(State(states, check.Item).HasPassed));
         Assert.Equal("p=reject; sp=reject; pct=100", State(states, DnsHealthItems.DmarcPolicy).Baseline);

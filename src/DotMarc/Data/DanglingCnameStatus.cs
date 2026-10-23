@@ -9,5 +9,10 @@ public enum DanglingCnameStatus
 
     /// <summary>A common subdomain is a CNAME to a name that no longer exists: whoever registers or claims that
     /// name can serve content, or receive mail, as the domain.</summary>
-    Dangling
+    Dangling,
+
+    /// <summary>Only CNAMEs to names that no longer exist under a provider's own domain that nobody else can create
+    /// names in (Microsoft's retired Skype for Business hosts under lync.com, say): dead records worth removing, but
+    /// not a takeover risk.</summary>
+    OldRecords
 }

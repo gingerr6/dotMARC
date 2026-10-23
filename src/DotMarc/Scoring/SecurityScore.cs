@@ -16,7 +16,9 @@ public sealed record DomainScore(int Score, string Grade, IReadOnlyList<ScoreFac
 
 /// <summary>A 0-100 score and A-F grade for how well a domain is protected against spoofing and interception, from the
 /// checks dotMARC already runs and the last 30 days of reports. Parts that don't apply (mail delivery security for a
-/// parked domain that sends and receives nothing) are left out, and the rest scaled to 100.</summary>
+/// parked domain that sends and receives nothing) are left out, and the rest scaled to 100. So are the domain checks
+/// that haven't run yet, or have nothing to check (no website, no registration of its own): they only count once
+/// there's a result.</summary>
 public static class SecurityScore
 {
     /// <summary>The domain's reports' pass rates over the window: DMARC (SPF or DKIM passing) and DKIM alone. Null with
@@ -39,6 +41,8 @@ public static class SecurityScore
             factors.Add(MtaSts(domain));
             factors.Add(Tlsrpt(domain));
         }
+
+        factors.AddRange(new[] { DomainRegistration(domain), DanglingRecords(domain), WebsiteCertificates(domain) }.OfType<ScoreFactor>());
 
         var max = factors.Sum(factor => factor.Max);
         var score = (int)Math.Round(100.0 * factors.Sum(factor => factor.Points) / max);
@@ -115,6 +119,31 @@ public static class SecurityScore
         (true, MtaStsStatus.Active, _) => new("MTA-STS", 5, 10, "Move MTA-STS from testing to enforce."),
         (true, _, _) => new("MTA-STS", 0, 10, "Finish setting up MTA-STS: its DNS records aren't all in place."),
         _ => new("MTA-STS", 0, 10, "Turn on MTA-STS, so mail to the domain is only delivered encrypted."),
+    };
+
+    private static ScoreFactor? DomainRegistration(Domain domain) => domain.DomainExpiryStatus switch
+    {
+        DomainExpiryStatus.Ok => new("Domain registration", 5, 5, null),
+        DomainExpiryStatus.ExpiringSoon => new("Domain registration", 2, 5, "Make sure the domain's registration renews: it expires within 30 days."),
+        DomainExpiryStatus.Expired => new("Domain registration", 0, 5, "Renew the domain's registration: it has expired."),
+        _ => null,
+    };
+
+    private static ScoreFactor? DanglingRecords(Domain domain) => domain.DanglingCnameStatus switch
+    {
+        DanglingCnameStatus.Ok => new("No takeover risks", 10, 10, null),
+        DanglingCnameStatus.OldRecords => new("No takeover risks", 9, 10, "Remove the old subdomain records that point at retired provider names."),
+        DanglingCnameStatus.Dangling => new("No takeover risks", 0, 10, "Remove the subdomain records that point at names that no longer exist: someone could take them over."),
+        _ => null,
+    };
+
+    private static ScoreFactor? WebsiteCertificates(Domain domain) => domain.CertificateStatus switch
+    {
+        CertificateCheckStatus.Ok => new("Website certificates", 5, 5, null),
+        CertificateCheckStatus.ExpiringSoon => new("Website certificates", 2, 5, "Renew the website certificate: it expires within 14 days."),
+        CertificateCheckStatus.Invalid => new("Website certificates", 2, 5, "Fix the website certificate: it doesn't cover every address, such as www."),
+        CertificateCheckStatus.Expired => new("Website certificates", 0, 5, "Renew the website certificate: it has expired."),
+        _ => null,
     };
 
     private static ScoreFactor Tlsrpt(Domain domain) => domain.TlsrptCheckStatus == TlsrptCheckStatus.Ok
