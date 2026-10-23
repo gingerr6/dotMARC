@@ -87,4 +87,27 @@ public sealed class SecurityScoreTests
         Assert.Null(SecurityScore.Average([]));
         Assert.Equal(83, SecurityScore.Average([new DomainScore(100, "A", []), new DomainScore(65, "C", []), new DomainScore(84, "B", [])]));
     }
+
+    [Fact]
+    public void For_LeavesOutDomainChecksThatHaventRun()
+    {
+        var score = SecurityScore.For(FullyProtected(), Clean);
+
+        Assert.DoesNotContain(score.Factors, factor => factor.Name is "Domain registration" or "No takeover risks" or "Website certificates");
+    }
+
+    [Fact]
+    public void For_CountsATakeoverRiskAndAnExpiringRegistration()
+    {
+        var domain = FullyProtected();
+        domain.DanglingCnameStatus = DanglingCnameStatus.Dangling;
+        domain.DomainExpiryStatus = DomainExpiryStatus.ExpiringSoon;
+        domain.CertificateStatus = CertificateCheckStatus.Ok;
+
+        var score = SecurityScore.For(domain, Clean);
+
+        Assert.True(score.Score < 100);
+        Assert.Equal("No takeover risks", score.Improvements.First().Name);
+        Assert.Contains(score.Factors, factor => factor is { Name: "Website certificates", Full: true });
+    }
 }
