@@ -98,6 +98,20 @@
     {
         <MudText Typo="Typo.body2" Class="mt-1">@Domain.MtaStsCheckDetail</MudText>
     }
+    @if (_enforceReadiness is { } readiness)
+    {
+        <MudAlert Severity="@(readiness.Ready ? Severity.Success : Severity.Info)" Dense="true" Class="mt-2">
+            <div class="d-flex align-center flex-wrap" style="gap:8px">
+                <span>@readiness.Summary</span>
+                @if (readiness.Ready)
+                {
+                    <AuthorizeView Policy="MtaStsManage" Context="enforceAuthState">
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" Disabled="_isSwitchingToEnforce" OnClick="SwitchToEnforceAsync">Switch to enforce</MudButton>
+                    </AuthorizeView>
+                }
+            </div>
+        </MudAlert>
+    }
 
     <AuthorizeView Policy="MtaStsManage" Context="manageAuthState">
         <div class="mt-3">
@@ -186,6 +200,8 @@
     private bool? _cnameOk;
     private bool? _txtOk;
     private string? _txtDetail;
+    private MtaStsEnforceAssessment? _enforceReadiness;
+    private bool _isSwitchingToEnforce;
 
     private string PolicyRecord => MtaStsPolicyRenderer.PolicyRecord(MtaStsPolicyRenderer.PolicyId(Domain.MtaStsMode, Domain.MtaStsMxHosts, Domain.MtaStsMaxAgeSeconds));
 
@@ -247,6 +263,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadEnforceReadinessAsync();
+
         if (RendererInfo.IsInteractive)
         {
             await CheckRecordsAsync();
@@ -340,6 +358,38 @@
         if (enabledSuccessfully && MayPush)
         {
             await PushDnsRecordsAsync();
+        }
+    }
+
+    private async Task LoadEnforceReadinessAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var nowUtc = DateTimeOffset.UtcNow;
+        _enforceReadiness = MtaStsEnforceReadiness.Assess(Domain, await MtaStsEnforceReadiness.LoadAsync(db, Domain.Id, nowUtc), nowUtc);
+    }
+
+    /// <summary>Moves the policy to enforce, keeping everything else. The policy id changes with it, so the _mta-sts
+    /// record needs updating too: the record check above shows that, with its push button.</summary>
+    private async Task SwitchToEnforceAsync()
+    {
+        _isSwitchingToEnforce = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await DomainManagementService.SetMtaStsConfigAsync(db, await AuditActorAccessor.GetAsync(), Domain.Id, enabled: true, MtaStsMode.Enforce,
+                Domain.MtaStsMxHosts, Domain.MtaStsMaxAgeSeconds, CancellationToken.None);
+            Domain.MtaStsMode = _mode = MtaStsMode.Enforce;
+            _enforceReadiness = null;
+            await CheckRecordsAsync();
+            Snackbar.Add($"{Domain.Name}'s MTA-STS policy is now enforce. Update its _mta-sts record so senders fetch it.", Severity.Success);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add($"Failed to switch {Domain.Name} to enforce. Try again.", Severity.Error);
+        }
+        finally
+        {
+            _isSwitchingToEnforce = false;
         }
     }
 
