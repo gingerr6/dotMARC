@@ -11,6 +11,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime Js
 
 <PageTitle>dotMARC - Dashboard</PageTitle>
 <div class="d-flex align-center mb-1">
@@ -325,6 +326,62 @@ else
         }
     }
 
+    // The Group and Tag filters are remembered in this browser, so someone who works on one client comes back to it.
+    // Read once the circuit can run JS; a remembered Group or Tag that's gone, or that this person can't see, is ignored.
+    private const string GroupFilterKey = "dotmarc-dashboard-group";
+    private const string TagFilterKey = "dotmarc-dashboard-tag";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var groupId = await ReadRememberedAsync(GroupFilterKey);
+        var tagId = await ReadRememberedAsync(TagFilterKey);
+        var group = groupId is { } g && _allGroups.Any(candidate => candidate.Id == g) ? groupId : null;
+        var tag = tagId is { } t && _allTags.Any(candidate => candidate.Id == t) ? tagId : null;
+        if ((group is not null && group != _selectedGroupId) || (tag is not null && tag != _selectedTagId))
+        {
+            _selectedGroupId = group ?? _selectedGroupId;
+            _selectedTagId = tag ?? _selectedTagId;
+            await LoadAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task<int?> ReadRememberedAsync(string key)
+    {
+        try
+        {
+            return int.TryParse(await Js.InvokeAsync<string?>("localStorage.getItem", key), out var id) ? id : null;
+        }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private async Task RememberAsync(string key, int? id)
+    {
+        try
+        {
+            if (id is { } value)
+            {
+                await Js.InvokeVoidAsync("localStorage.setItem", key, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                await Js.InvokeVoidAsync("localStorage.removeItem", key);
+            }
+        }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or TaskCanceledException)
+        {
+            // Only a convenience: the filter still applies, it just won't be there next time.
+        }
+    }
+
     private void ShowDnsPushResultToast()
     {
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(Navigation.Uri).Query);
@@ -411,12 +468,14 @@ else
     private async Task OnGroupFilterChangedAsync(int? groupId)
     {
         _selectedGroupId = groupId;
+        await RememberAsync(GroupFilterKey, groupId);
         await LoadAsync();
     }
 
     private async Task OnTagFilterChangedAsync(int? tagId)
     {
         _selectedTagId = tagId;
+        await RememberAsync(TagFilterKey, tagId);
         await LoadAsync();
     }
 
