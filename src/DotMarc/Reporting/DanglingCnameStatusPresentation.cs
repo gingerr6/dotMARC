@@ -10,6 +10,7 @@ public static class DanglingCnameStatusPresentation
     {
         DanglingCnameStatus.Ok => Color.Success,
         DanglingCnameStatus.Dangling => Color.Error,
+        DanglingCnameStatus.OldRecords => Color.Warning,
         _ => Color.Default
     };
 
@@ -17,6 +18,7 @@ public static class DanglingCnameStatusPresentation
     {
         DanglingCnameStatus.Ok => "OK",
         DanglingCnameStatus.Dangling => "Takeover risk",
+        DanglingCnameStatus.OldRecords => "Old records",
         _ => "Not checked yet"
     };
 }

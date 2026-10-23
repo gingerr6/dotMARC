@@ -132,6 +132,7 @@ public static class SecurityScore
     private static ScoreFactor? DanglingRecords(Domain domain) => domain.DanglingCnameStatus switch
     {
         DanglingCnameStatus.Ok => new("No takeover risks", 10, 10, null),
+        DanglingCnameStatus.OldRecords => new("No takeover risks", 9, 10, "Remove the old subdomain records that point at retired provider names."),
         DanglingCnameStatus.Dangling => new("No takeover risks", 0, 10, "Remove the subdomain records that point at names that no longer exist: someone could take them over."),
         _ => null,
     };
