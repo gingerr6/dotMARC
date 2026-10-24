@@ -32,10 +32,10 @@ else
             <MudSwitch T="bool" @bind-Value="_failingOnly" Color="Color.Error" Label="Failing DMARC only" />
         </ToolBarContent>
         <HeaderContent>
-            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.Label)">Sender</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.Volume)" InitialDirection="SortDirection.Descending">Messages</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.PassRate)">Passing DMARC</MudTableSortLabel></MudTh>
-            <MudTh>Domains</MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.Label)"><Hint Text="A service or server sending mail as your domains, across every domain you can see.">Sender</Hint></MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.Volume)" InitialDirection="SortDirection.Descending"><Hint Text="Messages from this sender in the last 30 days.">Messages</Hint></MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(r => r.PassRate)"><Hint Text="The share of this sender's messages that passed DMARC.">Passing DMARC</Hint></MudTableSortLabel></MudTh>
+            <MudTh><Hint Text="The domains it sent mail as.">Domains</Hint></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd>

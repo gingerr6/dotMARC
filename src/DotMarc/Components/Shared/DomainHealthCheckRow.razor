@@ -3,7 +3,16 @@
    button, or nothing), so a real MudTable's homogeneous RowTemplate would fight this more than
    help - see the design spec's UI changes section. *@
 <div class="dotmarc-health-row">
-    <MudText Typo="Typo.body1" Class="dotmarc-health-title">@Title</MudText>
+    <MudText Typo="Typo.body1" Class="dotmarc-health-title">
+        @if (Hint is null)
+        {
+            @Title
+        }
+        else
+        {
+            <Hint Text="@Hint">@Title</Hint>
+        }
+    </MudText>
     <MudChip T="string" Color="@StatusColor" Size="Size.Small" Class="dotmarc-health-status">@StatusLabel</MudChip>
     <MudText Typo="Typo.caption" Class="dotmarc-health-checked">@(CheckedUtc is { } checkedUtc ? $"Checked: {DotMarc.Reporting.UkTime.DateTimeSeconds(checkedUtc)}" : "Not checked yet")</MudText>
     <div class="dotmarc-health-detail d-flex align-center flex-wrap" style="gap:8px;">
@@ -24,6 +33,9 @@
 
 @code {
     [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>What the check is, shown on hover over its name.</summary>
+    [Parameter] public string? Hint { get; set; }
     [Parameter, EditorRequired] public Color StatusColor { get; set; }
     [Parameter, EditorRequired] public string StatusLabel { get; set; } = "";
     [Parameter] public DateTimeOffset? CheckedUtc { get; set; }

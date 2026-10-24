@@ -40,13 +40,13 @@ else
         </ToolBarContent>
         <HeaderContent>
             <tr>
-                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.DomainName)">Domain</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.AlertType)">Type</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.Severity)">Severity</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.CreatedUtc)">Created</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.IsResolved ? e.ResolvedUtc ?? DateTimeOffset.MinValue : DateTimeOffset.MaxValue)">Resolved</MudTableSortLabel></MudTh>
-                <MudTh>Message</MudTh>
-                <MudTh>Tickets</MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.DomainName)"><Hint Text="The domain the alert is about.">Domain</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.AlertType)"><Hint Text="What kind of problem it is. Manage > Alerts sets which types are raised and where they go.">Type</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.Severity)"><Hint Text="Warning: needs attention. Info: for awareness.">Severity</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.CreatedUtc)"><Hint Text="When the alert was raised.">Created</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<AlertEvent, object>(e => e.IsResolved ? e.ResolvedUtc ?? DateTimeOffset.MinValue : DateTimeOffset.MaxValue)"><Hint Text="When the alert closed: fixed, or acknowledged.">Resolved</Hint></MudTableSortLabel></MudTh>
+                <MudTh><Hint Text="What dotMARC found.">Message</Hint></MudTh>
+                <MudTh><Hint Text="PSA tickets raised for this alert.">Tickets</Hint></MudTh>
                 <MudTh></MudTh>
             </tr>
             @if (_showFilters)

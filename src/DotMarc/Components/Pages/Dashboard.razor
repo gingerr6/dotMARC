@@ -109,18 +109,18 @@ else
         </ToolBarContent>
         <HeaderContent>
             <tr>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Name)">Domain</MudTableSortLabel></MudTh>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Status)">Report Status</MudTableSortLabel></MudTh>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.PassRate ?? -1)">Pass rate (30d)</MudTableSortLabel></MudTh>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.LastReportReceivedUtc ?? DateTimeOffset.MinValue)">Last report</MudTableSortLabel></MudTh>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.IsMonitored)">Monitored</MudTableSortLabel></MudTh>
-                <MudTh colspan="2" Style="text-align:center">DNS Status</MudTh>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Setup.Total == 0 ? 1.0 : (double)r.Setup.Done / r.Setup.Total)">Setup</MudTableSortLabel></MudTh>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Score?.Score ?? -1)">Score</MudTableSortLabel></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Name)"><Hint Text="The domain. Open it for its reports, senders and DNS checks.">Domain</Hint></MudTableSortLabel></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Status)"><Hint Text="OK; Warning (under 95% of mail passing DMARC); Missing (a domain that sends mail has had no report for 2 days); Not monitored.">Report Status</Hint></MudTableSortLabel></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.PassRate ?? -1)"><Hint Text="The share of the domain's mail that passed DMARC (SPF or DKIM, aligned with the domain) over the last 30 days.">Pass rate (30d)</Hint></MudTableSortLabel></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.LastReportReceivedUtc ?? DateTimeOffset.MinValue)"><Hint Text="When the most recent DMARC report for the domain arrived.">Last report</Hint></MudTableSortLabel></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.IsMonitored)"><Hint Text="Whether dotMARC actively watches the domain: its daily DNS checks run and it can raise alerts. Turn off for domains you only keep for their reports.">Monitored</Hint></MudTableSortLabel></MudTh>
+                <MudTh colspan="2" Style="text-align:center"><Hint Text="The domain's DMARC and MTA-STS records as found in DNS.">DNS Status</Hint></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Setup.Total == 0 ? 1.0 : (double)r.Setup.Done / r.Setup.Total)"><Hint Text="How many items of the new-client DNS checklist are done.">Setup</Hint></MudTableSortLabel></MudTh>
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Score?.Score ?? -1)"><Hint Text="A 0 to 100 security score with an A to F grade, from DMARC enforcement, SPF, DKIM, MTA-STS and the domain checks. Hover a score for its breakdown.">Score</Hint></MudTableSortLabel></MudTh>
             </tr>
             <tr>
-                <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => DmarcStatusPresentation.GetLabel(r.DmarcCheckStatus, r.DmarcAuthorizationCheckStatus))">DMARC</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => MtaStsStatusPresentation.GetLabel(r.MtaStsStatus, r.MtaStsMode))">MTA-STS</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => DmarcStatusPresentation.GetLabel(r.DmarcCheckStatus, r.DmarcAuthorizationCheckStatus))"><Hint Text="The domain's DMARC record and policy: none (watch only), quarantine (junk) or reject (refuse).">DMARC</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => MtaStsStatusPresentation.GetLabel(r.MtaStsStatus, r.MtaStsMode))"><Hint Text="Whether senders must deliver to the domain over encryption: off, testing (report problems only) or enforcing.">MTA-STS</Hint></MudTableSortLabel></MudTh>
             </tr>
             @if (_showFilters)
             {

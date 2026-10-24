@@ -35,11 +35,11 @@ else
                           AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Style="max-width:320px" />
         </ToolBarContent>
         <HeaderContent>
-            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Name)" InitialDirection="SortDirection.Ascending">Client</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Score ?? -1)">Score</MudTableSortLabel></MudTh>
-            <MudTh>Schedule</MudTh>
-            <MudTh>Recipients</MudTh>
-            <MudTh>Last report</MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Name)" InitialDirection="SortDirection.Ascending"><Hint Text="The client (Group) the report covers.">Client</Hint></MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Score ?? -1)"><Hint Text="The average security score of the client's domains.">Score</Hint></MudTableSortLabel></MudTh>
+            <MudTh><Hint Text="How often the report is emailed automatically.">Schedule</Hint></MudTh>
+            <MudTh><Hint Text="Who the report is emailed to.">Recipients</Hint></MudTh>
+            <MudTh><Hint Text="The last report sent, and whether it was delivered.">Last report</Hint></MudTh>
             <MudTh></MudTh>
         </HeaderContent>
         <RowTemplate>

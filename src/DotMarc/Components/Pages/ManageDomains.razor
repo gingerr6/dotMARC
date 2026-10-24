@@ -71,16 +71,16 @@ else
         <HeaderContent>
             <tr>
                 <MudTh></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.Name)">Domain</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.GroupIds.Count)">Groups</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.TagIds.Count)">Tags</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.Name)"><Hint Text="The domain, as it appears in DMARC reports.">Domain</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.GroupIds.Count)"><Hint Text="The clients (Groups) the domain belongs to. Groups decide who can see it.">Groups</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.TagIds.Count)"><Hint Text="Your own labels, for filtering. They don't change who can see what.">Tags</Hint></MudTableSortLabel></MudTh>
                 @foreach (var list in _psaLists)
                 {
                     <MudTh>@list.Psa.CompanyLabel() override</MudTh>
                 }
-                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.IsMonitored)">Monitored</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.ReportCount)">Reports</MudTableSortLabel></MudTh>
-                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.LastReportReceivedUtc ?? DateTimeOffset.MinValue)">Last report</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.IsMonitored)"><Hint Text="Whether dotMARC actively watches the domain: its daily DNS checks run and it can raise alerts. Turn off for domains you only keep for their reports.">Monitored</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.ReportCount)"><Hint Text="How many DMARC reports dotMARC holds for the domain.">Reports</Hint></MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel SortBy="new Func<DomainRow, object>(d => d.LastReportReceivedUtc ?? DateTimeOffset.MinValue)"><Hint Text="When the most recent DMARC report for the domain arrived.">Last report</Hint></MudTableSortLabel></MudTh>
                 <MudTh></MudTh>
             </tr>
             @if (_showFilters)
