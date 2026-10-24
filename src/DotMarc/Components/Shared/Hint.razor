@@ -1,0 +1,15 @@
+@* A label that explains itself on hover or keyboard focus: column headings and check names, so what a column or check
+   means is on the page rather than in the docs. The dotted underline says there's something to read. *@
+<MudTooltip Arrow="true" Placement="Placement.Top" ShowOnFocus="true" Delay="250" Inline="true">
+    <ChildContent>
+        <span class="dotmarc-hint" tabindex="0">@ChildContent</span>
+    </ChildContent>
+    <TooltipContent>
+        <div class="dotmarc-hint-text">@Text</div>
+    </TooltipContent>
+</MudTooltip>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

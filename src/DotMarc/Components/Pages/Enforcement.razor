@@ -37,10 +37,10 @@ else
             <MudSwitch T="bool" @bind-Value="_stuckOnly" Color="Color.Warning" Label="Stuck only" />
         </ToolBarContent>
         <HeaderContent>
-            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Name)">Domain</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Assessment.Stage)">Policy now</MudTableSortLabel></MudTh>
-            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.SortKey)" InitialDirection="SortDirection.Ascending">Next step</MudTableSortLabel></MudTh>
-            <MudTh>What's in the way</MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Name)"><Hint Text="The domain. Open it to move its policy on.">Domain</Hint></MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.Assessment.Stage)"><Hint Text="The DMARC policy the domain publishes now: none, quarantine or reject, with a percentage when it only applies to part of the mail.">Policy now</Hint></MudTableSortLabel></MudTh>
+            <MudTh><MudTableSortLabel SortBy="new Func<Row, object>(r => r.SortKey)" InitialDirection="SortDirection.Ascending"><Hint Text="The next policy to move to, and whether the domain is ready for it.">Next step</Hint></MudTableSortLabel></MudTh>
+            <MudTh><Hint Text="What needs doing first: enough days of reports, every sender with real volume reviewed, and approved senders passing DMARC.">What's in the way</Hint></MudTh>
         </HeaderContent>
         <RowTemplate>
             <MudTd><MudLink Href="@($"/domains/{Uri.EscapeDataString(context.Name)}")">@context.Name</MudLink></MudTd>

@@ -117,7 +117,7 @@ else
                     </div>
                 }
 
-                <DomainHealthCheckRow Title="DMARC record"
+                <DomainHealthCheckRow Title="DMARC record" Hint="The _dmarc TXT record: tells receivers what to do with mail that fails DMARC, and where to send reports."
                                       StatusColor="@DmarcStatusPresentation.GetColor(_domain.DmarcCheckStatus)"
                                       StatusLabel="@DmarcStatusPresentation.GetLabel(_domain.DmarcCheckStatus)"
                                       CheckedUtc="_domain.DmarcCheckedUtc"
@@ -157,7 +157,7 @@ else
                 @if (_enforcement is { } enforcement)
                 {
                     var nextName = enforcement.NextPolicy is { } next ? next.ToString().ToLowerInvariant() : null;
-                    <DomainHealthCheckRow Title="DMARC enforcement"
+                    <DomainHealthCheckRow Title="DMARC enforcement" Hint="How far the domain is from blocking spoofed mail (p=reject), and what's in the way."
                                           StatusColor="@(enforcement.Enforced ? Color.Success : enforcement.Ready ? Color.Info : enforcement.Stage == EnforcementStage.NoRecord ? Color.Error : Color.Warning)"
                                           StatusLabel="@EnforcementReadiness.Describe(enforcement.Stage)"
                                           CheckedUtc="_domain.DmarcCheckedUtc"
@@ -196,7 +196,7 @@ else
                     </DomainHealthCheckRow>
                 }
 
-                <DomainHealthCheckRow Title="DMARC authorization record"
+                <DomainHealthCheckRow Title="DMARC authorization record" Hint="A record in your reporting mailbox's domain that lets receivers send this domain's reports there. Without it some receivers won't."
                                       StatusColor="@DmarcAuthorizationStatusPresentation.GetColor(_domain.DmarcAuthorizationCheckStatus)"
                                       StatusLabel="@DmarcAuthorizationStatusPresentation.GetLabel(_domain.DmarcAuthorizationCheckStatus)"
                                       CheckedUtc="_domain.DmarcAuthorizationCheckedUtc"
@@ -234,7 +234,7 @@ else
 
                 @if (!string.IsNullOrWhiteSpace(GraphOptions.Value.TlsReportingAddress))
                 {
-                    <DomainHealthCheckRow Title="TLS reporting record"
+                    <DomainHealthCheckRow Title="TLS reporting record" Hint="The _smtp._tls record: asks senders to report problems delivering to the domain over encryption."
                                           StatusColor="@TlsrptStatusPresentation.GetColor(_domain.TlsrptCheckStatus)"
                                           StatusLabel="@TlsrptStatusPresentation.GetLabel(_domain.TlsrptCheckStatus)"
                                           CheckedUtc="_domain.TlsrptCheckedUtc"
@@ -265,7 +265,7 @@ else
                     </DomainHealthCheckRow>
                 }
 
-                <DomainHealthCheckRow Title="MTA-STS"
+                <DomainHealthCheckRow Title="MTA-STS" Hint="Tells senders to deliver to the domain only over encrypted, verified connections, so mail can't be intercepted."
                                       StatusColor="@MtaStsStatusPresentation.GetColor(_domain.MtaStsStatus, _domain.MtaStsMode)"
                                       StatusLabel="@MtaStsStatusPresentation.GetLabel(_domain.MtaStsStatus, _domain.MtaStsMode)"
                                       CheckedUtc="_domain.MtaStsCheckedUtc"
@@ -275,7 +275,7 @@ else
                     </ActionContent>
                 </DomainHealthCheckRow>
 
-                <DomainHealthCheckRow Title="SPF"
+                <DomainHealthCheckRow Title="SPF" Hint="The list of servers allowed to send mail as the domain."
                                       StatusColor="@SpfStatusPresentation.GetColor(_domain.SpfCheckStatus)"
                                       StatusLabel="@SpfStatusPresentation.GetLabel(_domain.SpfCheckStatus)"
                                       CheckedUtc="_domain.SpfCheckedUtc"
@@ -327,7 +327,7 @@ else
                     </Below>
                 </DomainHealthCheckRow>
 
-                <DomainHealthCheckRow Title="MX"
+                <DomainHealthCheckRow Title="MX" Hint="The mail servers that receive the domain's email."
                                       StatusColor="@MxStatusPresentation.GetColor(_domain.MxCheckStatus)"
                                       StatusLabel="@MxStatusPresentation.GetLabel(_domain.MxCheckStatus)"
                                       CheckedUtc="_domain.MxCheckedUtc"
@@ -350,7 +350,7 @@ else
 
                 @if (_domain.IsMonitored)
                 {
-                    <DomainHealthCheckRow Title="Dangling CNAME"
+                    <DomainHealthCheckRow Title="Dangling CNAME" Hint="Common subdomains pointing at names that no longer exist, which someone could claim to take the subdomain over."
                                           StatusColor="@DanglingCnameStatusPresentation.GetColor(_domain.DanglingCnameStatus)"
                                           StatusLabel="@DanglingCnameStatusPresentation.GetLabel(_domain.DanglingCnameStatus)"
                                           CheckedUtc="_domain.DanglingCnameCheckedUtc"
@@ -371,7 +371,7 @@ else
                         </ActionContent>
                     </DomainHealthCheckRow>
 
-                    <DomainHealthCheckRow Title="Website certificates"
+                    <DomainHealthCheckRow Title="Website certificates" Hint="The HTTPS certificates on the domain, www and mta-sts. Expired or wrong ones show visitors a browser warning."
                                           StatusColor="@CertificateStatusPresentation.GetColor(_domain.CertificateStatus)"
                                           StatusLabel="@CertificateStatusPresentation.GetLabel(_domain.CertificateStatus)"
                                           CheckedUtc="_domain.CertificateCheckedUtc"
@@ -392,7 +392,7 @@ else
                         </ActionContent>
                     </DomainHealthCheckRow>
 
-                    <DomainHealthCheckRow Title="Domain registration"
+                    <DomainHealthCheckRow Title="Domain registration" Hint="When the domain's registration expires, from the registry. If it lapses, the domain's mail and website stop."
                                           StatusColor="@DomainExpiryStatusPresentation.GetColor(_domain.DomainExpiryStatus)"
                                           StatusLabel="@DomainExpiryStatusPresentation.GetLabel(_domain.DomainExpiryStatus)"
                                           CheckedUtc="_domain.DomainExpiryCheckedUtc"
@@ -414,7 +414,7 @@ else
                     </DomainHealthCheckRow>
                 }
 
-                <DomainHealthCheckRow Title="DKIM"
+                <DomainHealthCheckRow Title="DKIM" Hint="The public keys receivers use to check the domain's email signatures."
                                       StatusColor="@DkimStatusPresentation.GetColor(_domain.DkimCheckStatus)"
                                       StatusLabel="@DkimStatusPresentation.GetLabel(_domain.DkimCheckStatus)"
                                       CheckedUtc="_domain.DkimCheckedUtc"
@@ -447,7 +447,7 @@ else
                     </ActionContent>
                 </DomainHealthCheckRow>
 
-                <DomainHealthCheckRow Title="DNS provider"
+                <DomainHealthCheckRow Title="DNS provider" Hint="Who hosts the domain's DNS, and whether dotMARC can push records there."
                                       StatusColor="@DnsProviderStatusPresentation.GetColor(_domain.DnsProvider)"
                                       StatusLabel="@DnsProviderStatusPresentation.GetLabel(_domain.DnsProvider)"
                                       CheckedUtc="_domain.DnsProviderCheckedUtc"
@@ -501,12 +501,12 @@ else
                     </ToolBarContent>
                     <HeaderContent>
                         <tr>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.ReportingOrg)">From</MudTableSortLabel></MudTh>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.DateRangeBeginUtc)">Date range</MudTableSortLabel></MudTh>
-                            <MudTh>Policy</MudTh>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.SuccessfulSessionCount))">Successful sessions</MudTableSortLabel></MudTh>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.FailedSessionCount))">Failed sessions</MudTableSortLabel></MudTh>
-                            <MudTh>Failure details</MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.ReportingOrg)"><Hint Text="The organisation that sent the report, such as Google or Microsoft.">From</Hint></MudTableSortLabel></MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.DateRangeBeginUtc)"><Hint Text="The period the report covers, usually one day.">Date range</Hint></MudTableSortLabel></MudTh>
+                            <MudTh><Hint Text="What the sender checked against: sts (the domain's MTA-STS policy) or no-policy-found (it hadn't the policy yet, so it used plain encryption).">Policy</Hint></MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.SuccessfulSessionCount))"><Hint Text="Connections to the domain's mail servers that were encrypted and passed the policy.">Successful sessions</Hint></MudTableSortLabel></MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.FailedSessionCount))"><Hint Text="Connections that failed: a certificate, encryption or policy problem. Once MTA-STS enforces, these are refused.">Failed sessions</Hint></MudTableSortLabel></MudTh>
+                            <MudTh><Hint Text="Why the failed connections failed, as the sender reported it.">Failure details</Hint></MudTh>
                         </tr>
                         @if (_showTlsrptFilters)
                         {
@@ -555,17 +555,17 @@ else
                 </ToolBarContent>
                 <HeaderContent>
                     <tr>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)">Source</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => ApprovalLabel(s))">Approval</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)">Volume</MudTableSortLabel></MudTh>
-                        <MudTh>7d trend</MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.FirstSeenUtc ?? DateTimeOffset.MinValue)">First seen</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.SpfResult)">SPF</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.DkimResult)">DKIM</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Disposition)">Disposition</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.ReasonSummary)">Reason</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Organization ?? string.Empty)">Owner</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Country ?? string.Empty)">Country</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)"><Hint Text="The server that sent mail as this domain: its name where it has one, otherwise its IP address. Recognised services such as Microsoft 365 are named.">Source</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => ApprovalLabel(s))"><Hint Text="Approved: the domain's own mail. Not ours: spoofing, or forwarding you've checked. Forwarder: a known forwarding service, nothing to do. Unreviewed: nobody has looked yet.">Approval</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)"><Hint Text="Messages from this source in the last 30 days, as receivers reported them.">Volume</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><Hint Text="Messages a day from this source over the last 7 days.">7d trend</Hint></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.FirstSeenUtc ?? DateTimeOffset.MinValue)"><Hint Text="When this source first appeared in a report for this domain.">First seen</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.SpfResult)"><Hint Text="Whether SPF passed: the sending server is listed in the domain's SPF record. Forwarding always breaks SPF, so a fail here isn't always a problem.">SPF</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.DkimResult)"><Hint Text="Whether DKIM passed: the message carried a valid signature from the domain. Signatures survive forwarding.">DKIM</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Disposition)"><Hint Text="What the receiving server did with the mail: none (delivered), quarantine (junk) or reject (refused).">Disposition</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.ReasonSummary)"><Hint Text="Why the receiver didn't follow the DMARC policy, when it says: forwarded, mailing list, local policy and so on.">Reason</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Organization ?? string.Empty)"><Hint Text="Who the IP address is registered to, from its internet registry.">Owner</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Country ?? string.Empty)"><Hint Text="The country the IP address is registered in.">Country</Hint></MudTableSortLabel></MudTh>
                     </tr>
                     @if (_showSourceFilters)
                     {
@@ -724,8 +724,8 @@ else
                 </ToolBarContent>
                 <HeaderContent>
                     <tr>
-                        <MudTh><MudTableSortLabel SortBy="new Func<Report, object>(r => r.ReportingOrg)">From</MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<Report, object>(r => r.DateRangeBeginUtc)">Date range</MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<Report, object>(r => r.ReportingOrg)"><Hint Text="The organisation that sent the report, such as Google or Microsoft.">From</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<Report, object>(r => r.DateRangeBeginUtc)"><Hint Text="The period the report covers, usually one day.">Date range</Hint></MudTableSortLabel></MudTh>
                     </tr>
                     @if (_showReportFilters)
                     {

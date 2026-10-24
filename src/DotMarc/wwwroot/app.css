@@ -156,3 +156,7 @@ html {
     .dotmarc-health-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; padding: 12px 0; }
     .dotmarc-health-checked, .dotmarc-health-detail, .dotmarc-health-below { grid-column: 1 / -1; }
 }
+
+/* Hint (Components/Shared/Hint.razor): a label with an explanation on hover. */
+.dotmarc-hint { text-decoration: underline dotted; text-decoration-color: var(--mud-palette-text-secondary); text-underline-offset: 3px; cursor: help; }
+.dotmarc-hint-text { max-width: 320px; white-space: normal; text-align: left; text-transform: none; font-weight: 400; }
