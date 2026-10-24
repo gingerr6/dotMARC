@@ -42,7 +42,7 @@ public static class SecurityScore
             factors.Add(Tlsrpt(domain));
         }
 
-        factors.AddRange(new[] { DomainRegistration(domain), DanglingRecords(domain), WebsiteCertificates(domain) }.OfType<ScoreFactor>());
+        factors.AddRange(new[] { DomainRegistration(domain), DanglingRecords(domain), WebsiteCertificates(domain), Blocklists(domain) }.OfType<ScoreFactor>());
 
         var max = factors.Sum(factor => factor.Max);
         var score = (int)Math.Round(100.0 * factors.Sum(factor => factor.Points) / max);
@@ -126,6 +126,13 @@ public static class SecurityScore
         DomainExpiryStatus.Ok => new("Domain registration", 5, 5, null),
         DomainExpiryStatus.ExpiringSoon => new("Domain registration", 2, 5, "Make sure the domain's registration renews: it expires within 30 days."),
         DomainExpiryStatus.Expired => new("Domain registration", 0, 5, "Renew the domain's registration: it has expired."),
+        _ => null,
+    };
+
+    private static ScoreFactor? Blocklists(Domain domain) => domain.BlocklistStatus switch
+    {
+        BlocklistStatus.Clear => new("Not on blocklists", 5, 5, null),
+        BlocklistStatus.Listed => new("Not on blocklists", 0, 5, "Get the domain's sending server off the spam blocklists it's on, and find out why it was listed."),
         _ => null,
     };
 

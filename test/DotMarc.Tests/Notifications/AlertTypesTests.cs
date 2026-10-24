@@ -33,7 +33,7 @@ public sealed class AlertTypesTests
         Assert.Equal(
             ["MissedReport", "SuspiciousRejectActivity", "TlsrptFailure", "UnexpectedActivityOnNullRoutedDomain",
              "DmarcRecordBroken", "DmarcAuthorizationBroken", "TlsrptRecordBroken", "SpfRecordBroken", "MxRecordBroken",
-             "DkimRecordBroken", "MtaStsFailing", "DanglingCname", "CertificateExpiring", "DomainExpiring", "DmarcPolicyWeakened", "NameserversChanged", "ApiKeyExpiring", "ClientReportFailed", "PsaConnectionLost", "BackupFailed", "UnapprovedSender"],
+             "DkimRecordBroken", "MtaStsFailing", "DanglingCname", "CertificateExpiring", "DomainExpiring", "LookalikeDomain", "Blocklisted", "DmarcPolicyWeakened", "NameserversChanged", "ApiKeyExpiring", "ClientReportFailed", "PsaConnectionLost", "BackupFailed", "UnapprovedSender"],
             AlertTypes.All.Select(alertType => alertType.Key));
     }
 
@@ -49,9 +49,9 @@ public sealed class AlertTypesTests
     }
 
     [Fact]
-    public void DnsHealth_ListsTheTwelveDnsHealthAlertTypes()
+    public void DnsHealth_ListsTheFourteenDnsHealthAlertTypes()
     {
-        Assert.Equal(12, AlertTypes.DnsHealth.Count);
+        Assert.Equal(14, AlertTypes.DnsHealth.Count);
         Assert.All(AlertTypes.DnsHealth, key => Assert.NotNull(AlertTypes.Find(key)));
     }
 }

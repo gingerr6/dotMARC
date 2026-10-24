@@ -124,6 +124,24 @@ public static class DnsHealthChecks
             },
             domain => domain.DomainExpiryCheckedUtc, domain => domain.DomainExpiryStatus.ToString(), domain => domain.DomainExpiryDetail,
             settings => settings.DomainExpiryAlertMode),
+        new(DnsHealthItems.Lookalikes, AlertTypes.LookalikeDomain, "Lookalike domains",
+            domain => domain.LookalikeStatus switch
+            {
+                LookalikeStatus.Clear => DnsCheckHealth.Passing,
+                LookalikeStatus.Found => DnsCheckHealth.Failing,
+                _ => DnsCheckHealth.Ignored
+            },
+            domain => domain.LookalikeCheckedUtc, domain => domain.LookalikeStatus.ToString(), domain => domain.LookalikeDetail,
+            settings => settings.LookalikeAlertMode),
+        new(DnsHealthItems.Blocklist, AlertTypes.Blocklisted, "Blocklists",
+            domain => domain.BlocklistStatus switch
+            {
+                BlocklistStatus.Clear => DnsCheckHealth.Passing,
+                BlocklistStatus.Listed => DnsCheckHealth.Failing,
+                _ => DnsCheckHealth.Ignored
+            },
+            domain => domain.BlocklistCheckedUtc, domain => domain.BlocklistStatus.ToString(), domain => domain.BlocklistDetail,
+            settings => settings.BlocklistAlertMode),
     ];
 
     public static DnsHealthCheck For(string item) => All.Single(check => check.Item == item);

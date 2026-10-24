@@ -54,6 +54,10 @@ public sealed class PollingService : BackgroundService
 
     internal const long DomainExpiryCheckLeaderLockKey = 84_200_033;
 
+    internal const long LookalikeCheckLeaderLockKey = 84_200_035;
+
+    internal const long BlocklistCheckLeaderLockKey = 84_200_037;
+
     /// <summary>Arbitrary fixed key for this service's DKIM-check advisory lock. Runs on the same
     /// schedule as every other check even though most domains will have no selectors configured
     /// yet (RunSingleDkimCheckAsync short-circuits to NotConfigured in that case) - simpler than
@@ -217,6 +221,35 @@ public sealed class PollingService : BackgroundService
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Domain registration check cycle failed; will retry next interval.");
+                    }
+
+                    try
+                    {
+                        // Weekly, not daily: a few hundred lookups a domain, for something that changes slowly.
+                        context.ChangeTracker.Clear();
+                        var lookalikeChecker = scope.ServiceProvider.GetRequiredService<DotMarc.Lookalikes.ILookalikeChecker>();
+                        await RunDailyCheckCycleAsync(context, LookalikeCheckLeaderLockKey, "lookalike domain",
+                            (_, nowUtc) => d => d.LookalikeCheckedUtc == null || d.LookalikeCheckedUtc < nowUtc.AddDays(-7)
+                                || d.AlertStates.Any(state => state.Item == DnsHealthItems.Lookalikes && state.RecheckDueUtc <= nowUtc && d.LookalikeCheckedUtc < state.RecheckDueUtc),
+                            domain => DotMarc.Lookalikes.LookalikeService.RefreshAsync(context, domain, lookalikeChecker, DateTimeOffset.UtcNow, stoppingToken), stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Lookalike domain check cycle failed; will retry next interval.");
+                    }
+
+                    try
+                    {
+                        context.ChangeTracker.Clear();
+                        var blocklistChecker = scope.ServiceProvider.GetRequiredService<IBlocklistChecker>();
+                        await RunDailyCheckCycleAsync(context, BlocklistCheckLeaderLockKey, "blocklist",
+                            (cutoff, nowUtc) => d => d.BlocklistCheckedUtc == null || d.BlocklistCheckedUtc < cutoff
+                                || d.AlertStates.Any(state => state.Item == DnsHealthItems.Blocklist && state.RecheckDueUtc <= nowUtc && d.BlocklistCheckedUtc < state.RecheckDueUtc),
+                            domain => RunSingleBlocklistCheckAsync(context, domain, blocklistChecker, stoppingToken), stoppingToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Blocklist check cycle failed; will retry next interval.");
                     }
 
 
@@ -589,6 +622,20 @@ public sealed class PollingService : BackgroundService
         domain.DomainExpiryDetail = result.Detail;
         domain.DomainExpiresUtc = result.ExpiresUtc;
         domain.DomainRegistrar = result.Registrar;
+    }
+
+    /// <summary>The blocklist check also covers the IP senders approved on the domain's Sources tab, read from the
+    /// context the domain was loaded from.</summary>
+    internal static async Task RunSingleBlocklistCheckAsync(DotMarcDbContext context, Domain domain, IBlocklistChecker checker, CancellationToken cancellationToken)
+    {
+        var approvedIps = await context.SenderApprovals.AsNoTracking()
+            .Where(approval => approval.DomainId == domain.Id && approval.Status == SenderApprovalStatus.Approved && approval.SenderKey.StartsWith("ip:"))
+            .Select(approval => approval.SenderKey.Substring(3))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var result = await checker.CheckAsync(domain.Name, approvedIps, cancellationToken).ConfigureAwait(false);
+        domain.BlocklistStatus = result.Status;
+        domain.BlocklistCheckedUtc = DateTimeOffset.UtcNow;
+        domain.BlocklistDetail = result.Detail;
     }
 
     /// <summary>Runs one check for every monitored domain the filter says is due (its last run missing or over 24 hours
