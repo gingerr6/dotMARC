@@ -64,6 +64,14 @@ public sealed class Domain
     public DateTimeOffset? DomainExpiresUtc { get; set; }
     public string? DomainRegistrar { get; set; }
 
+    public LookalikeStatus LookalikeStatus { get; set; }
+    public DateTimeOffset? LookalikeCheckedUtc { get; set; }
+    public string? LookalikeDetail { get; set; }
+
+    public BlocklistStatus BlocklistStatus { get; set; }
+    public DateTimeOffset? BlocklistCheckedUtc { get; set; }
+    public string? BlocklistDetail { get; set; }
+
     public List<string> DkimSelectors { get; set; } = [];
     public DkimCheckStatus DkimCheckStatus { get; set; }
     public DateTimeOffset? DkimCheckedUtc { get; set; }

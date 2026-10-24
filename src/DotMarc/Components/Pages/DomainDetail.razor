@@ -37,6 +37,8 @@
 @inject IDanglingCnameChecker DanglingCnameChecker
 @inject ICertificateChecker CertificateChecker
 @inject IDomainExpiryChecker DomainExpiryChecker
+@inject DotMarc.Lookalikes.ILookalikeChecker LookalikeChecker
+@inject IBlocklistChecker BlocklistChecker
 @inject IDkimDnsChecker DkimDnsChecker
 @inject IMailServiceDetector MailServiceDetector
 @inject ITxtRecordLookup TxtRecordLookup
@@ -407,6 +409,99 @@ else
                                     else
                                     {
                                         <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckDomainExpiryAsync" title="Recheck now" />
+                                    }
+                                </Authorized>
+                            </AuthorizeView>
+                        </ActionContent>
+                    </DomainHealthCheckRow>
+
+                    <DomainHealthCheckRow Title="Lookalike domains" Hint="Registered typo and look-alike versions of the domain, such as a letter swapped or .com for .co.uk. One set up for mail is how invoice fraud usually starts. Checked weekly."
+                                          StatusColor="@LookalikeStatusPresentation.GetColor(_domain.LookalikeStatus)"
+                                          StatusLabel="@LookalikeStatusPresentation.GetLabel(_domain.LookalikeStatus)"
+                                          CheckedUtc="_domain.LookalikeCheckedUtc"
+                                          Detail="@_domain.LookalikeDetail">
+                        <ActionContent>
+                            @if (_lookalikes.Count > 0)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _showLookalikes = !_showLookalikes">
+                                    @(_showLookalikes ? "Hide" : $"View ({_lookalikes.Count})")
+                                </MudButton>
+                            }
+                            <AuthorizeView Policy="DomainsEdit" Context="lookalikeRecheckAuthState">
+                                <Authorized>
+                                    @if (_isRecheckingLookalikes)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                    }
+                                    else
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckLookalikesAsync" title="Recheck now" />
+                                    }
+                                </Authorized>
+                            </AuthorizeView>
+                        </ActionContent>
+                        <Below>
+                            @if (_showLookalikes && _lookalikes.Count > 0)
+                            {
+                                <MudSimpleTable Dense="true" Hover="true" Class="mt-1">
+                                    <thead>
+                                        <tr>
+                                            <th>Domain</th>
+                                            <th><Hint Text="How it differs from the real domain.">Kind</Hint></th>
+                                            <th><Hint Text="Whether it has MX records, so it can send convincing mail and receive replies.">Mail</Hint></th>
+                                            <th>First seen</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var lookalike in _lookalikes)
+                                        {
+                                            <tr style="@(lookalike.Dismissed ? "opacity:0.55;" : "")">
+                                                <td>@lookalike.Name</td>
+                                                <td>@lookalike.Kind</td>
+                                                <td>
+                                                    @if (lookalike.HasMx)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="@(lookalike.Dismissed ? Color.Default : Color.Error)">Can receive mail</MudChip>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>No</span>
+                                                    }
+                                                </td>
+                                                <td>@UkTime.Date(lookalike.FirstSeenUtc)</td>
+                                                <td>
+                                                    <AuthorizeView Policy="DomainsEdit" Context="lookalikeDismissAuthState">
+                                                        <Authorized>
+                                                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => SetLookalikeDismissedAsync(lookalike.Id, !lookalike.Dismissed)">
+                                                                @(lookalike.Dismissed ? "Restore" : "Dismiss")
+                                                            </MudButton>
+                                                        </Authorized>
+                                                    </AuthorizeView>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </MudSimpleTable>
+                            }
+                        </Below>
+                    </DomainHealthCheckRow>
+
+                    <DomainHealthCheckRow Title="Blocklists" Hint="Whether the IP addresses the domain sends from (in its SPF record or approved on Sources) or receives mail at are on the main spam blocklists. A listed server's mail goes to spam or bounces. Big providers' servers are skipped."
+                                          StatusColor="@BlocklistStatusPresentation.GetColor(_domain.BlocklistStatus)"
+                                          StatusLabel="@BlocklistStatusPresentation.GetLabel(_domain.BlocklistStatus)"
+                                          CheckedUtc="_domain.BlocklistCheckedUtc"
+                                          Detail="@_domain.BlocklistDetail">
+                        <ActionContent>
+                            <AuthorizeView Policy="DomainsEdit" Context="blocklistRecheckAuthState">
+                                <Authorized>
+                                    @if (_isRecheckingBlocklist)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                                    }
+                                    else
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="RecheckBlocklistAsync" title="Recheck now" />
                                     }
                                 </Authorized>
                             </AuthorizeView>
@@ -820,6 +915,10 @@ else
     private bool _isRecheckingDanglingCname;
     private bool _isRecheckingCertificate;
     private bool _isRecheckingDomainExpiry;
+    private bool _isRecheckingLookalikes;
+    private bool _isRecheckingBlocklist;
+    private bool _showLookalikes;
+    private List<LookalikeDomain> _lookalikes = [];
     private bool _isRecheckingDkim;
     private bool _isRecheckingDnsProvider;
     private DotNetObjectReference<DomainDetail>? _dotNetRef;
@@ -962,6 +1061,7 @@ else
         }
 
         _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
+        _lookalikes = await LoadLookalikesAsync(db, _domain.Id);
         _clientManagesDns = _domain.Groups.Any(group => group.ClientManagesDns);
         _mayPush = !_clientManagesDns && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.DnsPush))).Succeeded;
         await RefreshDomainZonePushAsync();
@@ -1825,6 +1925,85 @@ else
         finally
         {
             _isRecheckingDomainExpiry = false;
+        }
+    }
+
+    private static Task<List<LookalikeDomain>> LoadLookalikesAsync(DotMarcDbContext db, int domainId) =>
+        db.LookalikeDomains.AsNoTracking()
+            .Where(lookalike => lookalike.DomainId == domainId)
+            .OrderByDescending(lookalike => lookalike.HasMx && !lookalike.Dismissed)
+            .ThenBy(lookalike => lookalike.Name)
+            .ToListAsync();
+
+    private void CopyLookalikeStatus(Domain domain)
+    {
+        _domain!.LookalikeStatus = domain.LookalikeStatus;
+        _domain.LookalikeCheckedUtc = domain.LookalikeCheckedUtc;
+        _domain.LookalikeDetail = domain.LookalikeDetail;
+    }
+
+    /// <summary>Lookalike counterpart to RecheckMxAsync. A few hundred lookups, so it takes a few seconds.</summary>
+    private async Task RecheckLookalikesAsync()
+    {
+        _isRecheckingLookalikes = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var domain = await db.Domains.SingleAsync(d => d.Id == _domain!.Id);
+            try
+            {
+                await DotMarc.Lookalikes.LookalikeService.RefreshAsync(db, domain, LookalikeChecker, DateTimeOffset.UtcNow, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add($"Failed to check {DomainName}'s lookalike domains. Try again.", Severity.Error);
+                return;
+            }
+            await db.SaveChangesAsync();
+
+            CopyLookalikeStatus(domain);
+            _lookalikes = await LoadLookalikesAsync(db, domain.Id);
+        }
+        finally
+        {
+            _isRecheckingLookalikes = false;
+        }
+    }
+
+    private async Task SetLookalikeDismissedAsync(int lookalikeId, bool dismissed)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await DotMarc.Lookalikes.LookalikeService.SetDismissedAsync(db, await AuditActorAccessor.GetAsync(), lookalikeId, dismissed);
+        CopyLookalikeStatus(await db.Domains.AsNoTracking().SingleAsync(d => d.Id == _domain!.Id));
+        _lookalikes = await LoadLookalikesAsync(db, _domain!.Id);
+    }
+
+    /// <summary>Blocklist counterpart to RecheckMxAsync.</summary>
+    private async Task RecheckBlocklistAsync()
+    {
+        _isRecheckingBlocklist = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var domain = await db.Domains.SingleAsync(d => d.Id == _domain!.Id);
+            try
+            {
+                await PollingService.RunSingleBlocklistCheckAsync(db, domain, BlocklistChecker, CancellationToken.None);
+            }
+            catch (Exception)
+            {
+                Snackbar.Add($"Failed to check {DomainName}'s blocklists. Try again.", Severity.Error);
+                return;
+            }
+            await db.SaveChangesAsync();
+
+            _domain!.BlocklistStatus = domain.BlocklistStatus;
+            _domain.BlocklistCheckedUtc = domain.BlocklistCheckedUtc;
+            _domain.BlocklistDetail = domain.BlocklistDetail;
+        }
+        finally
+        {
+            _isRecheckingBlocklist = false;
         }
     }
 

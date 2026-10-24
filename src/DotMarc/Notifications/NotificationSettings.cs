@@ -32,6 +32,8 @@ public sealed class NotificationSettings
     public DnsHealthAlertMode DanglingCnameAlertMode { get; set; } = DnsHealthAlertMode.WhenItBreaks;
     public DnsHealthAlertMode CertificateAlertMode { get; set; } = DnsHealthAlertMode.WhenItBreaks;
     public DnsHealthAlertMode DomainExpiryAlertMode { get; set; } = DnsHealthAlertMode.WhenItBreaks;
+    public DnsHealthAlertMode LookalikeAlertMode { get; set; } = DnsHealthAlertMode.WhenItBreaks;
+    public DnsHealthAlertMode BlocklistAlertMode { get; set; } = DnsHealthAlertMode.WhenItBreaks;
     public bool DmarcPolicyWeakenedEnabled { get; set; } = true;
     public bool NameserversChangedEnabled { get; set; } = true;
 

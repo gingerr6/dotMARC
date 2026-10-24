@@ -363,6 +363,18 @@ namespace DotMarc.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
 
+                    b.Property<DateTimeOffset?>("BlocklistCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BlocklistDetail")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("BlocklistStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<DateTimeOffset?>("CertificateCheckedUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -474,6 +486,18 @@ namespace DotMarc.Migrations
 
                     b.Property<DateTimeOffset?>("LastReportReceivedUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LookalikeCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LookalikeDetail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("LookalikeStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("MtaStsCheckDetail")
                         .HasColumnType("text");
@@ -702,6 +726,47 @@ namespace DotMarc.Migrations
                     b.HasKey("RangeStart", "RangeEnd");
 
                     b.ToTable("IpRanges");
+                });
+
+            modelBuilder.Entity("DotMarc.Data.LookalikeDomain", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Dismissed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("DomainId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("FirstSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("HasMx")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("LastSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("character varying(253)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DomainId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("LookalikeDomains");
                 });
 
             modelBuilder.Entity("DotMarc.Data.ParseFailure", b =>
@@ -1553,6 +1618,11 @@ namespace DotMarc.Migrations
                     b.Property<int>("AcknowledgeableAutoCloseDays")
                         .HasColumnType("integer");
 
+                    b.Property<string>("BlocklistAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("CertificateAlertMode")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1597,6 +1667,11 @@ namespace DotMarc.Migrations
 
                     b.Property<string>("GenericWebhookUrl")
                         .HasColumnType("text");
+
+                    b.Property<string>("LookalikeAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int>("MissingReportThresholdDays")
                         .HasColumnType("integer");
@@ -1654,6 +1729,7 @@ namespace DotMarc.Migrations
                         {
                             Id = 1,
                             AcknowledgeableAutoCloseDays = 0,
+                            BlocklistAlertMode = "WhenItBreaks",
                             CertificateAlertMode = "WhenItBreaks",
                             CooldownMinutes = 180,
                             DanglingCnameAlertMode = "WhenItBreaks",
@@ -1664,6 +1740,7 @@ namespace DotMarc.Migrations
                             DomainExpiryAlertMode = "WhenItBreaks",
                             Enabled = true,
                             GenericWebhookEnabled = false,
+                            LookalikeAlertMode = "WhenItBreaks",
                             MissingReportThresholdDays = 2,
                             MonitorIntervalSeconds = 300,
                             MtaStsAlertMode = "WhenItBreaks",
@@ -2392,6 +2469,15 @@ namespace DotMarc.Migrations
                 {
                     b.HasOne("DotMarc.Data.Domain", null)
                         .WithMany("DkimRecords")
+                        .HasForeignKey("DomainId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DotMarc.Data.LookalikeDomain", b =>
+                {
+                    b.HasOne("DotMarc.Data.Domain", null)
+                        .WithMany()
                         .HasForeignKey("DomainId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

@@ -169,6 +169,8 @@ else
         new("Dangling CNAME", "Alerts when a common subdomain (www, autodiscover, shop and so on) points at a name that no longer exists, so whoever claims it controls the subdomain. Monitored domains only.", settings => settings.DanglingCnameAlertMode, (settings, mode) => settings.DanglingCnameAlertMode = mode),
         new("Website certificates", "Alerts when the certificate on the domain's website, www or mta-sts host has expired, expires within 14 days or isn't valid for it. Monitored domains only.", settings => settings.CertificateAlertMode, (settings, mode) => settings.CertificateAlertMode = mode),
         new("Domain registration", "Alerts when the domain's registration expires within 30 days, or has expired. Monitored domains only.", settings => settings.DomainExpiryAlertMode, (settings, mode) => settings.DomainExpiryAlertMode = mode),
+        new("Lookalike domains", "Alerts when a typo or look-alike version of the domain is registered and set up to receive mail. Checked weekly; dismissed ones don't alert. Monitored domains only.", settings => settings.LookalikeAlertMode, (settings, mode) => settings.LookalikeAlertMode = mode),
+        new("Blocklists", "Alerts when one of the domain's own sending servers (from its SPF record, approved IP senders, or its own mail server) is on a spam blocklist. Monitored domains only.", settings => settings.BlocklistAlertMode, (settings, mode) => settings.BlocklistAlertMode = mode),
     ];
 
     private NotificationSettings? _settings;

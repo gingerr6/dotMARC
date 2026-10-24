@@ -66,6 +66,15 @@ public static class ClientReportNextSteps
             case DomainExpiryStatus.ExpiringSoon when domain.DomainExpiresUtc is { } expires: yield return $"The registration for {name} expires on {UkTime.Date(expires)}. Make sure it renews."; break;
         }
 
+        if (domain.BlocklistStatus == BlocklistStatus.Listed)
+        {
+            yield return $"A server {name} sends mail from is on a spam blocklist, so its mail may go to spam or bounce. Find out why, fix it and ask for delisting.";
+        }
+        if (domain.LookalikeStatus == LookalikeStatus.Found)
+        {
+            yield return $"Someone has registered a domain that looks like {name} and set it up for mail. Warn staff and suppliers to check sender addresses, especially on payment requests.";
+        }
+
         var reportingStep = $"Add the record that lets {name}'s DMARC reports reach your reporting mailbox.";
         switch (domain.DmarcCheckStatus)
         {

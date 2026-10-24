@@ -24,6 +24,8 @@ public sealed class DnsHealthAlertEvaluatorTests
         DanglingCnameStatus = DanglingCnameStatus.Ok, DanglingCnameCheckedUtc = Now.AddHours(-1),
         CertificateStatus = CertificateCheckStatus.Ok, CertificateCheckedUtc = Now.AddHours(-1),
         DomainExpiryStatus = DomainExpiryStatus.Ok, DomainExpiryCheckedUtc = Now.AddHours(-1),
+        LookalikeStatus = LookalikeStatus.Clear, LookalikeCheckedUtc = Now.AddHours(-1),
+        BlocklistStatus = BlocklistStatus.Clear, BlocklistCheckedUtc = Now.AddHours(-1),
         DmarcPolicy = DmarcPolicyLevel.Reject, DmarcSubdomainPolicy = DmarcPolicyLevel.Reject, DmarcPercent = 100,
         DnsNameservers = ["ns1.example.net", "ns2.example.net"], DnsProviderCheckedUtc = Now.AddHours(-1),
     };
@@ -62,6 +64,8 @@ public sealed class DnsHealthAlertEvaluatorTests
             case DnsHealthItems.DanglingCname: domain.DanglingCnameStatus = Enum.Parse<DanglingCnameStatus>(status); break;
             case DnsHealthItems.Certificate: domain.CertificateStatus = Enum.Parse<CertificateCheckStatus>(status); break;
             case DnsHealthItems.DomainExpiry: domain.DomainExpiryStatus = Enum.Parse<DomainExpiryStatus>(status); break;
+            case DnsHealthItems.Lookalikes: domain.LookalikeStatus = Enum.Parse<LookalikeStatus>(status); break;
+            case DnsHealthItems.Blocklist: domain.BlocklistStatus = Enum.Parse<BlocklistStatus>(status); break;
         }
 
         return domain;
@@ -102,6 +106,12 @@ public sealed class DnsHealthAlertEvaluatorTests
     [InlineData(DnsHealthItems.MtaSts, "PendingDns", DnsCheckHealth.Ignored)]
     [InlineData(DnsHealthItems.MtaSts, "PendingCertificate", DnsCheckHealth.Ignored)]
     [InlineData(DnsHealthItems.MtaSts, "NotConfigured", DnsCheckHealth.Ignored)]
+    [InlineData(DnsHealthItems.Lookalikes, "Clear", DnsCheckHealth.Passing)]
+    [InlineData(DnsHealthItems.Lookalikes, "Found", DnsCheckHealth.Failing)]
+    [InlineData(DnsHealthItems.Lookalikes, "NotApplicable", DnsCheckHealth.Ignored)]
+    [InlineData(DnsHealthItems.Blocklist, "Clear", DnsCheckHealth.Passing)]
+    [InlineData(DnsHealthItems.Blocklist, "Listed", DnsCheckHealth.Failing)]
+    [InlineData(DnsHealthItems.Blocklist, "NothingToCheck", DnsCheckHealth.Ignored)]
     public void EachStatus_IsPassingFailingOrIgnored(string item, string status, DnsCheckHealth expected)
     {
         Assert.Equal(expected, DnsHealthChecks.For(item).Health(WithStatus(item, status)));
@@ -124,7 +134,7 @@ public sealed class DnsHealthAlertEvaluatorTests
         var actions = Run(HealthyDomain(), states);
 
         Assert.Empty(Raised(actions));
-        Assert.Equal(12, states.Count);
+        Assert.Equal(14, states.Count);
         Assert.All(states, state => Assert.Equal(7, state.DomainId));
         Assert.All(DnsHealthChecks.All, check => Assert.True(State(states, check.Item).HasPassed));
         Assert.Equal("p=reject; sp=reject; pct=100", State(states, DnsHealthItems.DmarcPolicy).Baseline);

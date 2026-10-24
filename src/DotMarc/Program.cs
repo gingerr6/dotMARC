@@ -335,6 +335,13 @@ builder.Services.AddHttpClient<DotMarc.Dns.IDanglingCnameChecker, DotMarc.Dns.Da
     client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
 });
 builder.Services.AddSingleton<DotMarc.Dns.ITlsCertificateProbe, DotMarc.Dns.TlsCertificateProbe>();
+builder.Services.AddHttpClient<DotMarc.Lookalikes.ILookalikeChecker, DotMarc.Lookalikes.LookalikeChecker>(client =>
+{
+    client.BaseAddress = new Uri("https://cloudflare-dns.com/");
+    client.DefaultRequestHeaders.Add("Accept", "application/dns-json");
+});
+builder.Services.AddSingleton<DotMarc.Dns.IDnsblResolver, DotMarc.Dns.SystemDnsblResolver>();
+builder.Services.AddScoped<DotMarc.Dns.IBlocklistChecker, DotMarc.Dns.BlocklistChecker>();
 builder.Services.AddHttpClient<DotMarc.Dns.IDomainExpiryChecker, DotMarc.Dns.DomainExpiryChecker>(client =>
 {
     client.BaseAddress = new Uri("https://rdap.org/");

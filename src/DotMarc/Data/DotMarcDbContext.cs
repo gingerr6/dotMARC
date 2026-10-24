@@ -40,6 +40,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DomainAlertState> DomainAlertStates => Set<DomainAlertState>();
     public DbSet<DomainDkimRecord> DomainDkimRecords => Set<DomainDkimRecord>();
     public DbSet<SenderApproval> SenderApprovals => Set<SenderApproval>();
+    public DbSet<LookalikeDomain> LookalikeDomains => Set<LookalikeDomain>();
     public DbSet<DotMarc.Backups.BackupSettings> BackupSettings => Set<DotMarc.Backups.BackupSettings>();
     public DbSet<DotMarc.Updates.ServerUpdater> ServerUpdaters => Set<DotMarc.Updates.ServerUpdater>();
     public DbSet<DotMarc.Bimi.BimiAsset> BimiAssets => Set<DotMarc.Bimi.BimiAsset>();
@@ -83,6 +84,10 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(d => d.DomainExpiryStatus).HasConversion<string>().HasMaxLength(20);
             entity.Property(d => d.DomainExpiryDetail).HasMaxLength(1000);
             entity.Property(d => d.DomainRegistrar).HasMaxLength(200);
+            entity.Property(d => d.LookalikeStatus).HasConversion<string>().HasMaxLength(20);
+            entity.Property(d => d.LookalikeDetail).HasMaxLength(2000);
+            entity.Property(d => d.BlocklistStatus).HasConversion<string>().HasMaxLength(20);
+            entity.Property(d => d.BlocklistDetail).HasMaxLength(4000);
             entity.Property(d => d.DkimCheckStatus).HasConversion<string>();
             entity.Property(d => d.BimiCheckStatus).HasConversion<string>();
             entity.Property(d => d.BimiCheckDetail).HasMaxLength(2000);
@@ -374,6 +379,14 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.HasOne<Domain>().WithMany(domain => domain.AlertStates).HasForeignKey(state => state.DomainId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<LookalikeDomain>(entity =>
+        {
+            entity.Property(lookalike => lookalike.Name).HasMaxLength(253);
+            entity.Property(lookalike => lookalike.Kind).HasMaxLength(40);
+            entity.HasIndex(lookalike => new { lookalike.DomainId, lookalike.Name }).IsUnique();
+            entity.HasOne<Domain>().WithMany().HasForeignKey(lookalike => lookalike.DomainId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<SenderApproval>(entity =>
         {
             entity.Property(approval => approval.SenderKey).HasMaxLength(64);
@@ -409,6 +422,8 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(settings => settings.DanglingCnameAlertMode).HasConversion<string>().HasMaxLength(20);
             entity.Property(settings => settings.CertificateAlertMode).HasConversion<string>().HasMaxLength(20);
             entity.Property(settings => settings.DomainExpiryAlertMode).HasConversion<string>().HasMaxLength(20);
+            entity.Property(settings => settings.LookalikeAlertMode).HasConversion<string>().HasMaxLength(20);
+            entity.Property(settings => settings.BlocklistAlertMode).HasConversion<string>().HasMaxLength(20);
         });
 
         modelBuilder.Entity<EncryptedSecret>(entity =>
