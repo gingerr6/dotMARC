@@ -28,6 +28,24 @@ public static class EnforcementData
             })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        // Only mail that didn't pass SPF can be forwarded mail, so only its records are loaded to look for signs of it.
+        var forwardingEvidence = (await db.ReportRecords.AsNoTracking()
+            .Where(record => domainIds.Contains(record.Report.DomainId) && record.Report.ReceivedUtc >= windowStart && record.SpfResult != AuthResult.Pass)
+            .Select(record => new
+            {
+                record.Report.DomainId,
+                record.SourceIp,
+                record.MessageCount,
+                record.HeaderFrom,
+                record.SpfResult,
+                Spf = record.AuthDetails.Where(detail => detail.Mechanism == DmarcAuthMechanism.Spf).Select(detail => detail.Domain).ToList(),
+                Dkim = record.AuthDetails.Where(detail => detail.Mechanism == DmarcAuthMechanism.Dkim).Select(detail => new { detail.Domain, detail.Result }).ToList(),
+                Overrides = record.OverrideReasons.Select(reason => reason.Type).ToList(),
+            })
+            .ToListAsync(cancellationToken).ConfigureAwait(false))
+            .ToLookup(record => (record.DomainId, record.SourceIp), record => new ForwardingEvidence(record.MessageCount, record.HeaderFrom, record.SpfResult, record.Spf,
+                record.Dkim.Select(detail => (detail.Domain, detail.Result)).ToList(), record.Overrides));
+
         var firstReports = await db.Reports.AsNoTracking()
             .Where(report => domainIds.Contains(report.DomainId))
             .GroupBy(report => report.DomainId)
@@ -46,7 +64,8 @@ public static class EnforcementData
             .GroupBy(row => row.DomainId)
             .ToDictionary(group => group.Key, group => group
                 .Select(row => (Row: row, Identity: SenderIdentity.For(row.SourceIp, hostNames.GetValueOrDefault(row.SourceIp)?.HostName,
-                    owners.GetValueOrDefault(row.SourceIp)?.Organization ?? IpRangeMatcher.FindContaining(ranges, row.SourceIp)?.Organization)))
+                    owners.GetValueOrDefault(row.SourceIp)?.Organization ?? IpRangeMatcher.FindContaining(ranges, row.SourceIp)?.Organization,
+                    ForwardingDetector.Detect(row.Volume, forwardingEvidence[(row.DomainId, row.SourceIp)]))))
                 .GroupBy(item => item.Identity.Key)
                 .Select(sender => new SenderVolume(sender.First().Identity, sender.Sum(item => item.Row.Volume), sender.Sum(item => item.Row.Passing)))
                 .ToList());

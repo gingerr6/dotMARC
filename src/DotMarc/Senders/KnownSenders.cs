@@ -43,6 +43,9 @@ public static class KnownSenders
         new("addy", "addy.io", ["anonaddy.me", "addy.io"], [], IsForwarder: true),
         new("duckduckgo-email", "DuckDuckGo Email Protection", ["duck.com"], [], IsForwarder: true),
         new("pobox", "Pobox", ["pobox.com"], [], IsForwarder: true),
+        // Filtering services in front of a recipient's mailbox: they re-send the domain's mail into it after scanning.
+        new("avanan", "Check Point Harmony Email (Avanan)", ["cloud-sec-av.com", "avanan.net"], [], IsForwarder: true),
+        new("perception-point", "Perception Point", ["perception-point.io"], [], IsForwarder: true),
     ];
 
     /// <summary>The service behind a source, or null when it isn't one dotMARC knows.</summary>

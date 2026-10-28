@@ -1079,6 +1079,11 @@ else
             .Select(a => new SourceRow(a.SourceIp, a.Volume, a.SpfResult.ToString(), a.DkimResult.ToString(), a.Disposition.ToString(), a.OverrideReasonTypes, a.AuthDetails, a.InferredReason))
             .OrderByDescending(s => s.Volume)
             .ToList();
+        var recordsByIp = _domain.Reports.SelectMany(report => report.Records).ToLookup(record => record.SourceIp);
+        foreach (var source in _sources)
+        {
+            source.DetectedForwarding = ForwardingDetector.Detect(source.Volume, recordsByIp[source.SourceIp].Select(ForwardingEvidence.From));
+        }
 
         _returnPaths = ReturnPathDomains.From(_domain.Name, _domain.Reports).Take(5).Select(domain => new ReturnPathRow(domain, null)).ToList();
         _ = LoadReturnPathCnamesAsync(_returnPaths);
@@ -1258,6 +1263,8 @@ else
         var scope = identity.IsService ? $"Covers every {identity.Label} server sending this domain's mail." : "Covers this IP only.";
         return _senderApprovals.TryGetValue(identity.Key, out var approval)
             ? $"{SenderApprovalService.Describe(approval.Status)} by {approval.DecidedBy} on {DotMarc.Reporting.UkTime.Date(approval.DecidedUtc)}. {scope}"
+            : identity.ForwardingReason is { } detected
+                ? $"Detected as forwarding. {detected} It isn't a sender of the domain's own, so there's nothing to review; mark it not ours if you disagree. {scope}"
             : identity.IsForwarder
                 ? $"A mail forwarder: someone this domain emailed has their address pass mail on through {identity.Label}. It isn't the domain's own sender, so there's nothing to review. {scope}"
                 : $"Nobody has reviewed this sender yet. {scope}";
@@ -2261,7 +2268,10 @@ else
         public int[] DailyVolumes { get; set; } = [];
 
         // Recomputed as the host name and owner arrive, so a source joins its service once it's recognised.
-        public SenderIdentity Identity => SenderIdentity.For(SourceIp, HostName, Organization);
+        public SenderIdentity Identity => SenderIdentity.For(SourceIp, HostName, Organization, DetectedForwarding);
+
+        /// <summary>Why this IP's mail looks forwarded (see ForwardingDetector), or null.</summary>
+        public string? DetectedForwarding { get; set; }
 
         // A source whose earliest-ever report (across all history, not just this 30-day window)
         // is itself within the last week is brand new to this domain - the single highest-signal
