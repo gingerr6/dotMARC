@@ -650,22 +650,19 @@ else
                 </ToolBarContent>
                 <HeaderContent>
                     <tr>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)"><Hint Text="The server that sent mail as this domain: its name where it has one, otherwise its IP address. Recognised services such as Microsoft 365 are named.">Source</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)"><Hint Text="The server that sent mail as this domain: its name where it has one, otherwise its IP address, then who the address is registered to and its country. Recognised services such as Microsoft 365 are named.">Source</Hint></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => ApprovalLabel(s))"><Hint Text="Approved: the domain's own mail. Not ours: spoofing, or forwarding you've checked. Forwarder: a known forwarding service, nothing to do. Unreviewed: nobody has looked yet.">Approval</Hint></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)"><Hint Text="Messages from this source in the last 30 days, as receivers reported them.">Volume</Hint></MudTableSortLabel></MudTh>
                         <MudTh><Hint Text="Messages a day from this source over the last 7 days.">7d trend</Hint></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.FirstSeenUtc ?? DateTimeOffset.MinValue)"><Hint Text="When this source first appeared in a report for this domain.">First seen</Hint></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.SpfResult)"><Hint Text="Whether SPF passed: the sending server is listed in the domain's SPF record. Forwarding always breaks SPF, so a fail here isn't always a problem.">SPF</Hint></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.DkimResult)"><Hint Text="Whether DKIM passed: the message carried a valid signature from the domain. Signatures survive forwarding.">DKIM</Hint></MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Disposition)"><Hint Text="What the receiving server did with the mail: none (delivered), quarantine (junk) or reject (refused).">Disposition</Hint></MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.ReasonSummary)"><Hint Text="Why the receiver didn't follow the DMARC policy, when it says: forwarded, mailing list, local policy and so on.">Reason</Hint></MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Organization ?? string.Empty)"><Hint Text="Who the IP address is registered to, from its internet registry.">Owner</Hint></MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Country ?? string.Empty)"><Hint Text="The country the IP address is registered in.">Country</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Disposition)"><Hint Text="What the receiving server did with the mail: none (delivered), quarantine (junk) or reject (refused). Beneath it, why the receiver didn't follow the DMARC policy, when it says: forwarded, mailing list, local policy and so on.">Disposition</Hint></MudTableSortLabel></MudTh>
                     </tr>
                     @if (_showSourceFilters)
                     {
                     <tr>
-                        <MudTh><MudTextField T="string" @bind-Value="_sourceIpFilter" Placeholder="Search" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" /></MudTh>
+                        <MudTh><MudTextField T="string" @bind-Value="_sourceIpFilter" Placeholder="Name, IP, owner, country" Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" /></MudTh>
                         <MudTh>
                             <MudSelect T="string" Value="_sourceApprovalFilter" ValueChanged="@(v => _sourceApprovalFilter = v)" Clearable="true" Placeholder="Any" Margin="Margin.Dense">
                                 <MudSelectItem T="string" Value="@("Approved")">Approved</MudSelectItem>
@@ -705,18 +702,13 @@ else
                                     <MudSelectItem T="string" Value="disposition">@disposition</MudSelectItem>
                                 }
                             </MudSelect>
-                        </MudTh>
-                        <MudTh><MudTextField T="string" @bind-Value="_sourceReasonFilter" Placeholder="Search" Immediate="true" Margin="Margin.Dense" /></MudTh>
-                        <MudTh><MudTextField T="string" @bind-Value="_sourceOwnerFilter" Placeholder="Search" Immediate="true" Margin="Margin.Dense" /></MudTh>
-                        <MudTh>
-                            <SearchableSelect TValue="string" Options="@(_sources.Where(s => s.Country is not null).Select(s => s.Country!).Distinct().OrderBy(c => c).Select(country => new SelectOption<string>(country, country)).ToList())"
-                                              Value="_sourceCountryFilter" ValueChanged="@(v => _sourceCountryFilter = v)" Clearable="true" Placeholder="Any" Margin="Margin.Dense" />
+                            <MudTextField T="string" @bind-Value="_sourceReasonFilter" Placeholder="Reason" Immediate="true" Margin="Margin.Dense" />
                         </MudTh>
                     </tr>
                     }
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd>
+                    <MudTd Style="max-width:300px; overflow-wrap:anywhere;">
                         @* The name first, since it says who sent the mail; the IP stays beneath it, as SPF needs it. *@
                         @if (context.Identity.IsService)
                         {
@@ -735,6 +727,15 @@ else
                             {
                                 <MudText Typo="Typo.caption" Class="mud-text-secondary">Looking up name…</MudText>
                             }
+                        }
+                        @* Owner and country here rather than in columns of their own, so the table fits a laptop screen. *@
+                        @if (context.IsEnrichmentPending)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Looking up owner…</MudText>
+                        }
+                        else if (OwnerLine(context) is { } owner)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@owner</MudText>
                         }
                     </MudTd>
                     <MudTd>
@@ -793,19 +794,13 @@ else
                             <span>@context.DkimResult</span>
                         </MudTooltip>
                     </MudTd>
-                    <MudTd>@context.Disposition</MudTd>
-                    <MudTd>@context.ReasonSummary</MudTd>
                     <MudTd>
-                        @if (context.IsEnrichmentPending)
+                        <div>@context.Disposition</div>
+                        @if (!string.IsNullOrEmpty(context.ReasonSummary))
                         {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
-                        }
-                        else
-                        {
-                            @(context.Organization ?? "—")
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.ReasonSummary</MudText>
                         }
                     </MudTd>
-                    <MudTd>@(context.IsEnrichmentPending ? "" : (context.Country ?? "—"))</MudTd>
                 </RowTemplate>
             </MudTable>
         </MudTabPanel>
@@ -864,8 +859,6 @@ else
     private string? _sourceDkimFilter;
     private string? _sourceDispositionFilter;
     private string? _sourceReasonFilter;
-    private string? _sourceOwnerFilter;
-    private string? _sourceCountryFilter;
     private string? _sourceApprovalFilter;
     private const string UnreviewedFilter = "Unreviewed";
     private Dictionary<string, SenderApproval> _senderApprovals = [];
@@ -936,11 +929,20 @@ else
     private static string TlsrptFailureSummary(TlsrptReport report) =>
         string.Join(", ", report.Policies.SelectMany(policy => policy.FailureDetails).Select(detail => $"{detail.ResultType} ({detail.FailedSessionCount})"));
 
+    /// <summary>Who the source's address is registered to and where, for the line under its name; null when neither is
+    /// known, or when the service line above already names the owner and there's no country to add.</summary>
+    private static string? OwnerLine(SourceRow source)
+    {
+        var owner = source.Identity.IsService && source.HostName is null ? null : source.Organization;
+        var parts = new[] { owner, source.Country }.Where(part => !string.IsNullOrWhiteSpace(part)).ToList();
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
+    }
+
     private bool SourceMatchesFilters(SourceRow source)
     {
-        if ((!ContainsIgnoreCase(source.SourceIp, _sourceIpFilter) && !ContainsIgnoreCase(source.HostName ?? "", _sourceIpFilter))
-            || !ContainsIgnoreCase(source.ReasonSummary, _sourceReasonFilter)
-            || !ContainsIgnoreCase(source.Organization, _sourceOwnerFilter))
+        var searched = string.IsNullOrWhiteSpace(_sourceIpFilter)
+            || new[] { source.SourceIp, source.HostName, source.Identity.Label, source.Organization, source.Country }.Any(value => ContainsIgnoreCase(value ?? "", _sourceIpFilter));
+        if (!searched || !ContainsIgnoreCase(source.ReasonSummary, _sourceReasonFilter))
         {
             return false;
         }
@@ -965,10 +967,6 @@ else
             return false;
         }
         if (_sourceDispositionFilter is not null && source.Disposition != _sourceDispositionFilter)
-        {
-            return false;
-        }
-        if (_sourceCountryFilter is not null && source.Country != _sourceCountryFilter)
         {
             return false;
         }
