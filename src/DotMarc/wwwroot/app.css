@@ -72,6 +72,11 @@ html {
     color: var(--mud-palette-text-secondary);
 }
 
+.reason-list .reason-domains {
+    color: var(--mud-palette-text-secondary);
+    overflow-wrap: anywhere;
+}
+
 /* The box shown while the live connection to the server is down (App.razor). Hidden until Blazor adds one of its
    components-reconnect-* classes; themed with MudBlazor's colours, so it follows light and dark mode. */
 .dotmarc-reconnect {
