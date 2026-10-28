@@ -225,4 +225,34 @@ public class DashboardSummaryTests
         Assert.Equal(2, row.Setup.Done);
         Assert.True(row.Setup.Total > row.Setup.Done);
     }
+
+    [Fact]
+    public void Build_NamesTheDomainsBehindEachReason()
+    {
+        ReportRecord Blocked(int count, string headerFrom)
+        {
+            var record = Record(count, AuthResult.Fail, AuthResult.Fail);
+            record.Disposition = DispositionResult.Quarantine;
+            record.HeaderFrom = headerFrom;
+            record.AuthDetails.Add(new ReportRecordAuthDetail { Mechanism = DmarcAuthMechanism.Spf, Domain = headerFrom, Result = DmarcMechanismResult.Fail });
+            record.AuthDetails.Add(new ReportRecordAuthDetail { Mechanism = DmarcAuthMechanism.Dkim, Domain = headerFrom, Result = DmarcMechanismResult.Fail });
+            return record;
+        }
+
+        var forwarded = Blocked(4, "fabrikam.io");
+        forwarded.AuthDetails.Clear();
+        forwarded.OverrideReasons.Add(new ReportRecordPolicyOverrideReason { Type = DmarcPolicyOverrideType.Forwarded });
+        var domains = new[]
+        {
+            DomainWith("contoso.io", true, DateTimeOffset.UtcNow, ReportWith("google.com", Blocked(1, "contoso.io"))),
+            DomainWith("fabrikam.io", true, DateTimeOffset.UtcNow, ReportWith("google.com", Blocked(3, "fabrikam.io"), forwarded)),
+            DomainWith("quiet.io", true, DateTimeOffset.UtcNow, ReportWith("google.com", Record(10, AuthResult.Pass, AuthResult.Pass))),
+        };
+
+        var (summary, _) = DashboardSummary.Build(domains, parseFailureCount: 0);
+
+        Assert.Equal([new ReasonDomainCount("fabrikam.io", 3), new ReasonDomainCount("contoso.io", 1)], summary.ReasonDomains.InferredBothFailure);
+        Assert.Equal([new ReasonDomainCount("fabrikam.io", 4)], summary.ReasonDomains.BenignOverride);
+        Assert.Empty(summary.ReasonDomains.LocalPolicy);
+    }
 }

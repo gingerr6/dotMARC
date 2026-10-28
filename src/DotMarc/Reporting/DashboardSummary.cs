@@ -10,6 +10,10 @@ namespace DotMarc.Reporting;
 /// split as <see cref="DomainStatistics"/>.</summary>
 public sealed record DashboardSummary(int DomainCount, double OverallPassRate, int WarningCount, int MissingCount, int ParseFailureCount, int SourceCount, ReasonBreakdown ReasonBreakdown)
 {
+    /// <summary>Which domains make up each count in <see cref="ReasonBreakdown"/>, most messages first, so the
+    /// dashboard can say where they came from. Empty unless built by <see cref="Build"/>.</summary>
+    public ReasonDomains ReasonDomains { get; init; } = ReasonDomains.Empty;
+
     public const string NotMonitored = "Not monitored";
 
     /// <summary>The dashboard's per-domain status: Not monitored when it's switched off, Missing when a monitored domain
@@ -52,9 +56,42 @@ public sealed record DashboardSummary(int DomainCount, double OverallPassRate, i
             rows.Count(r => r.Status == "Missing"),
             parseFailureCount,
             sourceCount,
-            DomainStatistics.GetReasonBreakdown(domains.Select(d => (IEnumerable<Report>)d.Reports)));
+            DomainStatistics.GetReasonBreakdown(domains.Select(d => (IEnumerable<Report>)d.Reports)))
+        {
+            ReasonDomains = ReasonDomains.From(domains.Select(d => (d.Name, DomainStatistics.GetReasonBreakdown(d.Reports)))),
+        };
 
         return (summary, rows);
+    }
+}
+
+/// <summary>A domain and how many of its messages fall under one reject/quarantine reason.</summary>
+public sealed record ReasonDomainCount(string DomainName, int Count);
+
+/// <summary>Per reason in a <see cref="ReasonBreakdown"/>, the domains whose messages make up its count.</summary>
+public sealed record ReasonDomains(
+    IReadOnlyList<ReasonDomainCount> BenignOverride, IReadOnlyList<ReasonDomainCount> LocalPolicy, IReadOnlyList<ReasonDomainCount> Other,
+    IReadOnlyList<ReasonDomainCount> InferredSpfFailure, IReadOnlyList<ReasonDomainCount> InferredDkimFailure, IReadOnlyList<ReasonDomainCount> InferredBothFailure,
+    IReadOnlyList<ReasonDomainCount> NoReasonGiven)
+{
+    public static ReasonDomains Empty { get; } = new([], [], [], [], [], [], []);
+
+    public static ReasonDomains From(IEnumerable<(string DomainName, ReasonBreakdown Breakdown)> perDomain)
+    {
+        var list = perDomain.Where(item => item.Breakdown.Total > 0).ToList();
+        if (list.Count == 0)
+        {
+            return Empty;
+        }
+
+        IReadOnlyList<ReasonDomainCount> For(Func<ReasonBreakdown, int> count) => list
+            .Where(item => count(item.Breakdown) > 0)
+            .Select(item => new ReasonDomainCount(item.DomainName, count(item.Breakdown)))
+            .OrderByDescending(item => item.Count).ThenBy(item => item.DomainName, StringComparer.Ordinal)
+            .ToList();
+
+        return new(For(b => b.BenignOverride), For(b => b.LocalPolicy), For(b => b.Other),
+            For(b => b.InferredSpfFailure), For(b => b.InferredDkimFailure), For(b => b.InferredBothFailure), For(b => b.NoReasonGiven));
     }
 }
 

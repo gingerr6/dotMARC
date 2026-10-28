@@ -9,22 +9,52 @@
     <ul class="reason-list">
         @foreach (var reason in Reasons)
         {
-            <li class="@(reason.Count == 0 ? "reason-none" : null)"><strong>@reason.Count</strong> @reason.Description</li>
+            <li class="@(reason.Count == 0 ? "reason-none" : null)">
+                <strong>@reason.Count</strong> @reason.Description
+                @if (reason.Domains.Count > 0)
+                {
+                    @* Which domains, so a count across every domain can be followed up: each opens that domain's Sources tab. *@
+                    <span class="reason-domains">
+                        &ndash;
+                        @foreach (var (domain, index) in reason.Domains.Take(MaxDomainsShown).Select((domain, index) => (domain, index)))
+                        {
+                            @(index > 0 ? ", " : "")<a href="@($"/domains/{Uri.EscapeDataString(domain.DomainName)}/sources")">@domain.DomainName</a>@(reason.Domains.Count > 1 ? $" ({domain.Count})" : "")
+                        }
+                        @if (reason.Domains.Count > MaxDomainsShown)
+                        {
+                            @($" and {reason.Domains.Count - MaxDomainsShown} more")
+                        }
+                    </span>
+                }
+            </li>
         }
     </ul>
 </div>
 
 @code {
+    private const int MaxDomainsShown = 5;
+
     [Parameter, EditorRequired] public ReasonBreakdown Breakdown { get; set; } = default!;
 
-    private IEnumerable<(int Count, string Description)> Reasons =>
-    [
-        (Breakdown.BenignOverride, "benign override (forwarders and mailing lists)"),
-        (Breakdown.LocalPolicy, "local policy"),
-        (Breakdown.Other, "other"),
-        (Breakdown.InferredSpfFailure, "inferred SPF-only failure"),
-        (Breakdown.InferredDkimFailure, "inferred DKIM-only failure"),
-        (Breakdown.InferredBothFailure, "inferred SPF and DKIM both failing"),
-        (Breakdown.NoReasonGiven, "no reason given"),
-    ];
+    /// <summary>The domains behind each count, on the dashboard where the counts span every domain. Left out on a
+    /// domain's own page.</summary>
+    [Parameter] public ReasonDomains? Domains { get; set; }
+
+    private IEnumerable<(int Count, string Description, IReadOnlyList<ReasonDomainCount> Domains)> Reasons
+    {
+        get
+        {
+            var domains = Domains ?? ReasonDomains.Empty;
+            return
+            [
+                (Breakdown.BenignOverride, "benign override (forwarders and mailing lists)", domains.BenignOverride),
+                (Breakdown.LocalPolicy, "local policy", domains.LocalPolicy),
+                (Breakdown.Other, "other", domains.Other),
+                (Breakdown.InferredSpfFailure, "inferred SPF-only failure", domains.InferredSpfFailure),
+                (Breakdown.InferredDkimFailure, "inferred DKIM-only failure", domains.InferredDkimFailure),
+                (Breakdown.InferredBothFailure, "inferred SPF and DKIM both failing", domains.InferredBothFailure),
+                (Breakdown.NoReasonGiven, "no reason given", domains.NoReasonGiven),
+            ];
+        }
+    }
 }
