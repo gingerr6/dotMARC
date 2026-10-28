@@ -221,9 +221,12 @@ public sealed class AlertingService : IAlertingService
         foreach (var domain in domains)
         {
             var decisions = approvalsByDomain[domain.Id].ToDictionary(approval => approval.SenderKey, approval => approval.Status);
-            var volumeByIp = domain.Reports
+            var recordsInWindow = domain.Reports
                 .Where(report => report.ReceivedUtc >= windowStartUtc)
                 .SelectMany(report => report.Records)
+                .ToList();
+            var recordsByIp = recordsInWindow.ToLookup(record => record.SourceIp);
+            var volumeByIp = recordsInWindow
                 .Where(DomainStatistics.IsPassing)
                 .GroupBy(record => record.SourceIp)
                 .ToDictionary(group => group.Key, group => group.Sum(record => record.MessageCount));
@@ -248,7 +251,10 @@ public sealed class AlertingService : IAlertingService
                 }
 
                 owners.TryGetValue(ip, out var owner);
-                var identity = SenderIdentity.For(ip, hostName, owner?.Organization);
+                // Mail forwarded on with the domain's signature intact passes DMARC from someone else's server; that's
+                // the domain's own mail, not a new sender.
+                var forwarding = ForwardingDetector.Detect(recordsByIp[ip].Sum(record => record.MessageCount), recordsByIp[ip].Select(ForwardingEvidence.From));
+                var identity = SenderIdentity.For(ip, hostName, owner?.Organization, forwarding);
                 var decided = decisions.TryGetValue(identity.Key, out var status);
                 if ((decided && status == SenderApprovalStatus.Approved) || (!decided && identity.IsForwarder))
                 {
