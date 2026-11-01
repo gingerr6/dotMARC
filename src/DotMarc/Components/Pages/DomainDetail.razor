@@ -1478,10 +1478,14 @@ else
         }
 
         var change = plan.Changes[0];
+        // Cast the whole concatenation. MarkupString + string is a plain string, which the dialog encodes.
+        var message = (MarkupString)(
+            $"<p>Now: <code>{System.Net.WebUtility.HtmlEncode(change.ExistingValue)}</code></p><p>New: <code>{System.Net.WebUtility.HtmlEncode(change.DesiredValue)}</code></p>" +
+            (policy == DmarcPolicyLevel.Reject
+                ? "<p>Mail that fails DMARC will be refused. Undo it by pushing p=quarantine again if something goes wrong.</p>"
+                : "<p>Mail that fails DMARC will go to junk.</p>"));
         var confirmed = await DialogService.ShowMessageBoxAsync($"Move {DomainName} to p={name}",
-            (MarkupString)$"<p>Now: <code>{System.Net.WebUtility.HtmlEncode(change.ExistingValue)}</code></p><p>New: <code>{System.Net.WebUtility.HtmlEncode(change.DesiredValue)}</code></p>" +
-            (policy == DmarcPolicyLevel.Reject ? "<p>Mail that fails DMARC will be refused. Undo it by pushing p=quarantine again if something goes wrong.</p>" : "<p>Mail that fails DMARC will go to junk.</p>"),
-            yesText: "Push", cancelText: "Cancel");
+            message, yesText: "Push", cancelText: "Cancel");
         if (confirmed == true)
         {
             await OpenDnsPushPopupAsync(pushProvider.ProviderKey, _domain.Id, "dmarc-policy", name);
