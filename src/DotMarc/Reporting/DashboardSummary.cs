@@ -16,6 +16,19 @@ public sealed record DashboardSummary(int DomainCount, double OverallPassRate, i
 
     public const string NotMonitored = "Not monitored";
 
+    /// <summary>Case-folded name the dashboard sorts on, so "Alpha.test" and "zeta.test" order as alpha then zeta.
+    /// The domain table's Domain column sorts by this same key. A custom <see cref="Domain.SortOrder"/> is only for
+    /// Manage Domains; the dashboard does not use it.</summary>
+    public static string NameSortKey(string name) => name.ToLowerInvariant();
+
+    /// <summary>A to Z by <paramref name="name"/>, ignoring case. Names that differ only by case keep a fixed order
+    /// (the original spelling). The dashboard's domain rows and its Group and Tag lists use this when nothing else
+    /// has chosen an order.</summary>
+    public static List<T> OrderByName<T>(IEnumerable<T> items, Func<T, string> name) =>
+        items.OrderBy(item => NameSortKey(name(item)), StringComparer.Ordinal)
+            .ThenBy(item => name(item), StringComparer.Ordinal)
+            .ToList();
+
     /// <summary>The dashboard's per-domain status: Not monitored when it's switched off, Missing when a monitored domain
     /// that sends mail has had no report for two days, Warning when its pass rate is under 95%, otherwise OK. Shared with
     /// the API's summary.</summary>
@@ -33,9 +46,7 @@ public sealed record DashboardSummary(int DomainCount, double OverallPassRate, i
 
     public static (DashboardSummary Summary, List<DashboardDomainRow> Rows) Build(IReadOnlyList<Domain> domains, int parseFailureCount)
     {
-        var rows = domains
-            .OrderBy(d => d.SortOrder)
-            .ThenBy(d => d.Name)
+        var rows = OrderByName(domains, domain => domain.Name)
             .Select(d =>
             {
                 var passRate = DomainStatistics.GetPassRate(d.Reports);
@@ -87,7 +98,11 @@ public sealed record ReasonDomains(
         IReadOnlyList<ReasonDomainCount> For(Func<ReasonBreakdown, int> count) => list
             .Where(item => count(item.Breakdown) > 0)
             .Select(item => new ReasonDomainCount(item.DomainName, count(item.Breakdown)))
-            .OrderByDescending(item => item.Count).ThenBy(item => item.DomainName, StringComparer.Ordinal)
+            // Most messages first: the page only names a few, so the largest contributors stay visible. Equal counts
+            // fall back to the same case-insensitive name order as the domain table.
+            .OrderByDescending(item => item.Count)
+            .ThenBy(item => DashboardSummary.NameSortKey(item.DomainName), StringComparer.Ordinal)
+            .ThenBy(item => item.DomainName, StringComparer.Ordinal)
             .ToList();
 
         return new(For(b => b.BenignOverride), For(b => b.LocalPolicy), For(b => b.Other),

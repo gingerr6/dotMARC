@@ -109,7 +109,8 @@ else
         </ToolBarContent>
         <HeaderContent>
             <tr>
-                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Name)"><Hint Text="The domain. Open it for its reports, senders and DNS checks.">Domain</Hint></MudTableSortLabel></MudTh>
+                @* A to Z until a column is clicked. MudBlazor then sorts by that column, and this arrow shows the default. Nothing stores a sort, so a new visit starts here again. *@
+                <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => DashboardSummary.NameSortKey(r.Name))" InitialDirection="SortDirection.Ascending"><Hint Text="The domain. Open it for its reports, senders and DNS checks.">Domain</Hint></MudTableSortLabel></MudTh>
                 <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.Status)"><Hint Text="OK; Warning (under 95% of mail passing DMARC); Missing (a domain that sends mail has had no report for 2 days); Not monitored.">Report Status</Hint></MudTableSortLabel></MudTh>
                 <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.PassRate ?? -1)"><Hint Text="The share of the domain's mail that passed DMARC (SPF or DKIM, aligned with the domain) over the last 30 days.">Pass rate (30d)</Hint></MudTableSortLabel></MudTh>
                 <MudTh rowspan="2"><MudTableSortLabel SortBy="new Func<DashboardDomainRow, object>(r => r.LastReportReceivedUtc ?? DateTimeOffset.MinValue)"><Hint Text="When the most recent DMARC report for the domain arrived.">Last report</Hint></MudTableSortLabel></MudTh>
@@ -407,12 +408,15 @@ else
         // stale data as PollingService writes new reports behind it.
         await using var db = await DbFactory.CreateDbContextAsync();
 
-        _allGroups = await db.Groups.AsNoTracking().OrderBy(g => g.Name).ToListAsync();
+        // Group and Tag are lists of names, not a custom order. Case-insensitive, same as the domain table. A chosen
+        // Group or Tag filters which domains appear; it does not change their order.
+        var groups = await db.Groups.AsNoTracking().ToListAsync();
         if (_scopedGroupIds is not null)
         {
-            _allGroups = _allGroups.Where(g => _scopedGroupIds.Contains(g.Id)).ToList();
+            groups = groups.Where(g => _scopedGroupIds.Contains(g.Id)).ToList();
         }
-        _allTags = await db.Tags.AsNoTracking().OrderBy(t => t.Name).ToListAsync();
+        _allGroups = DashboardSummary.OrderByName(groups, group => group.Name);
+        _allTags = DashboardSummary.OrderByName(await db.Tags.AsNoTracking().ToListAsync(), tag => tag.Name);
 
         var cutoff = DomainStatistics.GetWindowCutoffUtc();
         var query = db.Domains
