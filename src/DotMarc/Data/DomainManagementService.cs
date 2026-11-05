@@ -240,8 +240,9 @@ public static class DomainManagementService
     /// correct at the scale (a handful to a few dozen domains) this app is designed for. Two
     /// domains can end up with the same SortOrder if a manual add (AddDomainAsync) races a
     /// report-driven one (PollingService.StoreReportAsync) - there's no uniqueness constraint on
-    /// the column, and every ordering query breaks such ties with .ThenBy(d => d.Name), so this is
-    /// tolerated by design rather than guarded against.</summary>
+    /// the column, and the queries that order by SortOrder (Manage Domains, the API) break such
+    /// ties with .ThenBy(d => d.Name), so this is tolerated by design rather than guarded against.
+    /// The dashboard lists domains A to Z instead, and does not read SortOrder.</summary>
     public static async Task ReorderAsync(DotMarcDbContext context, AuditActor actor, IReadOnlyList<int> orderedDomainIds, CancellationToken cancellationToken = default)
     {
         var domains = await context.Domains

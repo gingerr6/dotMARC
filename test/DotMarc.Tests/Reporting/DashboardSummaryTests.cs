@@ -159,14 +159,37 @@ public class DashboardSummaryTests
     }
 
     [Fact]
-    public void Build_OrdersRowsBySortOrderThenName()
+    public void Build_OrdersRowsAlphabeticallyByName_IgnoringCaseAndCustomSortOrder()
     {
-        var domainA = new Domain { Name = "b.example.com", FirstSeenUtc = DateTimeOffset.UtcNow, SortOrder = 1 };
-        var domainB = new Domain { Name = "a.example.com", FirstSeenUtc = DateTimeOffset.UtcNow, SortOrder = 0 };
+        // SortOrder would put zeta first. The dashboard's default is the name, A to Z, ignoring case.
+        var later = new Domain { Name = "zeta.test", FirstSeenUtc = DateTimeOffset.UtcNow, SortOrder = 0 };
+        var earlier = new Domain { Name = "Alpha.test", FirstSeenUtc = DateTimeOffset.UtcNow, SortOrder = 9 };
+        var middle = new Domain { Name = "middle.test", FirstSeenUtc = DateTimeOffset.UtcNow, SortOrder = 1 };
 
-        var (_, rows) = DashboardSummary.Build([domainA, domainB], parseFailureCount: 0);
+        var (_, rows) = DashboardSummary.Build([later, earlier, middle], parseFailureCount: 0);
 
-        Assert.Equal(["a.example.com", "b.example.com"], rows.Select(r => r.Name));
+        Assert.Equal(["Alpha.test", "middle.test", "zeta.test"], rows.Select(row => row.Name));
+    }
+
+    [Fact]
+    public void OrderByName_SortsCaseInsensitively_AndBreaksCaseOnlyTiesBySpelling()
+    {
+        var names = DashboardSummary.OrderByName(["zeta", "Alpha", "alpha", "middle"], name => name);
+
+        Assert.Equal(["Alpha", "alpha", "middle", "zeta"], names);
+    }
+
+    [Fact]
+    public void ReasonDomains_ListsBiggestContributorsFirst_ThenNameIgnoringCase()
+    {
+        var domains = ReasonDomains.From(
+        [
+            ("Zebra.test", new ReasonBreakdown(2, 0, 0, 0)),
+            ("apple.test", new ReasonBreakdown(2, 0, 0, 0)),
+            ("middle.test", new ReasonBreakdown(5, 0, 0, 0)),
+        ]);
+
+        Assert.Equal(["middle.test", "apple.test", "Zebra.test"], domains.BenignOverride.Select(item => item.DomainName));
     }
 
     [Fact]
