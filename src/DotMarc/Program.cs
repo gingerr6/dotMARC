@@ -528,6 +528,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, DotMarc.Portal.ClientPortalGate>();
 builder.Services.AddScoped<DotMarc.Portal.PortalData>();
 builder.Services.AddScoped<DotMarc.Portal.PortalBrandLoader>();
+builder.Services.AddScoped<DotMarc.Reporting.DashboardFilterMemory>();
 builder.Services.AddScoped<DotMarc.Reporting.ClientReports.ClientReportBuilder>();
 builder.Services.AddScoped<DotMarc.Reporting.ClientReports.ClientReportDispatcher>();
 builder.Services.AddScoped<DotMarc.Reporting.ClientReports.ClientReportRunner>();

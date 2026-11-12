@@ -84,10 +84,37 @@ else
     private bool _failingOnly;
     private bool _likelySpoofOnly;
     private string? _filterLabel;
+    private int? _loadedGroupId;
+    private int? _loadedTagId;
+    private bool _hasLoaded;
+    private int _loadVersion;
 
     private sealed record SourceRow(string Label, string Detail, bool IsService, bool IsLikelySpoof, string? SpoofReason, int Volume, double PassRate, Dictionary<string, int> Domains);
 
-    protected override async Task OnInitializedAsync()
+    // The Group and Tag come from the address. Opening Sources for another Group stays on this page, so
+    // OnInitialized does not run again; without this the previous Group's senders stay on screen.
+    protected override async Task OnParametersSetAsync()
+    {
+        var groupId = GroupId;
+        var tagId = TagId;
+        if (_hasLoaded && groupId == _loadedGroupId && tagId == _loadedTagId)
+        {
+            return;
+        }
+
+        var version = ++_loadVersion;
+        await LoadAsync(groupId, tagId, version);
+        if (version != _loadVersion)
+        {
+            return;
+        }
+
+        _loadedGroupId = groupId;
+        _loadedTagId = tagId;
+        _hasLoaded = true;
+    }
+
+    private async Task LoadAsync(int? groupId, int? tagId, int version)
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var scopedGroupIds = authState.User.FindAll(DotMarc.Security.UserAccessClaimsTransformation.ScopedGroupClaimType).Select(c => int.Parse(c.Value)).ToList();
@@ -99,15 +126,16 @@ else
         {
             records = records.Where(record => record.Report.Domain.Groups.Any(group => scopedGroupIds.Contains(group.Id)));
         }
-        if (GroupId is { } groupId)
+        string? filterLabel = null;
+        if (groupId is { } selectedGroupId)
         {
-            records = records.Where(record => record.Report.Domain.Groups.Any(group => group.Id == groupId));
-            _filterLabel = $"the {await db.Groups.Where(group => group.Id == groupId).Select(group => group.Name).SingleOrDefaultAsync()} group's domains";
+            records = records.Where(record => record.Report.Domain.Groups.Any(group => group.Id == selectedGroupId));
+            filterLabel = $"the {await db.Groups.Where(group => group.Id == selectedGroupId).Select(group => group.Name).SingleOrDefaultAsync()} group's domains";
         }
-        if (TagId is { } tagId)
+        if (tagId is { } selectedTagId)
         {
-            records = records.Where(record => record.Report.Domain.Tags.Any(tag => tag.Id == tagId));
-            _filterLabel = $"domains tagged {await db.Tags.Where(tag => tag.Id == tagId).Select(tag => tag.Name).SingleOrDefaultAsync()}";
+            records = records.Where(record => record.Report.Domain.Tags.Any(tag => tag.Id == selectedTagId));
+            filterLabel = $"domains tagged {await db.Tags.Where(tag => tag.Id == selectedTagId).Select(tag => tag.Name).SingleOrDefaultAsync()}";
         }
 
         var perIpAndDomain = await records
@@ -126,7 +154,7 @@ else
         var owners = await IpInfoService.GetCachedAsync(db, ips, CancellationToken.None);
         var ranges = await IpInfoService.GetCachedRangesAsync(db, CancellationToken.None);
 
-        _rows = perIpAndDomain
+        var rows = perIpAndDomain
             .GroupBy(row => row.SourceIp)
             .Select(ipGroup =>
             {
@@ -165,6 +193,14 @@ else
             })
             .OrderByDescending(row => row.Volume)
             .ToList();
+        // A newer address (another Group) may have started while this was loading. Its rows have to win.
+        if (version != _loadVersion)
+        {
+            return;
+        }
+
+        _filterLabel = filterLabel;
+        _rows = rows;
     }
 
     private bool Matches(SourceRow row) =>

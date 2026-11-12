@@ -12,6 +12,7 @@
 @inject ISnackbar Snackbar
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime Js
+@inject DashboardFilterMemory FilterMemory
 
 <PageTitle>dotMARC - Dashboard</PageTitle>
 <div class="d-flex align-center mb-1">
@@ -23,7 +24,7 @@
     come in. Filter by Group or Tag below, or open a domain for its full report history.
 </MudText>
 
-@if (_summary is null)
+@if (_summary is null || !_filter.ListMatchesSelection)
 {
     <MudProgressCircular Indeterminate="true" />
 }
@@ -31,13 +32,13 @@ else
 {
     <MudGrid Class="mb-4">
         <MudItem xs="12" sm="6">
-            <SearchableSelect TValue="int?" Label="Group" Options="@(_allGroups.Select(group => new SelectOption<int?>(group.Id, group.Name)).ToList())"
-                              Value="_selectedGroupId" ValueChanged="@(v => OnGroupFilterChangedAsync(v))"
+            <SearchableSelect TValue="int?" Label="Group" Options="@_groupOptions"
+                              Value="_filter.GroupId" ValueChanged="OnGroupFilterChangedAsync"
                               Clearable="@(_scopedGroupIds is null)" Disabled="@(_scopedGroupIds is not null && _scopedGroupIds.Count == 1)" />
         </MudItem>
         <MudItem xs="12" sm="6">
-            <SearchableSelect TValue="int?" Label="Tag" Options="@(_allTags.Select(tag => new SelectOption<int?>(tag.Id, tag.Name)).ToList())"
-                              Value="_selectedTagId" ValueChanged="@(v => OnTagFilterChangedAsync(v))" Clearable="true" />
+            <SearchableSelect TValue="int?" Label="Tag" Options="@_tagOptions"
+                              Value="_filter.TagId" ValueChanged="OnTagFilterChangedAsync" Clearable="true" />
         </MudItem>
     </MudGrid>
 
@@ -244,14 +245,21 @@ else
 }
 
 @code {
+    private readonly DashboardFilterSession _filter = new();
     private DashboardSummary? _summary;
     private List<DashboardDomainRow> _rows = [];
     private PollStatusRow? _lastPoll;
     private List<Group> _allGroups = [];
     private List<Tag> _allTags = [];
-    private int? _selectedGroupId;
-    private int? _selectedTagId;
+    private List<SelectOption<int?>> _groupOptions = [];
+    private List<SelectOption<int?>> _tagOptions = [];
     private List<int>? _scopedGroupIds;
+    private int _loadVersion;
+    private bool _browserFilterChecked;
+    private bool _catalogueLoaded;
+
+    [SupplyParameterFromQuery(Name = "group")] public int? GroupId { get; set; }
+    [SupplyParameterFromQuery(Name = "tag")] public int? TagId { get; set; }
 
     private string? _domainFilter;
     private string? _statusFilter;
@@ -262,17 +270,17 @@ else
     private string? _mtaStsFilter;
     private bool _showFilters;
 
-    private bool IsFilterActive => _selectedGroupId is not null || _selectedTagId is not null;
+    private bool IsFilterActive => _filter.GroupId is not null || _filter.TagId is not null;
 
     /// <summary>The Sources page, with the same Group or Tag filter as the dashboard.</summary>
     private void OpenSources()
     {
         var query = new List<string>();
-        if (_selectedGroupId is { } groupId)
+        if (_filter.GroupId is { } groupId)
         {
             query.Add($"group={groupId}");
         }
-        if (_selectedTagId is { } tagId)
+        if (_filter.TagId is { } tagId)
         {
             query.Add($"tag={tagId}");
         }
@@ -317,39 +325,82 @@ else
         return true;
     }
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAsync();
+    // The Group and Tag filters are remembered in this browser, so someone who works on one client comes back to it.
+    // A remembered Group or Tag that's gone, or that this person can't see, is ignored.
+    private const string GroupFilterKey = "dotmarc-dashboard-group";
+    private const string TagFilterKey = "dotmarc-dashboard-tag";
 
+    protected override void OnInitialized()
+    {
         if (RendererInfo.IsInteractive)
         {
             ShowDnsPushResultToast();
         }
     }
 
-    // The Group and Tag filters are remembered in this browser, so someone who works on one client comes back to it.
-    // Read once the circuit can run JS; a remembered Group or Tag that's gone, or that this person can't see, is ignored.
-    private const string GroupFilterKey = "dotmarc-dashboard-group";
-    private const string TagFilterKey = "dotmarc-dashboard-tag";
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    // The list is loaded here, not only in OnInitialized. Coming back from another page (and the home page, which
+    // redirects here) reuses this page when the address is still the dashboard, so OnInitialized does not run again.
+    // The address and the filter remembered for this circuit are both parameters of that visit: the domains have to
+    // be loaded for them before anything is shown. Otherwise the dropdown says "BCDR" and the table is every domain.
+    protected override async Task OnParametersSetAsync()
     {
-        if (!firstRender)
+        if (AwaitingRememberedFilter)
         {
             return;
         }
 
-        var groupId = await ReadRememberedAsync(GroupFilterKey);
-        var tagId = await ReadRememberedAsync(TagFilterKey);
-        var group = groupId is { } g && _allGroups.Any(candidate => candidate.Id == g) ? groupId : null;
-        var tag = tagId is { } t && _allTags.Any(candidate => candidate.Id == t) ? tagId : null;
-        if ((group is not null && group != _selectedGroupId) || (tag is not null && tag != _selectedTagId))
+        var (groupId, tagId) = SelectionForThisVisit();
+        if (_filter.ListMatchesSelection && groupId == _filter.GroupId && tagId == _filter.TagId)
         {
-            _selectedGroupId = group ?? _selectedGroupId;
-            _selectedTagId = tag ?? _selectedTagId;
-            await LoadAsync();
-            StateHasChanged();
+            return;
         }
+
+        _filter.Select(groupId, tagId);
+        await LoadAsync();
+    }
+
+    /// <summary>A fresh circuit has no filter until the browser's copy has been read. Loading every domain first and
+    /// narrowing it after render left that unfiltered list on screen when the second load never replaced it, which
+    /// is what happens on a client-side navigation back here.</summary>
+    private bool AwaitingRememberedFilter =>
+        !_browserFilterChecked && !FilterMemory.IsKnown && GroupId is null && TagId is null;
+
+    private (int? GroupId, int? TagId) SelectionForThisVisit()
+    {
+        int? rememberedGroup = FilterMemory.IsKnown ? FilterMemory.GroupId : null;
+        int? rememberedTag = FilterMemory.IsKnown ? FilterMemory.TagId : null;
+        return DashboardFilter.Resolve(GroupId, TagId, rememberedGroup, rememberedTag,
+            _allGroups.Select(group => group.Id), _allTags.Select(tag => tag.Id), idsAreKnown: _catalogueLoaded);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _browserFilterChecked)
+        {
+            return;
+        }
+
+        // The address, or a filter already chosen in this circuit, was applied before the first paint.
+        if (!AwaitingRememberedFilter)
+        {
+            _browserFilterChecked = true;
+            await PersistBrowserAsync();
+            SyncUrl();
+            return;
+        }
+
+        var rememberedGroup = await ReadRememberedAsync(GroupFilterKey);
+        var rememberedTag = await ReadRememberedAsync(TagFilterKey);
+        // The Group list is not loaded yet (we waited rather than paint every domain). LoadAsync drops an id that is gone.
+        var (groupId, tagId) = DashboardFilter.Resolve(null, null, rememberedGroup, rememberedTag, [], [], idsAreKnown: false);
+        // Remember it now so a navigation back, before this method runs again, comes back to the same filter.
+        FilterMemory.Remember(groupId, tagId);
+        _browserFilterChecked = true;
+        _filter.Select(groupId, tagId);
+        await LoadAsync();
+        await PersistBrowserAsync();
+        SyncUrl();
+        StateHasChanged();
     }
 
     private async Task<int?> ReadRememberedAsync(string key)
@@ -394,12 +445,13 @@ else
 
     private async Task LoadAsync()
     {
+        var version = ++_loadVersion;
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var scopedGroupClaims = authState.User.FindAll(DotMarc.Security.UserAccessClaimsTransformation.ScopedGroupClaimType).ToList();
         _scopedGroupIds = scopedGroupClaims.Count == 0 ? null : scopedGroupClaims.Select(c => int.Parse(c.Value)).ToList();
-        if (_scopedGroupIds is not null && (_selectedGroupId is null || !_scopedGroupIds.Contains(_selectedGroupId.Value)))
+        if (_scopedGroupIds is not null && (_filter.GroupId is null || !_scopedGroupIds.Contains(_filter.GroupId.Value)))
         {
-            _selectedGroupId = _scopedGroupIds[0];
+            _filter.Select(_scopedGroupIds[0], _filter.TagId);
         }
 
         // A fresh, untracked context per render: the page is read-only and Blazor Server's DI
@@ -417,6 +469,26 @@ else
         }
         _allGroups = DashboardSummary.OrderByName(groups, group => group.Name);
         _allTags = DashboardSummary.OrderByName(await db.Tags.AsNoTracking().ToListAsync(), tag => tag.Name);
+        _groupOptions = _allGroups.Select(group => new SelectOption<int?>(group.Id, group.Name)).ToList();
+        _tagOptions = _allTags.Select(tag => new SelectOption<int?>(tag.Id, tag.Name)).ToList();
+        _catalogueLoaded = true;
+        if (_filter.GroupId is { } selectedGroup && _allGroups.All(group => group.Id != selectedGroup))
+        {
+            _filter.Select(null, _filter.TagId);
+        }
+        if (_filter.TagId is { } selectedTag && _allTags.All(tag => tag.Id != selectedTag))
+        {
+            _filter.Select(_filter.GroupId, null);
+        }
+
+        // Captured after the adjustments above. A newer load (the dropdown moved, or the address changed) must not
+        // have this one publish the list it queried, or the dropdown and the table drift apart.
+        var groupId = _filter.GroupId;
+        var tagId = _filter.TagId;
+        if (version != _loadVersion)
+        {
+            return;
+        }
 
         var cutoff = DomainStatistics.GetWindowCutoffUtc();
         var query = db.Domains
@@ -433,26 +505,54 @@ else
             .AsSplitQuery()
             .AsQueryable();
 
-        if (_selectedGroupId is { } groupId)
+        if (groupId is { } filterGroupId)
         {
-            query = query.Where(d => d.Groups.Any(g => g.Id == groupId));
+            query = query.Where(d => d.Groups.Any(g => g.Id == filterGroupId));
         }
-        if (_selectedTagId is { } tagId)
+        if (tagId is { } filterTagId)
         {
-            query = query.Where(d => d.Tags.Any(t => t.Id == tagId));
+            query = query.Where(d => d.Tags.Any(t => t.Id == filterTagId));
         }
 
         var domains = await query.ToListAsync();
-
         var parseFailureCount = await db.ParseFailures.CountAsync();
-
-        (_summary, _rows) = DashboardSummary.Build(domains, parseFailureCount);
-
-        _lastPoll = await db.PollCycles
+        var lastPoll = await db.PollCycles
             .AsNoTracking()
             .OrderByDescending(p => p.PolledUtc)
             .Select(p => new PollStatusRow(p.PolledUtc, p.MessagesChecked, p.ReportsParsed, p.ParseFailures, p.Succeeded, p.ErrorMessage))
             .FirstOrDefaultAsync();
+        if (version != _loadVersion || _filter.GroupId != groupId || _filter.TagId != tagId)
+        {
+            return;
+        }
+
+        (_summary, _rows) = DashboardSummary.Build(domains, parseFailureCount);
+        _lastPoll = lastPoll;
+        _filter.MarkLoaded();
+        FilterMemory.Remember(groupId, tagId);
+    }
+
+    private async Task PersistBrowserAsync()
+    {
+        await RememberAsync(GroupFilterKey, _filter.GroupId);
+        await RememberAsync(TagFilterKey, _filter.TagId);
+    }
+
+    /// <summary>Puts the filter in the address so a refresh loads the same domains the dropdown is showing. The home
+    /// page and the Dashboard button open /dashboard with nothing in the address; the next paint writes it back.</summary>
+    private void SyncUrl()
+    {
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+
+        var target = DashboardFilter.Address(_filter.GroupId, _filter.TagId);
+        var current = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0];
+        if (!string.Equals(current, target, StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo(target, replace: true);
+        }
     }
 
     private async Task ToggleMonitoredAsync(DashboardDomainRow row, bool isMonitored)
@@ -471,16 +571,28 @@ else
 
     private async Task OnGroupFilterChangedAsync(int? groupId)
     {
-        _selectedGroupId = groupId;
-        await RememberAsync(GroupFilterKey, groupId);
+        if (groupId == _filter.GroupId && _filter.ListMatchesSelection)
+        {
+            return;
+        }
+
+        _filter.Select(groupId, _filter.TagId);
         await LoadAsync();
+        await PersistBrowserAsync();
+        SyncUrl();
     }
 
     private async Task OnTagFilterChangedAsync(int? tagId)
     {
-        _selectedTagId = tagId;
-        await RememberAsync(TagFilterKey, tagId);
+        if (tagId == _filter.TagId && _filter.ListMatchesSelection)
+        {
+            return;
+        }
+
+        _filter.Select(_filter.GroupId, tagId);
         await LoadAsync();
+        await PersistBrowserAsync();
+        SyncUrl();
     }
 
     private sealed record PollStatusRow(DateTimeOffset PolledUtc, int MessagesChecked, int ReportsParsed, int ParseFailures, bool Succeeded, string? ErrorMessage);
