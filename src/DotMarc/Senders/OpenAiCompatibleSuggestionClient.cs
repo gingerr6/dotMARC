@@ -24,13 +24,25 @@ public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<Op
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private const string SystemPrompt =
-        "You classify one sending source from a DMARC aggregate report. You are given only the IP, reverse DNS name, " +
-        "network owner, country, message count, SPF and DKIM results, disposition, and any classification the app already made. " +
-        "You are not given message content. Reply with JSON only, no markdown, in this shape: " +
+    /// <summary>A reply longer than this is cut on a word, so a runaway answer can't fill the row. A normal one-sentence
+    /// reason is far shorter and is kept whole.</summary>
+    internal const int MaximumReasonLength = 1000;
+
+    /// <summary>Sent as the system message. One concise sentence, and any other domain in the auth results is named
+    /// for what it is (the envelope domain, or the domain that signed) so it isn't read as the domain on the page.</summary>
+    internal const string Instructions =
+        "You classify one sending source from a DMARC aggregate report for the domain in the domain field (the From domain on the page). " +
+        "You are given only that domain, the IP, reverse DNS name, network owner, country, message count, SPF and DKIM results, " +
+        "disposition, and any classification the app already made. You are not given message content. " +
+        "Reply with JSON only, no markdown, in this shape: " +
         "{\"verdict\":\"legitimate_service\"|\"forwarder\"|\"likely_spoof\"|\"unknown\",\"reason\":\"one sentence\"}. " +
+        "The reason is one concise sentence and nothing more. " +
         "legitimate_service means a real mail service the domain might send through. forwarder means the mail was passed on " +
         "(a forward, an alias, or a mailing list). likely_spoof means the mail was probably forged. unknown means you cannot tell. " +
+        "If you mention a domain from the auth results that is not the domain field, say what it is. " +
+        "An SPF domain other than the domain field is the envelope (bounce) domain the message was sent from, not the From domain this page is about. " +
+        "A DKIM domain other than the domain field is the domain that signed the message. " +
+        "Do not leave the reader thinking that other domain is the one they are viewing. " +
         "Do not tell the user to change a stored decision; they decide.";
 
     public async Task<SourceSuggestionResult> SuggestAsync(string endpoint, string model, string apiKey, SourceSuggestionFacts facts, CancellationToken cancellationToken)
@@ -42,7 +54,7 @@ public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<Op
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             request.Content = JsonContent.Create(new ChatRequest(model, 0,
             [
-                new ChatMessage("system", SystemPrompt),
+                new ChatMessage("system", Instructions),
                 new ChatMessage("user", JsonSerializer.Serialize(facts, Json)),
             ]), options: Json);
             response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -126,12 +138,31 @@ public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<Op
         }
 
         var reason = string.Join(' ', (reply?.Reason ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        if (reason.Length > 240)
+        return SourceSuggestionResult.Ok(verdict, LimitReason(reason));
+    }
+
+    /// <summary>Keeps a normal sentence whole. Past <see cref="MaximumReasonLength"/>, cuts on a word when there is one
+    /// near the end, then adds an ellipsis.</summary>
+    internal static string LimitReason(string reason)
+    {
+        if (reason.Length == 0)
         {
-            reason = reason[..240].TrimEnd() + "…";
+            return "No reason given.";
         }
 
-        return SourceSuggestionResult.Ok(verdict, reason.Length == 0 ? "No reason given." : reason);
+        if (reason.Length <= MaximumReasonLength)
+        {
+            return reason;
+        }
+
+        var cut = reason[..MaximumReasonLength];
+        var lastSpace = cut.LastIndexOf(' ');
+        if (lastSpace >= MaximumReasonLength - 40)
+        {
+            cut = cut[..lastSpace];
+        }
+
+        return cut.TrimEnd() + "…";
     }
 
     private static SourceSuggestionVerdict? ParseVerdict(string? value) => value?.Trim().ToLowerInvariant() switch

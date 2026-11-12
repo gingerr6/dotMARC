@@ -31,5 +31,10 @@ public enum Permission
     ServerManage,
 
     /// <summary>Push records to a domain's DNS provider from dotMARC. Without it, dotMARC shows the records to copy.</summary>
-    DnsPush
+    DnsPush,
+
+    /// <summary>Ask the configured model for a suggestion about a source. Off unless a role includes it. The person's
+    /// own switch on the Sources tab still has to be on before the Suggest button is shown. Admin has it because Admin
+    /// has every permission; Viewer does not.</summary>
+    SourceSuggestions
 }

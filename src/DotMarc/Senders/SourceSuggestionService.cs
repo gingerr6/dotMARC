@@ -11,6 +11,11 @@ public static class SourceSuggestionService
     public static async Task<SourceSuggestionResult> SuggestAsync(DotMarcDbContext context, ISecretStore secrets, ISourceSuggestionClient client,
         AuditActor actor, Domain domain, SourceSuggestionFacts facts, CancellationToken cancellationToken = default)
     {
+        if (!await SourceSuggestionAccess.MayAskAsync(context, actor, cancellationToken).ConfigureAwait(false))
+        {
+            return SourceSuggestionResult.Failed(SourceSuggestionAccess.RefusedMessage);
+        }
+
         var settings = await SourceSuggestionSettingsService.GetAsync(context, cancellationToken).ConfigureAwait(false);
         if (!settings.IsReady())
         {

@@ -227,6 +227,21 @@ public sealed class RoleManagementServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpdateRoleAsync_RecordsAddingSourceSuggestions()
+    {
+        await using (var context = CreateContext())
+        {
+            await RoleManagementService.AddRoleAsync(context, TestActors.Admin, "Reviewer", [Permission.DomainsView]);
+            var roleId = (await context.Roles.SingleAsync(role => role.Name == "Reviewer")).Id;
+            await RoleManagementService.UpdateRoleAsync(context, TestActors.Admin, roleId, "Reviewer", [Permission.DomainsView, Permission.SourceSuggestions]);
+        }
+
+        await using var verify = CreateContext();
+        var entry = await verify.AuditEntries.SingleAsync(auditEntry => auditEntry.Action == AuditActions.RoleUpdated);
+        Assert.Equal([new AuditFieldChange("Permissions", "DomainsView", "DomainsView, SourceSuggestions")], entry.Changes);
+    }
+
+    [Fact]
     public async Task RemoveRoleAsync_RecordsNothing_WhenTheRoleIsStillGranted()
     {
         await using (var context = CreateContext())

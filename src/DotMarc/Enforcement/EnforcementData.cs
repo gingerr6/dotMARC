@@ -29,8 +29,11 @@ public static class EnforcementData
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         // Only mail that didn't pass SPF can be forwarded mail, so only its records are loaded to look for signs of it.
+        // Spf, Dkim and Overrides are three collections. Without a split query EF joins them into one result, and
+        // Development throws on that, which took the domain page down the first time it was opened.
         var forwardingEvidence = (await db.ReportRecords.AsNoTracking()
             .Where(record => domainIds.Contains(record.Report.DomainId) && record.Report.ReceivedUtc >= windowStart && record.SpfResult != AuthResult.Pass)
+            .AsSplitQuery()
             .Select(record => new
             {
                 record.Report.DomainId,

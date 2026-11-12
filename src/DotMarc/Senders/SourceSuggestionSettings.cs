@@ -2,7 +2,8 @@ namespace DotMarc.Senders;
 
 /// <summary>Singleton row (seeded <c>Id = 1</c>) for optional source suggestions. The API key lives in the secret
 /// store under <see cref="ApiKeySecretKey"/>, never on this entity. Suggestions stay off until an admin turns them
-/// on and stores an endpoint, a model name and a key. Each person then chooses whether to use them.</summary>
+/// on and stores an endpoint, a model name and a key. A person's role then has to include
+/// <c>SourceSuggestions</c>, and that person still chooses whether to use them.</summary>
 public sealed class SourceSuggestionSettings
 {
     public const string ApiKeySecretKey = "SourceSuggestions.ApiKey";
@@ -24,6 +25,10 @@ public sealed class SourceSuggestionSettings
     public bool IsReady() =>
         Enabled && !string.IsNullOrWhiteSpace(Endpoint) && !string.IsNullOrWhiteSpace(Model) && ApiKeyConfigured;
 
-    /// <summary>The Suggest button is shown only when the provider is ready and this person has turned suggestions on.</summary>
-    public static bool ShowSuggest(bool providerReady, bool userEnabled) => providerReady && userEnabled;
+    /// <summary>The person's own switch is shown only when the provider is ready and their role allows suggestions.</summary>
+    public static bool ShowSwitch(bool providerReady, bool permitted) => providerReady && permitted;
+
+    /// <summary>The Suggest button also needs this person to have turned suggestions on.</summary>
+    public static bool ShowSuggest(bool providerReady, bool permitted, bool userEnabled) =>
+        ShowSwitch(providerReady, permitted) && userEnabled;
 }

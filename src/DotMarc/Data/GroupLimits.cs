@@ -24,6 +24,8 @@ public static class GroupLimits
         Permission.ReportsManage,
         Permission.DnsPush,
         Permission.AlertsManage,
+        // Describes sources in the Groups they can already see. It doesn't change those sources, or anything else.
+        Permission.SourceSuggestions,
     };
 
     public static bool IsAllowed(Permission permission) => AllowedPermissions.Contains(permission);

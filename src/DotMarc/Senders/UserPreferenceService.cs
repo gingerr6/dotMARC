@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 namespace DotMarc.Senders;
 
 /// <summary>Reads and writes <see cref="UserPreference"/>. Each person is independent: turning suggestions on for one
-/// does not turn them on for anyone else, and a person with no row has them off.</summary>
+/// does not turn them on for anyone else, and a person with no row has them off. This is only the personal switch.
+/// Their role still has to include SourceSuggestions before the switch or the Suggest button is shown.</summary>
 public static class UserPreferenceService
 {
     public static string KeyFor(AuditActor actor) =>
