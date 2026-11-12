@@ -25,8 +25,15 @@ Admins can also create custom roles covering any subset of the available permiss
 management, Group/Tag management, access management, MTA-STS hosting (`MtaStsView`,
 `MtaStsManage`), [alerting](./alerts.mdx) (`AlertsView`, `AlertsManage`), DNS provider push
 configuration (`DnsPushManage`), viewing the in-app [server logs](./server-logs.mdx)
-(`LogsView`), and reading or setting retention for the [audit log](./audit-log.mdx) (`AuditView`,
-`AuditManage`) are each independently grantable.
+(`LogsView`), reading or setting retention for the [audit log](./audit-log.mdx) (`AuditView`,
+`AuditManage`), and [AI source suggestions](./sources.mdx#ai-suggestions) (`SourceSuggestions`) are
+each independently grantable.
+
+`SourceSuggestions` is off unless you add it to a role. Admin has it, because Admin has every
+permission. Viewer does not. A person who has it still turns suggestions on for themselves, on a
+domain's Sources tab; that personal switch starts off. Someone without the permission never sees
+the switch or the Suggest button. API keys don't get this permission, and neither do client portal
+users in practice: the portal doesn't offer suggestions, and a key can't ask for one.
 
 ### Roles limited to groups
 
@@ -37,9 +44,10 @@ or off while no one holds it.
 
 A limited role can only hold permissions that stay within its Groups: `DomainsView`, `DomainsAdd`,
 `DomainsEdit`, `DomainsDelete`, `MtaStsView`, `MtaStsManage`, `GroupsView`, `TagsView`, `AlertsView`,
-`AlertsManage`, `AuditView` and `ReportsManage`. Everything else changes something every client
-shares, such as other clients' Groups, tags, DNS provider credentials, or who has access. Even if a
-limited grant's role somehow holds such a permission, dotMARC drops it at sign-in.
+`AlertsManage`, `AuditView`, `ReportsManage`, `DnsPush` and `SourceSuggestions`. Everything else
+changes something every client shares, such as other clients' Groups, tags, DNS provider credentials,
+or who has access. Even if a limited grant's role somehow holds such a permission, dotMARC drops it
+at sign-in. `SourceSuggestions` only describes sources in those Groups. It doesn't change them.
 
 `AlertsManage`, `AuditView` and `ReportsManage` work within the Groups: a limited person can acknowledge
 their own Groups' alerts and send their own Groups' client reports, and a limited API key reads only

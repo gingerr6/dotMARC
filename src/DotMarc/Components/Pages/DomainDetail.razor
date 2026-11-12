@@ -17,6 +17,7 @@
 @using DotMarc.Notifications
 @using DotMarc.Senders
 @using DotMarc.Enforcement
+@using DotMarc.Portal
 @using DotMarc.Demo
 @inject AuditActorAccessor AuditActorAccessor
 @inject IDbContextFactory<DotMarcDbContext> DbFactory
@@ -648,7 +649,7 @@ else
                     {
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small" OnClick="@(() => { _showSourceFilters = true; _sourceApprovalFilter = UnreviewedFilter; })">@unreviewed unreviewed sender@(unreviewed == 1 ? "" : "s")</MudChip>
                     }
-                    @if (_aiConfigured)
+                    @if (SourceSuggestionSettings.ShowSwitch(_aiConfigured, _maySuggest))
                     {
                         <MudSwitch T="bool" Value="_suggestionsEnabled" ValueChanged="ToggleSuggestionsAsync" Color="Color.Primary" Label="AI suggestions" Class="ml-2" />
                     }
@@ -754,7 +755,7 @@ else
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                          Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => identity.IsForwarder ? Color.Info : identity.IsLikelySpoof ? Color.Warning : Color.Default })">@ApprovalLabel(context)</MudChip>
                             </MudTooltip>
-                            @if (SourceSuggestionSettings.ShowSuggest(_aiConfigured, _suggestionsEnabled))
+                            @if (SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest, _suggestionsEnabled))
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_suggestingKey == identity.Key)" OnClick="@(() => SuggestAsync(context))">Suggest</MudButton>
                             }
@@ -771,7 +772,8 @@ else
                         </div>
                         @if (_suggestions.TryGetValue(identity.Key, out var suggestion) && suggestion.Verdict is { } verdict)
                         {
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Suggestion: @SourceSuggestionText.Label(verdict). @suggestion.Reason</MudText>
+                            @* The table cell doesn't wrap, which was cutting the reason off. This block wraps the whole sentence. *@
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block dotmarc-suggestion-reason">Suggestion: @SourceSuggestionText.Label(verdict). @suggestion.Reason</MudText>
                         }
                     </MudTd>
                     <MudTd>@context.Volume</MudTd>
@@ -881,6 +883,7 @@ else
     private Dictionary<string, SenderApproval> _senderApprovals = [];
     private bool _showSourceFilters;
     private bool _aiConfigured;
+    private bool _maySuggest;
     private bool _suggestionsEnabled;
     private string? _suggestingKey;
     private readonly Dictionary<string, SourceSuggestionResult> _suggestions = [];
@@ -1081,8 +1084,10 @@ else
 
         _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
         var suggestionSettings = await SourceSuggestionSettingsService.GetAsync(db);
+        _maySuggest = !ClientPortalGate.IsPortalUser(authState.User)
+            && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.SourceSuggestions))).Succeeded;
         _aiConfigured = !DemoOptions.Value.Enabled && suggestionSettings.IsReady();
-        _suggestionsEnabled = _aiConfigured && await UserPreferenceService.SourceSuggestionsEnabledAsync(db, await AuditActorAccessor.GetAsync());
+        _suggestionsEnabled = await UserPreferenceService.SourceSuggestionsEnabledAsync(db, await AuditActorAccessor.GetAsync());
         _lookalikes = await LoadLookalikesAsync(db, _domain.Id);
         _clientManagesDns = _domain.Groups.Any(group => group.ClientManagesDns);
         _mayPush = !_clientManagesDns && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.DnsPush))).Succeeded;
@@ -1305,6 +1310,11 @@ else
 
     private async Task ToggleSuggestionsAsync(bool enabled)
     {
+        if (!SourceSuggestionSettings.ShowSwitch(_aiConfigured, _maySuggest))
+        {
+            return;
+        }
+
         _suggestionsEnabled = enabled;
         await using var db = await DbFactory.CreateDbContextAsync();
         await UserPreferenceService.SetSourceSuggestionsEnabledAsync(db, await AuditActorAccessor.GetAsync(), enabled);
@@ -1314,7 +1324,7 @@ else
     /// as the decision; Approve and Not ours are unchanged.</summary>
     private async Task SuggestAsync(SourceRow source)
     {
-        if (!SourceSuggestionSettings.ShowSuggest(_aiConfigured, _suggestionsEnabled) || _domain is null)
+        if (!SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest, _suggestionsEnabled) || _domain is null)
         {
             return;
         }
@@ -1322,7 +1332,7 @@ else
         _suggestingKey = source.Identity.Key;
         try
         {
-            var facts = new SourceSuggestionFacts(source.SourceIp, source.HostName, source.Organization, source.Country, source.Volume,
+            var facts = new SourceSuggestionFacts(_domain.Name, source.SourceIp, source.HostName, source.Organization, source.Country, source.Volume,
                 source.SpfResult, source.DkimResult, source.Disposition, source.Identity.IsService ? source.Identity.Label : null,
                 source.Identity.IsForwarder, source.Identity.IsLikelySpoof, source.Identity.SpoofReason, source.Identity.ForwardingReason,
                 string.IsNullOrEmpty(source.ReasonSummary) ? null : source.ReasonSummary,

@@ -31,8 +31,10 @@ public sealed record SourceSuggestionResult(SourceSuggestionVerdict? Verdict, st
 
 /// <summary>The aggregate facts sent to the model. There is no message content: no body, subject, headers or raw
 /// report. Adding a field here is adding something that leaves the server, so keep it to what an aggregate report
-/// already shows on the Sources tab.</summary>
+/// already shows on the Sources tab. <see cref="Domain"/> is the domain the page is about, so the model can tell it
+/// apart from an envelope or signing domain in <see cref="AuthResults"/>.</summary>
 public sealed record SourceSuggestionFacts(
+    string Domain,
     string Ip,
     string? HostName,
     string? Organization,

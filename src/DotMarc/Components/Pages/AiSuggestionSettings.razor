@@ -22,7 +22,8 @@
     <DocsLink Href="https://dotmarc.app/docs/sources#ai-suggestions" Text="How suggestions work" Class="ml-2" />
 </div>
 <MudText Typo="Typo.body1" Class="mb-4">
-    Optional help when someone is reviewing a source. Each person turns it on for themselves. A suggestion never
+    Optional help when someone is reviewing a source. You choose who may use it on Manage access, by adding
+    SourceSuggestions to their role. Each of those people still turns it on for themselves. A suggestion never
     approves a source or marks it not ours.
 </MudText>
 
@@ -35,7 +36,7 @@
         }
         <MudGrid>
             <MudItem xs="12">
-                <FieldWithHelp Topic="Suggestions" Help="Off means the Suggest button is hidden for everyone, even people who turned it on for themselves.">
+                <FieldWithHelp Topic="Suggestions" Help="Off means nobody can ask for a suggestion, even people whose role allows it and who turned it on for themselves.">
                     <MudSwitch T="bool" Label="Suggest verdicts for sources" Value="_settings.Enabled" ValueChanged="EnabledChanged" Disabled="_isDemo" Color="Color.Primary" />
                 </FieldWithHelp>
             </MudItem>

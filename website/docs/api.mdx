@@ -90,7 +90,9 @@ and their alerts, never sign-ins, settings or access changes.
 ## Reports and downloads
 
 - **Sending sources:** `GET /api/v1/domains/{domain}/sources` lists every IP that sent as the domain, busiest first, with
-  its pass rate and, once dotMARC has looked it up, who owns it. The report summary only shows the top few.
+  its pass rate and, once dotMARC has looked it up, who owns it. The report summary only shows the top few. The API
+  does not ask for an AI suggestion. A key never receives the `SourceSuggestions` permission, even when its role
+  includes it. Suggestions stay on the Sources tab in the web app.
 - **Individual reports:** `GET /api/v1/domains/{domain}/reports` and `.../tls-reports` list the DMARC and TLS reports
   received. Add `/{id}/raw` to one report's address for the original file, exactly as the receiver sent it.
 - **The dashboard's figures:** `GET /api/v1/summary` gives the headline numbers over every domain the key can see.

@@ -165,3 +165,12 @@ html {
 /* Hint (Components/Shared/Hint.razor): a label with an explanation on hover. */
 .dotmarc-hint { text-decoration: underline dotted; text-decoration-color: var(--mud-palette-text-secondary); text-underline-offset: 3px; cursor: help; }
 .dotmarc-hint-text { max-width: 320px; white-space: normal; text-align: left; text-transform: none; font-weight: 400; }
+
+/* The AI suggestion under a source. The table cell doesn't wrap, which was cutting the reason off mid-sentence. */
+.dotmarc-suggestion-reason {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: 36rem;
+}
