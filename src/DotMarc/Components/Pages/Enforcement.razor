@@ -87,6 +87,9 @@ else
     private string? _search;
     private bool _readyOnly;
     private bool _stuckOnly;
+    private int? _loadedGroupId;
+    private bool _hasLoaded;
+    private int _loadVersion;
 
     private sealed record Row(string Name, EnforcementAssessment Assessment)
     {
@@ -94,7 +97,27 @@ else
         public int SortKey => Assessment.Ready ? 0 : Assessment.Enforced ? 2 : 1;
     }
 
-    protected override async Task OnInitializedAsync()
+    // Same as Sources: the Group is in the address, and a later visit with a different one reuses this page.
+    protected override async Task OnParametersSetAsync()
+    {
+        var groupId = GroupId;
+        if (_hasLoaded && groupId == _loadedGroupId)
+        {
+            return;
+        }
+
+        var version = ++_loadVersion;
+        await LoadAsync(groupId, version);
+        if (version != _loadVersion)
+        {
+            return;
+        }
+
+        _loadedGroupId = groupId;
+        _hasLoaded = true;
+    }
+
+    private async Task LoadAsync(int? groupId, int version)
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var scopedGroupIds = authState.User.FindAll(DotMarc.Security.UserAccessClaimsTransformation.ScopedGroupClaimType).Select(c => int.Parse(c.Value)).ToList();
@@ -105,13 +128,18 @@ else
         {
             domains = domains.Where(domain => domain.Groups.Any(group => scopedGroupIds.Contains(group.Id)));
         }
-        if (GroupId is { } groupId)
+        if (groupId is { } selectedGroupId)
         {
-            domains = domains.Where(domain => domain.Groups.Any(group => group.Id == groupId));
+            domains = domains.Where(domain => domain.Groups.Any(group => group.Id == selectedGroupId));
         }
 
         var list = await domains.ToListAsync();
         var assessments = await EnforcementData.AssessAsync(db, list, DateTimeOffset.UtcNow);
+        if (version != _loadVersion)
+        {
+            return;
+        }
+
         _rows = list.Select(domain => new Row(domain.Name, assessments[domain.Id]))
             .OrderBy(row => row.SortKey).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
