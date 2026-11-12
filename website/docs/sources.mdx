@@ -1,0 +1,87 @@
+---
+description: How dotMARC groups the servers in a DMARC aggregate report, which ones it sets aside, and the optional AI suggestion.
+---
+
+# Sources
+
+A DMARC aggregate report lists the servers that sent mail as your domain: an IP address, sometimes a
+reverse DNS name, and the SPF and DKIM results. It does not include the message. The **Sources** tab
+on a domain, and the account-wide **Sources** page, turn that into something you can review.
+
+## Recognised services
+
+dotMARC names a source when it recognises the server. Microsoft 365, Google Workspace, Amazon SES,
+Mailchimp and the other services in the list are each one decision: approving Microsoft 365 covers
+every Microsoft 365 address, not one IP at a time.
+
+The reverse DNS name is what it trusts. `me-in-f20.1e100.net` and `mail.google.com` are Google
+Workspace, a sender you may want to approve. The network owner "Google LLC" is not used, because
+that name also belongs to customers' virtual machines.
+
+When the name matches more than one service, the longest match wins. Google's unverified forwarding
+pool uses names such as `x0b-00.v6.unverified-forwarding.1e100.net`. That is its own forwarder, not
+Google Workspace, even though the name also ends in `1e100.net`.
+
+If there is no reverse DNS name, dotMARC can still match a service by a published IP range. The
+ranges are the ones the provider documents for that mail, with the source and the date written next
+to them in the code. A name, when there is one, always wins over a range. Google's unverified
+forwarding ranges are `108.177.16.0/23`, `142.250.220.0/23` and `2600:1901:101::/48`.
+
+## Forwarders
+
+A forwarder is passing someone else's mail on: a recipient's forwarding address, a filtering service
+in front of their mailbox, or a mailing list. It is not the domain's own sender, so it does not
+count as waiting for review and it does not hold a domain back from the next DMARC policy.
+
+Alongside the services that were already recognised (Cloudflare Email Routing, ImprovMX, Forward
+Email, and others), dotMARC knows:
+
+* **Google unverified forwarding**, from the hostname and the ranges above. Google publishes these
+  for mail it forwards without adding authentication. They are not for your SPF record.
+* **Groups.io**, the mailing-list host, from `groups.io` names and the outbound addresses Groups.io
+  publishes.
+
+Microsoft's relay pool is the closest equivalent of Google's unverified forwarding, but Microsoft
+does not publish a stable hostname or address list for it, and the names it does document are the
+same ones ordinary Microsoft 365 mail uses. That mail stays Microsoft 365. Google Groups has the
+same problem: its servers look like ordinary Google Workspace, so they stay a sender.
+
+You can still approve a forwarder, or mark it not ours. That decision replaces the automatic one.
+
+## Likely spoof
+
+Some sources are noise: one or a few messages, from an address that isn't a known sender, with both
+SPF and DKIM failing, and either no reverse DNS name or a name that looks like a home or dynamic
+connection (the address written into the name, or a label such as `dsl` or `pool`). dotMARC marks
+those **Likely spoof**.
+
+A likely spoof does not count in the "unreviewed" number, and it does not block the move to
+quarantine or reject. It stays on the Sources tab, with its own filter, and the tooltip says why.
+
+The flag is cautious:
+
+* Mail that passed SPF or DKIM is never flagged.
+* More than 50 messages is left for a person, even from a residential-looking address.
+* A normal mail name such as `mail.contoso.com` is left for review. It may be a sender you have not
+  set up yet.
+* A saved **Approved** or **Not ours** always wins. Clear it and the flag can show again.
+
+The unapproved-sender alert is only for mail that *passed* DMARC from a sender nobody approved.
+Likely spoofs failed both checks, so they don't raise it.
+
+## AI suggestions
+
+An admin can connect an OpenAI-compatible model under **Manage > AI suggestions**: an endpoint, a
+model name, and an API key. The key is stored encrypted, the same way other integration secrets are,
+and is never written to the audit log.
+
+Suggestions stay off for each person until they turn **AI suggestions** on, on a domain's Sources
+tab. The switch is per person and defaults to off. The Suggest button is hidden when the admin has
+not connected a provider, when this person has left it off, and on the demo.
+
+**Suggest** sends that one source's aggregate details: the IP, reverse DNS name, owner, country,
+counts, SPF and DKIM results, and the classification dotMARC already made. It does not send message
+content. The reply is a verdict (legitimate service, forwarder, likely spoof, or unknown) and one
+sentence. It is shown on the row and recorded in the audit log. It does not change Approved or Not
+ours. If the provider is slow, refuses the key, or replies with something unreadable, the row is
+left as it was and the page says so.

@@ -205,7 +205,9 @@ public sealed class AlertingService : IAlertingService
     /// <summary>Raises UnapprovedSender for a domain with at least one approved sender (so someone has reviewed its
     /// senders) when, in the last week, mail passing DMARC came from a sender not approved: one nobody reviewed, or one
     /// marked not ours, which shouldn't be able to pass at all. Mail failing DMARC is left out: that's spoofing DMARC is
-    /// already dealing with, and it stays visible, unreviewed, on the Sources tab.</summary>
+    /// already dealing with, and it stays visible on the Sources tab. A likely spoof (see SpoofHeuristic) has no aligned
+    /// pass, so it is never in this set and doesn't raise the alert. The same sources are left out of the unreviewed
+    /// count and don't block enforcement.</summary>
     private async Task CheckUnapprovedSendersAsync(DotMarcDbContext db, NotificationSettings settings, List<Domain> domains, CancellationToken cancellationToken)
     {
         var domainIds = domains.Select(domain => domain.Id).ToList();

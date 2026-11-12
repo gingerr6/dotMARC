@@ -182,6 +182,10 @@ builder.Services.AddHttpClient(DotMarc.Email.GraphEmailSender.HttpClientName, cl
 builder.Services.AddSingleton<DotMarc.Email.IEmailSenderFactory, DotMarc.Email.EmailSenderFactory>();
 builder.Services.AddHttpClient<IGenericWebhookClient, GenericWebhookClient>();
 builder.Services.AddHttpClient<ISlackWebhookClient, SlackWebhookClient>();
+builder.Services.AddHttpClient<DotMarc.Senders.ISourceSuggestionClient, DotMarc.Senders.OpenAiCompatibleSuggestionClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
+});
 builder.Services.AddSingleton<IAlertWebhookClient, AlertWebhookClient>();
 
 // KeyVault:VaultUri is only set by infra/main.bicep when enableKeyVaultWrite is true (see

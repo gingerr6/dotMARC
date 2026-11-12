@@ -20,6 +20,7 @@ public static class ManageItems
         new("Connections", "/alerts/settings", Icons.Material.Filled.NotificationsActive, "Alerts", "Which alerts are raised, and where they go: email, Teams, Slack.", "UnlimitedAlertsManage"),
         new("Connections", "/psa/settings", Icons.Material.Filled.ConfirmationNumber, "PSA", "Raise alerts as tickets in HaloPSA, ConnectWise, Autotask or NinjaOne.", "UnlimitedAlertsManage"),
         new("Connections", "/reports/settings", Icons.Material.Filled.Email, "Email & reports", "How dotMARC sends email, and the defaults for client reports.", "UnlimitedReportsManage"),
+        new("Connections", "/ai/settings", Icons.Material.Filled.AutoAwesome, "AI suggestions", "Optional suggestions when reviewing a domain's sources. Off until you connect a model.", "ServerManage"),
         new("People & brand", "/access", Icons.Material.Filled.ManageAccounts, "Access", "Who can sign in, their roles, the groups they're limited to, and API keys.", "AccessManage"),
         new("People & brand", "/branding/settings", Icons.Material.Filled.Palette, "Branding", "Your logo and colours in the client portal and reports.", "AccessManage"),
         new("Server", "/control-panel", Icons.Material.Filled.Tune, "Control panel", "Offsite backups and updates for this server.", "ServerManage"),

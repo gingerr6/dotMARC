@@ -35,7 +35,9 @@ public sealed record EnforcementAssessment(
 
 /// <summary>Decides whether a domain can move to its next DMARC policy without its own mail being junked or bounced: two
 /// weeks of reports, every sender with real volume reviewed (approved, or marked not ours), and approved senders passing
-/// DMARC. Mail from senders marked not ours is expected to fail, and doesn't count against it.</summary>
+/// DMARC. Mail from senders marked not ours is expected to fail, and doesn't count against it. Known forwarders, and
+/// sources the spoof heuristic has set aside, don't need a review first. A decision someone saved still counts: an
+/// approved sender that fails DMARC holds the domain back even if the heuristic would have called it spoofing.</summary>
 public static class EnforcementReadiness
 {
     /// <summary>How much reporting a domain needs before a step up, and the window it's judged over.</summary>
@@ -102,7 +104,8 @@ public static class EnforcementReadiness
 
             bool Matters(SenderVolume sender) => sender.Volume >= MinVolumeToMatter || (volume > 0 && (double)sender.Volume / volume >= MinShareToMatter);
 
-            var unreviewed = senders.Where(sender => !approvals.ContainsKey(sender.Identity.Key) && !sender.Identity.IsForwarder && Matters(sender)).OrderByDescending(sender => sender.Volume).ToList();
+            var unreviewed = senders.Where(sender => SourceReview.CountsAsUnreviewed(sender.Identity,
+                approvals.TryGetValue(sender.Identity.Key, out var status) ? status : null) && Matters(sender)).OrderByDescending(sender => sender.Volume).ToList();
             if (unreviewed.Count > 0)
             {
                 blockers.Add(new($"{unreviewed.Count} sender{(unreviewed.Count == 1 ? "" : "s")} not reviewed",

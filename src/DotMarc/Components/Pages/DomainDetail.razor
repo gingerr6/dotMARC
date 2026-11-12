@@ -17,6 +17,7 @@
 @using DotMarc.Notifications
 @using DotMarc.Senders
 @using DotMarc.Enforcement
+@using DotMarc.Demo
 @inject AuditActorAccessor AuditActorAccessor
 @inject IDbContextFactory<DotMarcDbContext> DbFactory
 @inject IIpInfoLookup IpLookup
@@ -48,6 +49,9 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JSRuntime
+@inject ISecretStore SecretStore
+@inject ISourceSuggestionClient SuggestionClient
+@inject IOptions<DemoOptions> DemoOptions
 @implements IDisposable
 
 <PageTitle>dotMARC - @DomainName</PageTitle>
@@ -635,7 +639,7 @@ else
         <MudTabPanel Text="Sources">
             <MudTable Items="_sources" Hover="true" T="SourceRow" CustomHeader="true" Filter="SourceMatchesFilters">
                 <ToolBarContent>
-                    @{ var unreviewed = _sources.Select(s => s.Identity).DistinctBy(identity => identity.Key).Count(identity => !_senderApprovals.ContainsKey(identity.Key) && !identity.IsForwarder); }
+                    @{ var unreviewed = _sources.Select(s => s.Identity).DistinctBy(identity => identity.Key).Count(identity => SourceReview.CountsAsUnreviewed(identity, ApprovalStatus(identity))); }
                     @if (_senderApprovals.Count == 0)
                     {
                         <MudText Typo="Typo.body2" Class="mud-text-secondary">Approve the services and servers that send this domain's mail, and dotMARC alerts you when anything else starts passing DMARC.</MudText>
@@ -644,6 +648,10 @@ else
                     {
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small" OnClick="@(() => { _showSourceFilters = true; _sourceApprovalFilter = UnreviewedFilter; })">@unreviewed unreviewed sender@(unreviewed == 1 ? "" : "s")</MudChip>
                     }
+                    @if (_aiConfigured)
+                    {
+                        <MudSwitch T="bool" Value="_suggestionsEnabled" ValueChanged="ToggleSuggestionsAsync" Color="Color.Primary" Label="AI suggestions" Class="ml-2" />
+                    }
                     <MudSpacer />
                     <MudButton Variant="@(_showSourceFilters ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterList"
                                OnClick="@(() => _showSourceFilters = !_showSourceFilters)">@(_showSourceFilters ? "Hide filters" : "Filters")</MudButton>
@@ -651,7 +659,7 @@ else
                 <HeaderContent>
                     <tr>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)"><Hint Text="The server that sent mail as this domain: its name where it has one, otherwise its IP address, then who the address is registered to and its country. Recognised services such as Microsoft 365 are named.">Source</Hint></MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => ApprovalLabel(s))"><Hint Text="Approved: the domain's own mail. Not ours: spoofing, or forwarding you've checked. Forwarder: a known forwarding service, nothing to do. Unreviewed: nobody has looked yet.">Approval</Hint></MudTableSortLabel></MudTh>
+                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => ApprovalLabel(s))"><Hint Text="Approved: the domain's own mail. Not ours: spoofing, or forwarding you've checked. Forwarder: a known forwarding service, nothing to do. Likely spoof: a small unrecognised source that failed both checks and looks like a home connection or has no name; it doesn't count as waiting for review. Unreviewed: nobody has looked yet. A decision you save replaces the others.">Approval</Hint></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)"><Hint Text="Messages from this source in the last 30 days, as receivers reported them.">Volume</Hint></MudTableSortLabel></MudTh>
                         <MudTh><Hint Text="Messages a day from this source over the last 7 days.">7d trend</Hint></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.FirstSeenUtc ?? DateTimeOffset.MinValue)"><Hint Text="When this source first appeared in a report for this domain.">First seen</Hint></MudTableSortLabel></MudTh>
@@ -668,7 +676,8 @@ else
                                 <MudSelectItem T="string" Value="@("Approved")">Approved</MudSelectItem>
                                 <MudSelectItem T="string" Value="@("Not ours")">Not ours</MudSelectItem>
                                 <MudSelectItem T="string" Value="@UnreviewedFilter">Unreviewed</MudSelectItem>
-                                <MudSelectItem T="string" Value="@("Forwarder")">Forwarder</MudSelectItem>
+                                <MudSelectItem T="string" Value="@SourceReview.ForwarderLabel">Forwarder</MudSelectItem>
+                                <MudSelectItem T="string" Value="@SourceReview.LikelySpoofLabel">Likely spoof</MudSelectItem>
                             </MudSelect>
                         </MudTh>
                         <MudTh><MudNumericField T="int?" @bind-Value="_sourceMinVolumeFilter" Placeholder="Min" Margin="Margin.Dense" Min="0" /></MudTh>
@@ -740,11 +749,15 @@ else
                     </MudTd>
                     <MudTd>
                         @{ var identity = context.Identity; var status = ApprovalStatus(context); }
-                        <div class="d-flex align-center" style="gap:4px;">
-                            <MudTooltip Text="@ApprovalTooltip(identity)" Arrow="true">
+                        <div class="d-flex align-center flex-wrap" style="gap:4px;">
+                            <MudTooltip Text="@ApprovalTooltip(context)" Arrow="true">
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
-                                         Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => identity.IsForwarder ? Color.Info : Color.Default })">@ApprovalLabel(context)</MudChip>
+                                         Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => identity.IsForwarder ? Color.Info : identity.IsLikelySpoof ? Color.Warning : Color.Default })">@ApprovalLabel(context)</MudChip>
                             </MudTooltip>
+                            @if (SourceSuggestionSettings.ShowSuggest(_aiConfigured, _suggestionsEnabled))
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_suggestingKey == identity.Key)" OnClick="@(() => SuggestAsync(context))">Suggest</MudButton>
+                            }
                             <AuthorizeView Policy="DomainsEdit" Context="senderAuthState">
                                 <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@($"Review {identity.Label}")">
                                     <MudMenuItem OnClick="@(() => ReviewSenderAsync(identity, SenderApprovalStatus.Approved))">Approve @(identity.IsService ? $"all {identity.Label}" : "this IP")</MudMenuItem>
@@ -756,6 +769,10 @@ else
                                 </MudMenu>
                             </AuthorizeView>
                         </div>
+                        @if (_suggestions.TryGetValue(identity.Key, out var suggestion) && suggestion.Verdict is { } verdict)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">Suggestion: @SourceSuggestionText.Label(verdict). @suggestion.Reason</MudText>
+                        }
                     </MudTd>
                     <MudTd>@context.Volume</MudTd>
                     <MudTd>
@@ -863,6 +880,10 @@ else
     private const string UnreviewedFilter = "Unreviewed";
     private Dictionary<string, SenderApproval> _senderApprovals = [];
     private bool _showSourceFilters;
+    private bool _aiConfigured;
+    private bool _suggestionsEnabled;
+    private string? _suggestingKey;
+    private readonly Dictionary<string, SourceSuggestionResult> _suggestions = [];
 
     private string? _tlsrptFromFilter;
     private string? _tlsrptDateRangeFilter;
@@ -1059,6 +1080,9 @@ else
         }
 
         _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
+        var suggestionSettings = await SourceSuggestionSettingsService.GetAsync(db);
+        _aiConfigured = !DemoOptions.Value.Enabled && suggestionSettings.IsReady();
+        _suggestionsEnabled = _aiConfigured && await UserPreferenceService.SourceSuggestionsEnabledAsync(db, await AuditActorAccessor.GetAsync());
         _lookalikes = await LoadLookalikesAsync(db, _domain.Id);
         _clientManagesDns = _domain.Groups.Any(group => group.ClientManagesDns);
         _mayPush = !_clientManagesDns && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.DnsPush))).Succeeded;
@@ -1133,11 +1157,16 @@ else
 
             foreach (var source in _sources)
             {
+                source.ListedOnBlocklist = _domain.BlocklistStatus == BlocklistStatus.Listed
+                    && SpoofHeuristic.DetailMentionsIp(_domain.BlocklistDetail, source.SourceIp);
                 cachedHostNames.TryGetValue(source.SourceIp, out var cachedHostName);
                 source.HostName = cachedHostName?.HostName;
+                // A stored lookup counts even when it found no name. A refresh in the background keeps that answer
+                // until the new one arrives, so the spoof flag doesn't flicker off.
+                source.HostNameResolved = cachedHostName is not null;
                 if (IpHostNameService.NeedsLookup(cachedHostName, nowUtc))
                 {
-                    source.IsHostNamePending = true;
+                    source.IsHostNamePending = cachedHostName is null;
                     _ = LookUpHostNameInBackgroundAsync(source);
                 }
             }
@@ -1252,22 +1281,72 @@ else
         }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
     }
 
-    private SenderApprovalStatus? ApprovalStatus(SourceRow source) =>
-        _senderApprovals.TryGetValue(source.Identity.Key, out var approval) ? approval.Status : null;
+    private SenderApprovalStatus? ApprovalStatus(SourceRow source) => ApprovalStatus(source.Identity);
 
-    private string ApprovalLabel(SourceRow source) =>
-        ApprovalStatus(source) is null && source.Identity.IsForwarder ? "Forwarder" : SenderApprovalService.Describe(ApprovalStatus(source));
+    private SenderApprovalStatus? ApprovalStatus(SenderIdentity identity) =>
+        _senderApprovals.TryGetValue(identity.Key, out var approval) ? approval.Status : null;
 
-    private string ApprovalTooltip(SenderIdentity identity)
+    private string ApprovalLabel(SourceRow source) => SourceReview.Label(source.Identity, ApprovalStatus(source));
+
+    private string ApprovalTooltip(SourceRow source)
     {
+        var identity = source.Identity;
         var scope = identity.IsService ? $"Covers every {identity.Label} server sending this domain's mail." : "Covers this IP only.";
         return _senderApprovals.TryGetValue(identity.Key, out var approval)
             ? $"{SenderApprovalService.Describe(approval.Status)} by {approval.DecidedBy} on {DotMarc.Reporting.UkTime.Date(approval.DecidedUtc)}. {scope}"
+            : identity.SpoofReason is { } spoof
+                ? $"{spoof} {scope}"
             : identity.ForwardingReason is { } detected
                 ? $"Detected as forwarding. {detected} It isn't a sender of the domain's own, so there's nothing to review; mark it not ours if you disagree. {scope}"
             : identity.IsForwarder
                 ? $"A mail forwarder: someone this domain emailed has their address pass mail on through {identity.Label}. It isn't the domain's own sender, so there's nothing to review. {scope}"
                 : $"Nobody has reviewed this sender yet. {scope}";
+    }
+
+    private async Task ToggleSuggestionsAsync(bool enabled)
+    {
+        _suggestionsEnabled = enabled;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await UserPreferenceService.SetSourceSuggestionsEnabledAsync(db, await AuditActorAccessor.GetAsync(), enabled);
+    }
+
+    /// <summary>Asks the configured model about this one source. The reply is shown beside the row and is not saved
+    /// as the decision; Approve and Not ours are unchanged.</summary>
+    private async Task SuggestAsync(SourceRow source)
+    {
+        if (!SourceSuggestionSettings.ShowSuggest(_aiConfigured, _suggestionsEnabled) || _domain is null)
+        {
+            return;
+        }
+
+        _suggestingKey = source.Identity.Key;
+        try
+        {
+            var facts = new SourceSuggestionFacts(source.SourceIp, source.HostName, source.Organization, source.Country, source.Volume,
+                source.SpfResult, source.DkimResult, source.Disposition, source.Identity.IsService ? source.Identity.Label : null,
+                source.Identity.IsForwarder, source.Identity.IsLikelySpoof, source.Identity.SpoofReason, source.Identity.ForwardingReason,
+                string.IsNullOrEmpty(source.ReasonSummary) ? null : source.ReasonSummary,
+                source.AuthDetails.Take(20).Select(detail => $"{detail.Mechanism} {detail.Domain}: {detail.Result}").ToList());
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var result = await SourceSuggestionService.SuggestAsync(db, SecretStore, SuggestionClient, await AuditActorAccessor.GetAsync(), _domain, facts);
+            if (result.Verdict is not null)
+            {
+                _suggestions[source.Identity.Key] = result;
+            }
+            else if (result.Error is not null)
+            {
+                Snackbar.Add(result.Error, Severity.Warning);
+            }
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "AI suggestion for source {SourceIp} on {Domain} failed.", source.SourceIp, _domain.Name);
+            Snackbar.Add("Couldn't get a suggestion. Nothing was changed.", Severity.Warning);
+        }
+        finally
+        {
+            _suggestingKey = null;
+        }
     }
 
     /// <summary>Approves a sender, marks it not ours, or clears that (null). The menu only shows for DomainsEdit, but a
@@ -1329,6 +1408,7 @@ else
         {
             var cached = await IpHostNameService.EnrichAsync(DbFactory, ReverseDnsLookup, source.SourceIp, CancellationToken.None).ConfigureAwait(false);
             source.HostName = cached.HostName;
+            source.HostNameResolved = true;
         }
         catch (Exception ex)
         {
@@ -2268,11 +2348,18 @@ else
         public bool IsEnrichmentPending { get; set; } = true;
         public string? HostName { get; set; }
         public bool IsHostNamePending { get; set; }
+
+        /// <summary>True once a reverse-DNS lookup is stored, including one that found no name. False while the first
+        /// lookup is still running, so a missing name isn't treated as "no reverse DNS" yet.</summary>
+        public bool HostNameResolved { get; set; }
+        public bool ListedOnBlocklist { get; set; }
         public DateTimeOffset? FirstSeenUtc { get; set; }
         public int[] DailyVolumes { get; set; } = [];
 
         // Recomputed as the host name and owner arrive, so a source joins its service once it's recognised.
-        public SenderIdentity Identity => SenderIdentity.For(SourceIp, HostName, Organization, DetectedForwarding);
+        public SenderIdentity Identity => SenderIdentity.For(SourceIp, HostName, Organization, DetectedForwarding,
+            SpoofHeuristic.Assess(new SpoofEvidence(SourceIp, Volume, SpfResult == nameof(AuthResult.Pass) || DkimResult == nameof(AuthResult.Pass),
+                HostName, HostNameResolved, ListedOnBlocklist)));
 
         /// <summary>Why this IP's mail looks forwarded (see ForwardingDetector), or null.</summary>
         public string? DetectedForwarding { get; set; }

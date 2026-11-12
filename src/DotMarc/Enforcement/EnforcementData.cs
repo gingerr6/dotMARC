@@ -60,12 +60,21 @@ public static class EnforcementData
         var owners = await IpInfoService.GetCachedAsync(db, ips, cancellationToken).ConfigureAwait(false);
         var ranges = await IpInfoService.GetCachedRangesAsync(db, cancellationToken).ConfigureAwait(false);
 
+        var domainsById = domains.ToDictionary(domain => domain.Id);
         var sendersByDomain = perIp
             .GroupBy(row => row.DomainId)
             .ToDictionary(group => group.Key, group => group
-                .Select(row => (Row: row, Identity: SenderIdentity.For(row.SourceIp, hostNames.GetValueOrDefault(row.SourceIp)?.HostName,
-                    owners.GetValueOrDefault(row.SourceIp)?.Organization ?? IpRangeMatcher.FindContaining(ranges, row.SourceIp)?.Organization,
-                    ForwardingDetector.Detect(row.Volume, forwardingEvidence[(row.DomainId, row.SourceIp)]))))
+                .Select(row =>
+                {
+                    var cachedName = hostNames.GetValueOrDefault(row.SourceIp);
+                    var forwarding = ForwardingDetector.Detect(row.Volume, forwardingEvidence[(row.DomainId, row.SourceIp)]);
+                    var domain = domainsById[row.DomainId];
+                    var spoof = SpoofHeuristic.Assess(new SpoofEvidence(row.SourceIp, row.Volume, row.Passing > 0, cachedName?.HostName,
+                        cachedName is not null, domain.BlocklistStatus == BlocklistStatus.Listed && SpoofHeuristic.DetailMentionsIp(domain.BlocklistDetail, row.SourceIp)));
+                    return (Row: row, Identity: SenderIdentity.For(row.SourceIp, cachedName?.HostName,
+                        owners.GetValueOrDefault(row.SourceIp)?.Organization ?? IpRangeMatcher.FindContaining(ranges, row.SourceIp)?.Organization,
+                        forwarding, spoof));
+                })
                 .GroupBy(item => item.Identity.Key)
                 .Select(sender => new SenderVolume(sender.First().Identity, sender.Sum(item => item.Row.Volume), sender.Sum(item => item.Row.Passing)))
                 .ToList());
