@@ -135,7 +135,9 @@ reads very differently from no reason given at all:
 />
 
 The Sources tab breaks that down further per source IP, with the actual SPF/DKIM domain and result
-behind each pass/fail on hover, plus who owns the IP:
+behind each pass/fail on hover, plus who owns the IP. Recognised services are named, known
+forwarders and likely spoofs are set aside so they don't sit in the review queue, and an admin can
+turn on an optional suggestion that never decides for you. See [Sources](./sources.mdx).
 
 <ThemedImage
   alt="dotMARC Sources tab showing per-source volume, SPF/DKIM results, reject reason, and IP ownership"

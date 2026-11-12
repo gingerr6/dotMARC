@@ -107,4 +107,18 @@ public sealed class EnforcementReadinessTests
 
         Assert.True(result.Ready);
     }
+
+    [Fact]
+    public void Assess_DoesNotWaitOnALikelySpoof_ButASavedApprovalStillCounts()
+    {
+        var spoof = new SenderIdentity("ip:203.0.113.9", "203.0.113.9", false, IsLikelySpoof: true);
+
+        var setAside = Assess(Domain(), [new(Microsoft, 1000, 995), new(spoof, 40, 0)], new() { [Microsoft.Key] = SenderApprovalStatus.Approved });
+        Assert.True(setAside.Ready);
+
+        var approved = Assess(Domain(), [new(Microsoft, 1000, 995), new(spoof, 40, 0)],
+            new() { [Microsoft.Key] = SenderApprovalStatus.Approved, [spoof.Key] = SenderApprovalStatus.Approved });
+        Assert.False(approved.Ready);
+        Assert.Contains("failing DMARC", Assert.Single(approved.Blockers).Title);
+    }
 }

@@ -64,6 +64,8 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DotMarc.Reporting.ClientReports.ReportSettings> ReportSettings => Set<DotMarc.Reporting.ClientReports.ReportSettings>();
     public DbSet<DotMarc.Reporting.ClientReports.GroupReportSchedule> GroupReportSchedules => Set<DotMarc.Reporting.ClientReports.GroupReportSchedule>();
     public DbSet<DotMarc.Reporting.ClientReports.ClientReportDelivery> ClientReportDeliveries => Set<DotMarc.Reporting.ClientReports.ClientReportDelivery>();
+    public DbSet<DotMarc.Senders.SourceSuggestionSettings> SourceSuggestionSettings => Set<DotMarc.Senders.SourceSuggestionSettings>();
+    public DbSet<DotMarc.Senders.UserPreference> UserPreferences => Set<DotMarc.Senders.UserPreference>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -562,6 +564,17 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
             entity.Property(settings => settings.SmtpHost).HasMaxLength(253);
             entity.Property(settings => settings.SmtpUsername).HasMaxLength(254);
             entity.HasData(new DotMarc.Email.EmailSettings { Id = 1 });
+        });
+        modelBuilder.Entity<DotMarc.Senders.SourceSuggestionSettings>(entity =>
+        {
+            entity.Property(settings => settings.Endpoint).HasMaxLength(300);
+            entity.Property(settings => settings.Model).HasMaxLength(100);
+            entity.HasData(new DotMarc.Senders.SourceSuggestionSettings { Id = 1 });
+        });
+        modelBuilder.Entity<DotMarc.Senders.UserPreference>(entity =>
+        {
+            entity.Property(preference => preference.UserKey).HasMaxLength(200);
+            entity.HasIndex(preference => preference.UserKey).IsUnique();
         });
         modelBuilder.Entity<DotMarc.Portal.GroupBranding>(entity =>
         {

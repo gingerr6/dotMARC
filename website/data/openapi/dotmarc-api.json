@@ -2277,7 +2277,9 @@
                   "audit.exported",
                   "signin.succeeded",
                   "signin.refused",
-                  "page.viewed"
+                  "page.viewed",
+                  "settings.source_suggestions.saved",
+                  "source.suggestion_requested"
                 ],
                 "type": "string"
               },

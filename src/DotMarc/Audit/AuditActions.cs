@@ -78,6 +78,8 @@ public static class AuditActions
     public const string SignInSucceeded = "signin.succeeded";
     public const string SignInRefused = "signin.refused";
     public const string PageViewed = "page.viewed";
+    public const string SourceSuggestionSettingsSaved = "settings.source_suggestions.saved";
+    public const string SourceSuggestionRequested = "source.suggestion_requested";
 
     /// <summary>Every action with a short label, for the Action filter on the Audit log page.</summary>
     public static IReadOnlyList<(string Action, string Label)> All { get; } =
@@ -157,5 +159,7 @@ public static class AuditActions
         (SignInSucceeded, "Signed in"),
         (SignInRefused, "Sign-in refused"),
         (PageViewed, "Page viewed"),
+        (SourceSuggestionSettingsSaved, "AI suggestion settings saved"),
+        (SourceSuggestionRequested, "AI source suggestion requested"),
     ];
 }

@@ -15,7 +15,8 @@
 <MudText Typo="Typo.h4">Sources</MudText>
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
     Every server and service that sent mail as @(_filterLabel ?? "your domains") in the last 30 days, busiest first. Recognised services
-    (Microsoft 365, Google, Mailchimp and so on) are grouped together. Open a domain to approve its senders.
+    (Microsoft 365, Google, Mailchimp and so on) are grouped together. A likely spoof is a small unrecognised source that failed
+    both checks and looks like a home connection or has no name. Open a domain to approve its senders.
 </MudText>
 
 @if (_rows is null)
@@ -29,6 +30,7 @@ else
             <MudTextField T="string" @bind-Value="_search" Placeholder="Search sender or domain" Immediate="true" Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Search" Margin="Margin.Dense" Style="max-width:360px" />
             <MudSpacer />
+            <MudSwitch T="bool" @bind-Value="_likelySpoofOnly" Color="Color.Warning" Label="Likely spoofs" />
             <MudSwitch T="bool" @bind-Value="_failingOnly" Color="Color.Error" Label="Failing DMARC only" />
         </ToolBarContent>
         <HeaderContent>
@@ -39,7 +41,15 @@ else
         </HeaderContent>
         <RowTemplate>
             <MudTd>
-                <div>@(context.IsService ? (MarkupString)$"<b>{System.Net.WebUtility.HtmlEncode(context.Label)}</b>" : (MarkupString)System.Net.WebUtility.HtmlEncode(context.Label))</div>
+                <div class="d-flex align-center flex-wrap" style="gap:4px">
+                    <span>@(context.IsService ? (MarkupString)$"<b>{System.Net.WebUtility.HtmlEncode(context.Label)}</b>" : (MarkupString)System.Net.WebUtility.HtmlEncode(context.Label))</span>
+                    @if (context.IsLikelySpoof)
+                    {
+                        <MudTooltip Text="@(context.SpoofReason ?? "Likely spoofing.")" Arrow="true">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning">Likely spoof</MudChip>
+                        </MudTooltip>
+                    }
+                </div>
                 <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Detail</MudText>
             </MudTd>
             <MudTd>@context.Volume.ToString("N0")</MudTd>
@@ -72,9 +82,10 @@ else
     private List<SourceRow>? _rows;
     private string? _search;
     private bool _failingOnly;
+    private bool _likelySpoofOnly;
     private string? _filterLabel;
 
-    private sealed record SourceRow(string Label, string Detail, bool IsService, int Volume, double PassRate, Dictionary<string, int> Domains);
+    private sealed record SourceRow(string Label, string Detail, bool IsService, bool IsLikelySpoof, string? SpoofReason, int Volume, double PassRate, Dictionary<string, int> Domains);
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,32 +127,49 @@ else
         var ranges = await IpInfoService.GetCachedRangesAsync(db, CancellationToken.None);
 
         _rows = perIpAndDomain
-            .Select(row =>
+            .GroupBy(row => row.SourceIp)
+            .Select(ipGroup =>
             {
-                var hostName = hostNames.GetValueOrDefault(row.SourceIp)?.HostName;
-                var owner = owners.GetValueOrDefault(row.SourceIp)?.Organization ?? IpRangeMatcher.FindContaining(ranges, row.SourceIp)?.Organization;
-                return (Row: row, HostName: hostName, Owner: owner, Identity: SenderIdentity.For(row.SourceIp, hostName, owner));
+                var volume = ipGroup.Sum(row => row.Volume);
+                var passing = ipGroup.Sum(row => row.Passing);
+                var cachedName = hostNames.GetValueOrDefault(ipGroup.Key);
+                var hostName = cachedName?.HostName;
+                var owner = owners.GetValueOrDefault(ipGroup.Key)?.Organization ?? IpRangeMatcher.FindContaining(ranges, ipGroup.Key)?.Organization;
+                var spoof = SpoofHeuristic.Assess(new SpoofEvidence(ipGroup.Key, volume, passing > 0, hostName, cachedName is not null, false));
+                return (Ip: ipGroup.Key, HostName: hostName, Owner: owner, Volume: volume, Passing: passing,
+                    Identity: SenderIdentity.For(ipGroup.Key, hostName, owner, spoof: spoof),
+                    Domains: ipGroup.GroupBy(row => row.Domain).ToDictionary(domain => domain.Key, domain => domain.Sum(row => row.Volume)));
             })
             .GroupBy(item => item.Identity.Key)
             .Select(group =>
             {
                 var first = group.First();
-                var ipCount = group.Select(item => item.Row.SourceIp).Distinct().Count();
+                var ipCount = group.Select(item => item.Ip).Distinct().Count();
                 var detail = first.Identity.IsService
                     ? $"{ipCount} IP{(ipCount == 1 ? "" : "s")}"
                     : string.Join(" · ", new[] { first.HostName, first.Owner }.Where(part => !string.IsNullOrWhiteSpace(part)));
-                var label = !first.Identity.IsService && first.HostName is { } host ? $"{host} ({first.Row.SourceIp})" : first.Identity.Label;
-                var volume = group.Sum(item => item.Row.Volume);
-                return new SourceRow(label, detail, first.Identity.IsService, volume,
-                    volume == 0 ? 0 : (double)group.Sum(item => item.Row.Passing) / volume,
-                    group.GroupBy(item => item.Row.Domain).ToDictionary(domain => domain.Key, domain => domain.Sum(item => item.Row.Volume)));
+                var label = !first.Identity.IsService && first.HostName is { } host ? $"{host} ({first.Ip})" : first.Identity.Label;
+                var volume = group.Sum(item => item.Volume);
+                var domains = new Dictionary<string, int>();
+                foreach (var item in group)
+                {
+                    foreach (var (domain, count) in item.Domains)
+                    {
+                        domains[domain] = domains.GetValueOrDefault(domain) + count;
+                    }
+                }
+
+                var likely = group.All(item => item.Identity.IsLikelySpoof);
+                return new SourceRow(label, detail, first.Identity.IsService, likely, likely ? first.Identity.SpoofReason : null, volume,
+                    volume == 0 ? 0 : (double)group.Sum(item => item.Passing) / volume, domains);
             })
             .OrderByDescending(row => row.Volume)
             .ToList();
     }
 
     private bool Matches(SourceRow row) =>
-        (!_failingOnly || row.PassRate < 0.98)
+        (!_likelySpoofOnly || row.IsLikelySpoof)
+        && (!_failingOnly || row.PassRate < 0.98)
         && (string.IsNullOrWhiteSpace(_search)
             || row.Label.Contains(_search, StringComparison.OrdinalIgnoreCase)
             || row.Detail.Contains(_search, StringComparison.OrdinalIgnoreCase)

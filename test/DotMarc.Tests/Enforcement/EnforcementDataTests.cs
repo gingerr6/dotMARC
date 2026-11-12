@@ -60,4 +60,40 @@ public sealed class EnforcementDataTests : IAsyncLifetime
         Assert.Contains("198.51.100.66", unreviewed.Detail);
         Assert.DoesNotContain("203.0.113.20", unreviewed.Detail);
     }
+
+    [Fact]
+    public async Task A_small_residential_failure_is_set_aside_and_a_named_server_or_passing_mail_is_not()
+    {
+        var now = DateTimeOffset.UtcNow;
+        await using (var seed = CreateContext())
+        {
+            var domain = new Domain { Name = "contoso.com", IsMonitored = true, FirstSeenUtc = now.AddDays(-20), DmarcPolicy = DmarcPolicyLevel.None, DmarcCheckStatus = DmarcCheckStatus.Ok };
+            var report = new Report { ReportingOrg = "google.com", ReportId = "spoof", DateRangeBeginUtc = now.AddDays(-2), DateRangeEndUtc = now.AddDays(-1), RawXml = "<feedback/>", ReceivedUtc = now.AddDays(-1) };
+            report.Records.Add(Failing("203.0.113.8"));
+            report.Records.Add(Failing("203.0.113.9"));
+            report.Records.Add(new ReportRecord { SourceIp = "203.0.113.10", MessageCount = 30, SpfResult = AuthResult.Pass, DkimResult = AuthResult.Fail, Disposition = DispositionResult.None, HeaderFrom = "contoso.com" });
+            domain.Reports.Add(report);
+            seed.Domains.Add(domain);
+            seed.IpHostNames.AddRange(
+                new IpHostName { Ip = "203.0.113.8", HostName = "203-0-113-8.hsd1.example.net", LookedUpUtc = now },
+                new IpHostName { Ip = "203.0.113.9", HostName = "mail.contoso.com", LookedUpUtc = now },
+                new IpHostName { Ip = "203.0.113.10", HostName = "203-0-113-10.pool.example.net", LookedUpUtc = now });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = CreateContext();
+        var domains = await db.Domains.ToListAsync();
+        var assessment = (await EnforcementData.AssessAsync(db, domains, now))[domains[0].Id];
+
+        var unreviewed = Assert.Single(assessment.Blockers, blocker => blocker.Title.Contains("not reviewed"));
+        Assert.Contains("203.0.113.9", unreviewed.Detail);
+        Assert.Contains("203.0.113.10", unreviewed.Detail);
+        Assert.DoesNotContain("203.0.113.8", unreviewed.Detail);
+
+        static ReportRecord Failing(string ip) => new()
+        {
+            SourceIp = ip, MessageCount = 30, SpfResult = AuthResult.Fail, DkimResult = AuthResult.Fail,
+            Disposition = DispositionResult.None, HeaderFrom = "contoso.com",
+        };
+    }
 }

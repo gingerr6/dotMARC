@@ -1,0 +1,113 @@
+@page "/ai/settings"
+@layout DotMarc.Components.Layout.ManageLayout
+@attribute [Authorize(Policy = "ServerManage")]
+@using DotMarc.Audit
+@using DotMarc.Components.Shared
+@using DotMarc.Data
+@using DotMarc.Demo
+@using DotMarc.Notifications
+@using DotMarc.Senders
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.Extensions.Options
+@inject AuditActorAccessor AuditActorAccessor
+@inject IDbContextFactory<DotMarcDbContext> DbFactory
+@inject ISecretStore SecretStore
+@inject IOptions<DemoOptions> DemoOptions
+@inject ISnackbar Snackbar
+
+<PageTitle>dotMARC - AI suggestions</PageTitle>
+<div class="d-flex align-center mb-1">
+    <MudText Typo="Typo.h4">AI suggestions</MudText>
+    <DocsLink Href="https://dotmarc.app/docs/sources#ai-suggestions" Text="How suggestions work" Class="ml-2" />
+</div>
+<MudText Typo="Typo.body1" Class="mb-4">
+    Optional help when someone is reviewing a source. Each person turns it on for themselves. A suggestion never
+    approves a source or marks it not ours.
+</MudText>
+
+@if (_settings is not null)
+{
+    <MudPaper Class="pa-4 mb-4">
+        @if (_isDemo)
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">The demo doesn't send source details to an AI provider.</MudAlert>
+        }
+        <MudGrid>
+            <MudItem xs="12">
+                <FieldWithHelp Topic="Suggestions" Help="Off means the Suggest button is hidden for everyone, even people who turned it on for themselves.">
+                    <MudSwitch T="bool" Label="Suggest verdicts for sources" Value="_settings.Enabled" ValueChanged="EnabledChanged" Disabled="_isDemo" Color="Color.Primary" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Endpoint" Help="An OpenAI-compatible base URL, such as https://api.openai.com/v1, or the full chat-completions URL. A local server on http is allowed. Don't put the API key in the URL.">
+                    <MudTextField Label="Endpoint" @bind-Value="_settings.Endpoint" Disabled="_isDemo" Variant="Variant.Outlined" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="Model" Help="The model name the provider expects, such as gpt-4o-mini.">
+                    <MudTextField Label="Model" @bind-Value="_settings.Model" MaxLength="100" Disabled="_isDemo" Variant="Variant.Outlined" />
+                </FieldWithHelp>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <FieldWithHelp Topic="API key" Help="Stored encrypted, like other integration secrets, and never shown again. It is sent only to the endpoint above, as a bearer token.">
+                    <MudTextField Label="API key" @bind-Value="_newApiKey" InputType="InputType.Password" Disabled="_isDemo" Variant="Variant.Outlined"
+                                  HelperText="@(_settings.ApiKeyConfigured ? "A key is saved. Leave blank to keep it." : "No key saved.")" />
+                </FieldWithHelp>
+            </MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">
+            Suggest sends one source's aggregate details only: IP, reverse DNS name, owner, country, counts, and SPF/DKIM
+            results. It does not send message content.
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Disabled="_isDemo || _busy" OnClick="SaveAsync">Save</MudButton>
+    </MudPaper>
+}
+
+@code {
+    private SourceSuggestionSettings? _settings;
+    private string? _newApiKey;
+    private bool _busy;
+    private bool _isDemo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isDemo = DemoOptions.Value.Enabled;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _settings = await db.SourceSuggestionSettings.AsNoTracking().SingleAsync();
+    }
+
+    private void EnabledChanged(bool enabled)
+    {
+        if (_settings is not null)
+        {
+            _settings.Enabled = enabled;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_settings is null || _isDemo)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            await SourceSuggestionSettingsService.SaveAsync(db, await AuditActorAccessor.GetAsync(), SecretStore, _settings, _newApiKey);
+            _newApiKey = null;
+            _settings = await db.SourceSuggestionSettings.AsNoTracking().SingleAsync();
+            Snackbar.Add("AI suggestion settings saved.", Severity.Success);
+        }
+        catch (ArgumentException exception)
+        {
+            Snackbar.Add(exception.Message.Split(" (Parameter")[0], Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

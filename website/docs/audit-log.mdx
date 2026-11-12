@@ -11,8 +11,11 @@ The audit log answers "who changed this?", "who has been signing in?" and "who l
 
 * **Changes.** Domains, groups and tags added, changed or removed; roles and access grants; alert, HaloPSA and DNS
   provider settings; ticket rules; DNS records pushed to your provider, including a push that failed partway and
-  may have left the zone partly changed; running the HaloPSA integration test; and exporting the log itself. Each
+  may have left the zone partly changed; running the HaloPSA integration test; saving the optional AI suggestion
+  settings; asking for a suggestion on one source; and exporting the log itself. Each
   entry says who did it, when, what it was about, and the old and new value of every field that changed.
+  A suggestion request records the verdict or that the provider didn't answer. It does not record the API key
+  or any message content (none is sent).
 * **Sign-ins.** Every successful sign-in, and every sign-in refused because the person has no access grant, with
   the email they tried.
 * **Page views.** Which pages each person opened, such as a domain's Sources tab. These are hidden unless you

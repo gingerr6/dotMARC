@@ -2322,6 +2322,65 @@ namespace DotMarc.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DotMarc.Senders.SourceSuggestionSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("ApiKeyConfigured")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Endpoint")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SourceSuggestionSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            ApiKeyConfigured = false,
+                            Enabled = false
+                        });
+                });
+
+            modelBuilder.Entity("DotMarc.Senders.UserPreference", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("SourceSuggestionsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UserKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserKey")
+                        .IsUnique();
+
+                    b.ToTable("UserPreferences");
+                });
+
             modelBuilder.Entity("DotMarc.Updates.ServerUpdater", b =>
                 {
                     b.Property<int>("Id")
