@@ -1,8 +1,6 @@
 using System.Net;
-using DotMarc.Audit;
 using DotMarc.Data;
 using DotMarc.Demo;
-using DotMarc.Senders;
 using DotMarc.Tests.Internal;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -12,9 +10,9 @@ using Xunit;
 
 namespace DotMarc.Tests.Components;
 
-/// <summary>The Sources tab hides the AI switch and Suggest button until the person's role allows suggestions and they
-/// turn their own switch on. The demo host is used so the test can sign in; the demo flag is then turned off on the
-/// running options so a configured provider is allowed to show, which the public demo never does.</summary>
+/// <summary>The Sources tab shows Suggest to any signed-in app user once a provider is connected. There is no personal
+/// switch and no role permission. The demo host is used so the test can sign in; the demo flag is then turned off on
+/// the running options so a configured provider is allowed to show, which the public demo never does.</summary>
 [Collection("Postgres")]
 public sealed class SourceSuggestionScreenTests : IAsyncLifetime
 {
@@ -60,14 +58,13 @@ public sealed class SourceSuggestionScreenTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task TheSourcesTab_HidesSuggestions_UntilTheRoleAllowsThem_AndThePersonTurnsThemOn()
+    public async Task TheSourcesTab_ShowsSuggest_ForAViewer_OnceAProviderIsConnected()
     {
         using (await SignInAsync("admin"))
         {
             // Boots the demo, which seeds the domains and the Viewer role.
         }
 
-        _factory!.Services.GetRequiredService<IOptions<DemoOptions>>().Value.Enabled = false;
         await using (var context = CreateContext())
         {
             var settings = await context.SourceSuggestionSettings.SingleAsync();
@@ -75,50 +72,26 @@ public sealed class SourceSuggestionScreenTests : IAsyncLifetime
             settings.Endpoint = "https://models.example/v1";
             settings.Model = "test-model";
             settings.ApiKeyConfigured = true;
-            await UserPreferenceService.SetSourceSuggestionsEnabledAsync(context,
-                AuditActor.ForUser(null, DemoDataSeeder.ViewerEmail, "Demo Viewer"), true);
             await context.SaveChangesAsync();
         }
 
-        using (var viewer = await SignInAsync("viewer"))
+        using (var viewerOnDemo = await SignInAsync("viewer"))
         {
-            var response = await viewer.GetAsync("/domains/aurora-retail.example/sources");
-            var hidden = await response.Content.ReadAsStringAsync();
-            Assert.True(response.IsSuccessStatusCode, $"Sources page returned {(int)response.StatusCode}: {hidden[..Math.Min(hidden.Length, 500)]}");
-            Assert.DoesNotContain("AI suggestions", hidden);
-            Assert.DoesNotContain(">Suggest<", hidden);
+            var demo = await viewerOnDemo.GetStringAsync("/domains/aurora-retail.example/sources");
+            Assert.DoesNotContain(">Suggest<", demo);
+            Assert.DoesNotContain("AI suggestions", demo);
         }
 
-        await using (var context = CreateContext())
-        {
-            var grant = await context.UserAccesses.Include(access => access.Role).SingleAsync(access => access.Email == DemoDataSeeder.ViewerEmail);
-            grant.Role.Permissions = [.. grant.Role.Permissions, Permission.SourceSuggestions];
-            await context.SaveChangesAsync();
-        }
+        _factory!.Services.GetRequiredService<IOptions<DemoOptions>>().Value.Enabled = false;
 
-        using (var viewer = await SignInAsync("viewer"))
-        {
-            var shown = await viewer.GetStringAsync("/domains/aurora-retail.example/sources");
-            Assert.Contains("AI suggestions", shown);
-            Assert.Contains(">Suggest<", shown);
-        }
-
-        await using (var context = CreateContext())
-        {
-            await UserPreferenceService.SetSourceSuggestionsEnabledAsync(context,
-                AuditActor.ForUser(null, DemoDataSeeder.ViewerEmail, "Demo Viewer"), false);
-        }
-
-        using (var viewer = await SignInAsync("viewer"))
-        {
-            var switchOnly = await viewer.GetStringAsync("/domains/aurora-retail.example/sources");
-            Assert.Contains("AI suggestions", switchOnly);
-            Assert.DoesNotContain(">Suggest<", switchOnly);
-        }
+        using var viewer = await SignInAsync("viewer");
+        var shown = await viewer.GetStringAsync("/domains/aurora-retail.example/sources");
+        Assert.Contains(">Suggest<", shown);
+        Assert.DoesNotContain("AI suggestions", shown);
     }
 
     [Fact]
-    public async Task TheClientPortal_DoesNotShowSuggestions_EvenWhenTheRoleAllowsThem()
+    public async Task TheClientPortal_DoesNotShowSuggestions()
     {
         using (await SignInAsync("admin"))
         {
@@ -127,8 +100,6 @@ public sealed class SourceSuggestionScreenTests : IAsyncLifetime
         _factory!.Services.GetRequiredService<IOptions<DemoOptions>>().Value.Enabled = false;
         await using (var context = CreateContext())
         {
-            var grant = await context.UserAccesses.Include(access => access.Role).SingleAsync(access => access.Email == DemoDataSeeder.ClientEmail);
-            grant.Role.Permissions = [.. grant.Role.Permissions, Permission.SourceSuggestions];
             var settings = await context.SourceSuggestionSettings.SingleAsync();
             settings.Enabled = true;
             settings.Endpoint = "https://models.example/v1";
@@ -146,5 +117,4 @@ public sealed class SourceSuggestionScreenTests : IAsyncLifetime
         Assert.DoesNotContain("AI suggestions", portal);
         Assert.DoesNotContain(">Suggest<", portal);
     }
-
 }

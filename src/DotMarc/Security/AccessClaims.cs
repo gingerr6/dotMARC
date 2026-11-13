@@ -6,8 +6,7 @@ namespace DotMarc.Security;
 
 /// <summary>The permission and scoped-group claims for a role and its groups, built the same way for a signed-in
 /// person and an API key so the two can never be authorised differently. Groups count only on a scopable role. An API
-/// key never gets AccessManage, even if its role gains it after the key was made, and never gets SourceSuggestions:
-/// asking the model is part of the web app, not the API. A grant that is actually limited to
+/// key never gets AccessManage, even if its role gains it after the key was made. A grant that is actually limited to
 /// Groups never gets a permission outside GroupLimits, even if its role holds one, since that permission would reach
 /// past its Groups.</summary>
 public static class AccessClaims
@@ -17,7 +16,7 @@ public static class AccessClaims
         var groupIds = role.IsScopable ? scopedGroupIds.ToList() : [];
         foreach (var permission in role.Permissions)
         {
-            if (forApiKey && permission is Permission.AccessManage or Permission.SourceSuggestions)
+            if (forApiKey && permission is Permission.AccessManage)
             {
                 continue;
             }

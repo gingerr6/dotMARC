@@ -46,30 +46,6 @@ public sealed class AccessClaimsTests
     }
 
     [Fact]
-    public void AUserLimitedToGroups_KeepsSourceSuggestions()
-    {
-        var role = new Role { Name = "Reviewer", IsScopable = true, Permissions = [Permission.DomainsView, Permission.SourceSuggestions] };
-
-        var permissions = AccessClaims.For(role, [4])
-            .Where(claim => claim.Type == UserAccessClaimsTransformation.PermissionClaimType)
-            .Select(claim => claim.Value);
-
-        Assert.Equal(["DomainsView", "SourceSuggestions"], permissions);
-    }
-
-    [Fact]
-    public void AnApiKey_NeverGetsSourceSuggestions()
-    {
-        var role = new Role { Name = "Reviewer", Permissions = [Permission.DomainsView, Permission.SourceSuggestions] };
-
-        var permissions = AccessClaims.For(role, [], forApiKey: true)
-            .Where(claim => claim.Type == UserAccessClaimsTransformation.PermissionClaimType)
-            .Select(claim => claim.Value);
-
-        Assert.Equal(["DomainsView"], permissions);
-    }
-
-    [Fact]
     public void AnApiKey_NeverGetsAccessManage()
     {
         var role = new Role { Name = "Grew too much", Permissions = [Permission.DomainsView, Permission.AccessManage] };

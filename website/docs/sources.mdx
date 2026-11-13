@@ -75,17 +75,10 @@ An admin connects an OpenAI-compatible model under **Manage > AI suggestions**: 
 model name, and an API key. The key is stored encrypted, the same way other integration secrets are,
 and is never written to the audit log. While that switch is off, nobody can ask for a suggestion.
 
-Who may use suggestions is the `SourceSuggestions` permission, set on **Manage > Access** with the
-other permissions. It is off unless a role includes it. The built-in Admin role has every permission,
-so admins may use suggestions. Viewer, and any custom role, do not until an admin adds
-`SourceSuggestions`. To allow one person and not another, give them roles that differ, the same way
-as every other capability. Adding or removing the permission is written to the [audit log](./audit-log.mdx).
-
-A person whose role includes it still turns **AI suggestions** on, on a domain's Sources tab. That
-switch is their own, and it starts off, so connecting a model doesn't start suggesting for everyone.
-The Suggest button is hidden when the provider is not connected, when their role doesn't include
-`SourceSuggestions`, when they have left their switch off, and on the demo. Someone without the
-permission never sees the switch or the button, and asking anyway is refused.
+Once a model is connected, **Suggest** is on a domain's Sources tab for every signed-in user. There
+is no separate permission and no personal switch. Viewer, a custom role, and someone limited to
+Groups all see it. The button stays hidden when the provider is not connected, and on the demo.
+Asking anyway, without a connected provider, is refused.
 
 **Suggest** sends that one source's aggregate details: the domain the page is about, the IP, reverse
 DNS name, owner, country, counts, SPF and DKIM results, and the classification dotMARC already made.
@@ -94,10 +87,8 @@ or unknown) and one short sentence. The sentence is shown in full on the row and
 lines rather than being cut off. If an SPF or DKIM result names a domain other than the one on the
 page, the sentence says what that domain is: an SPF domain is the envelope (bounce) domain the message
 was sent from, and a DKIM domain is the one that signed the message. It does not change Approved or
-Not ours. The request is recorded in the audit log. If the provider is slow, refuses the key, or
-replies with something unreadable, the row is left as it was and the page says so.
+Not ours. The request is recorded in the [audit log](./audit-log.mdx). If the provider is slow, refuses
+the key, or replies with something unreadable, the row is left as it was and the page says so.
 
-The API lists sources and does not ask for a suggestion. A key never receives `SourceSuggestions`,
-even when its role includes it. [Client portal](./client-portal.mdx) users don't see suggestions
-either: the portal stays a simple list of senders, and a portal user is refused even when their role
-includes the permission.
+The API lists sources and does not ask for a suggestion. A key can't ask for one. [Client portal](./client-portal.mdx)
+users don't see suggestions either: the portal stays a simple list of senders, and a portal user is refused.

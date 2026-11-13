@@ -31,14 +31,11 @@ public sealed class SourceSuggestionClientTests
     }
 
     [Fact]
-    public void TheSwitchAndSuggestButton_StayHidden_WithoutThePermission()
+    public void Suggest_ShowsForAnyAppUser_OnceAProviderIsConnected()
     {
-        Assert.False(SourceSuggestionSettings.ShowSwitch(providerReady: true, permitted: false));
-        Assert.False(SourceSuggestionSettings.ShowSuggest(providerReady: true, permitted: false, userEnabled: true));
-        Assert.False(SourceSuggestionSettings.ShowSuggest(providerReady: false, permitted: true, userEnabled: true));
-        Assert.True(SourceSuggestionSettings.ShowSwitch(providerReady: true, permitted: true));
-        Assert.False(SourceSuggestionSettings.ShowSuggest(providerReady: true, permitted: true, userEnabled: false));
-        Assert.True(SourceSuggestionSettings.ShowSuggest(providerReady: true, permitted: true, userEnabled: true));
+        Assert.False(SourceSuggestionSettings.ShowSuggest(providerReady: false, signedInAppUser: true));
+        Assert.False(SourceSuggestionSettings.ShowSuggest(providerReady: true, signedInAppUser: false));
+        Assert.True(SourceSuggestionSettings.ShowSuggest(providerReady: true, signedInAppUser: true));
     }
 
     [Theory]

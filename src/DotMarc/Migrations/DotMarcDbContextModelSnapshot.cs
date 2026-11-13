@@ -2357,30 +2357,6 @@ namespace DotMarc.Migrations
                         });
                 });
 
-            modelBuilder.Entity("DotMarc.Senders.UserPreference", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("SourceSuggestionsEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("UserKey")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserKey")
-                        .IsUnique();
-
-                    b.ToTable("UserPreferences");
-                });
-
             modelBuilder.Entity("DotMarc.Updates.ServerUpdater", b =>
                 {
                     b.Property<int>("Id")

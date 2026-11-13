@@ -649,10 +649,6 @@ else
                     {
                         <MudChip T="string" Color="Color.Warning" Size="Size.Small" OnClick="@(() => { _showSourceFilters = true; _sourceApprovalFilter = UnreviewedFilter; })">@unreviewed unreviewed sender@(unreviewed == 1 ? "" : "s")</MudChip>
                     }
-                    @if (SourceSuggestionSettings.ShowSwitch(_aiConfigured, _maySuggest))
-                    {
-                        <MudSwitch T="bool" Value="_suggestionsEnabled" ValueChanged="ToggleSuggestionsAsync" Color="Color.Primary" Label="AI suggestions" Class="ml-2" />
-                    }
                     <MudSpacer />
                     <MudButton Variant="@(_showSourceFilters ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterList"
                                OnClick="@(() => _showSourceFilters = !_showSourceFilters)">@(_showSourceFilters ? "Hide filters" : "Filters")</MudButton>
@@ -755,7 +751,7 @@ else
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                          Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => identity.IsForwarder ? Color.Info : identity.IsLikelySpoof ? Color.Warning : Color.Default })">@ApprovalLabel(context)</MudChip>
                             </MudTooltip>
-                            @if (SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest, _suggestionsEnabled))
+                            @if (SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest))
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_suggestingKey == identity.Key)" OnClick="@(() => SuggestAsync(context))">Suggest</MudButton>
                             }
@@ -884,7 +880,6 @@ else
     private bool _showSourceFilters;
     private bool _aiConfigured;
     private bool _maySuggest;
-    private bool _suggestionsEnabled;
     private string? _suggestingKey;
     private readonly Dictionary<string, SourceSuggestionResult> _suggestions = [];
 
@@ -1084,10 +1079,8 @@ else
 
         _senderApprovals = await SenderApprovalService.GetAsync(db, _domain.Id);
         var suggestionSettings = await SourceSuggestionSettingsService.GetAsync(db);
-        _maySuggest = !ClientPortalGate.IsPortalUser(authState.User)
-            && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.SourceSuggestions))).Succeeded;
+        _maySuggest = !ClientPortalGate.IsPortalUser(authState.User);
         _aiConfigured = !DemoOptions.Value.Enabled && suggestionSettings.IsReady();
-        _suggestionsEnabled = await UserPreferenceService.SourceSuggestionsEnabledAsync(db, await AuditActorAccessor.GetAsync());
         _lookalikes = await LoadLookalikesAsync(db, _domain.Id);
         _clientManagesDns = _domain.Groups.Any(group => group.ClientManagesDns);
         _mayPush = !_clientManagesDns && (await AuthorizationService.AuthorizeAsync(authState.User, nameof(Permission.DnsPush))).Succeeded;
@@ -1308,23 +1301,11 @@ else
                 : $"Nobody has reviewed this sender yet. {scope}";
     }
 
-    private async Task ToggleSuggestionsAsync(bool enabled)
-    {
-        if (!SourceSuggestionSettings.ShowSwitch(_aiConfigured, _maySuggest))
-        {
-            return;
-        }
-
-        _suggestionsEnabled = enabled;
-        await using var db = await DbFactory.CreateDbContextAsync();
-        await UserPreferenceService.SetSourceSuggestionsEnabledAsync(db, await AuditActorAccessor.GetAsync(), enabled);
-    }
-
     /// <summary>Asks the configured model about this one source. The reply is shown beside the row and is not saved
     /// as the decision; Approve and Not ours are unchanged.</summary>
     private async Task SuggestAsync(SourceRow source)
     {
-        if (!SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest, _suggestionsEnabled) || _domain is null)
+        if (!SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest) || _domain is null)
         {
             return;
         }
