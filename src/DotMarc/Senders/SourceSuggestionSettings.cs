@@ -2,15 +2,14 @@ namespace DotMarc.Senders;
 
 /// <summary>Singleton row (seeded <c>Id = 1</c>) for optional source suggestions. The API key lives in the secret
 /// store under <see cref="ApiKeySecretKey"/>, never on this entity. Suggestions stay off until an admin turns them
-/// on and stores an endpoint, a model name and a key. A person's role then has to include
-/// <c>SourceSuggestions</c>, and that person still chooses whether to use them.</summary>
+/// on and stores an endpoint, a model name and a key. After that, every signed-in app user can ask.</summary>
 public sealed class SourceSuggestionSettings
 {
     public const string ApiKeySecretKey = "SourceSuggestions.ApiKey";
 
     public int Id { get; set; }
 
-    /// <summary>Admin switch. Off means nobody can ask for a suggestion, whatever their own preference is.</summary>
+    /// <summary>Admin switch. Off means nobody can ask for a suggestion.</summary>
     public bool Enabled { get; set; }
 
     /// <summary>OpenAI-compatible base URL, such as https://api.openai.com/v1, or the full chat-completions URL.</summary>
@@ -25,10 +24,8 @@ public sealed class SourceSuggestionSettings
     public bool IsReady() =>
         Enabled && !string.IsNullOrWhiteSpace(Endpoint) && !string.IsNullOrWhiteSpace(Model) && ApiKeyConfigured;
 
-    /// <summary>The person's own switch is shown only when the provider is ready and their role allows suggestions.</summary>
-    public static bool ShowSwitch(bool providerReady, bool permitted) => providerReady && permitted;
-
-    /// <summary>The Suggest button also needs this person to have turned suggestions on.</summary>
-    public static bool ShowSuggest(bool providerReady, bool permitted, bool userEnabled) =>
-        ShowSwitch(providerReady, permitted) && userEnabled;
+    /// <summary>The Suggest button. Shown when a provider is connected and this person is a signed-in app user.
+    /// The demo never counts as connected. Client portal users are not app users for this.</summary>
+    public static bool ShowSuggest(bool providerReady, bool signedInAppUser) =>
+        providerReady && signedInAppUser;
 }

@@ -43,7 +43,7 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
         {
             Name = "May suggest " + Guid.NewGuid().ToString("N"),
             IsScopable = portal,
-            Permissions = [Permission.DomainsView, Permission.SourceSuggestions],
+            Permissions = [Permission.DomainsView],
         };
         var groups = portal ? new List<Group> { new() { Name = "Client " + Guid.NewGuid().ToString("N") } } : [];
         context.UserAccesses.Add(new UserAccess
@@ -131,7 +131,7 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SomeoneWithoutThePermission_IsRefused_AndTheModelIsNotCalled()
+    public async Task ASignedInAppUser_MayAsk_WithoutASpecialPermission()
     {
         await using var context = CreateContext();
         var domain = new Domain { Name = "contoso.com", IsMonitored = true, FirstSeenUtc = DateTimeOffset.UtcNow };
@@ -139,6 +139,26 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
         await ConfigureProviderAsync(context);
         var role = new Role { Name = "Viewer only", Permissions = [Permission.DomainsView] };
         context.UserAccesses.Add(new UserAccess { Email = TestActors.Admin.Email!, EntraObjectId = TestActors.Admin.ObjectId, Role = role });
+        await context.SaveChangesAsync();
+        var secrets = new FakeSecretStore();
+        secrets.Secrets[SourceSuggestionSettings.ApiKeySecretKey] = "the-api-key";
+        var client = new StubClient(SourceSuggestionResult.Ok(SourceSuggestionVerdict.Forwarder, "Passed on."));
+
+        var result = await SourceSuggestionService.SuggestAsync(context, secrets, client, TestActors.Admin, domain, Facts);
+
+        Assert.Equal(SourceSuggestionVerdict.Forwarder, result.Verdict);
+        Assert.NotNull(client.Facts);
+        var entry = await context.AuditEntries.SingleAsync(audit => audit.Action == AuditActions.SourceSuggestionRequested);
+        Assert.Contains("Forwarder", entry.Summary);
+    }
+
+    [Fact]
+    public async Task SomeoneWithNoGrant_IsRefused_AndTheModelIsNotCalled()
+    {
+        await using var context = CreateContext();
+        var domain = new Domain { Name = "contoso.com", IsMonitored = true, FirstSeenUtc = DateTimeOffset.UtcNow };
+        context.Domains.Add(domain);
+        await ConfigureProviderAsync(context);
         await context.SaveChangesAsync();
         var client = new StubClient(SourceSuggestionResult.Ok(SourceSuggestionVerdict.Unknown, "no"));
 
@@ -150,33 +170,13 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task APermittedPerson_CanAsk_WhenTheirOwnSwitchIsOff()
+    public async Task AnApiKey_IsRefused()
     {
         await using var context = CreateContext();
         var domain = new Domain { Name = "contoso.com", IsMonitored = true, FirstSeenUtc = DateTimeOffset.UtcNow };
         context.Domains.Add(domain);
         await ConfigureProviderAsync(context);
-        await AllowAsync(context, TestActors.Admin);
-        await context.SaveChangesAsync();
-        Assert.False(await UserPreferenceService.SourceSuggestionsEnabledAsync(context, TestActors.Admin));
-        var secrets = new FakeSecretStore();
-        secrets.Secrets[SourceSuggestionSettings.ApiKeySecretKey] = "the-api-key";
-        var client = new StubClient(SourceSuggestionResult.Ok(SourceSuggestionVerdict.Forwarder, "Passed on."));
-
-        var result = await SourceSuggestionService.SuggestAsync(context, secrets, client, TestActors.Admin, domain, Facts);
-
-        Assert.Equal(SourceSuggestionVerdict.Forwarder, result.Verdict);
-        Assert.NotNull(client.Facts);
-    }
-
-    [Fact]
-    public async Task AnApiKey_IsRefused_EvenWhenItsRoleIncludesThePermission()
-    {
-        await using var context = CreateContext();
-        var domain = new Domain { Name = "contoso.com", IsMonitored = true, FirstSeenUtc = DateTimeOffset.UtcNow };
-        context.Domains.Add(domain);
-        await ConfigureProviderAsync(context);
-        var role = new Role { Name = "Key role", Permissions = [Permission.DomainsView, Permission.SourceSuggestions] };
+        var role = new Role { Name = "Key role", Permissions = [Permission.DomainsView] };
         context.Roles.Add(role);
         await context.SaveChangesAsync();
         var created = await ApiKeyManagementService.CreateAsync(context, TestActors.Admin, "Suggestions key", role.Id, [], 90);
@@ -191,7 +191,7 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AClientPortalUser_IsRefused_EvenWhenTheirRoleIncludesThePermission()
+    public async Task AClientPortalUser_IsRefused()
     {
         await using var context = CreateContext();
         var domain = new Domain { Name = "contoso.com", IsMonitored = true, FirstSeenUtc = DateTimeOffset.UtcNow };
@@ -208,7 +208,7 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task APersonLimitedToGroups_MayAsk_WhenTheirRoleIncludesThePermission()
+    public async Task APersonLimitedToGroups_MayAsk()
     {
         await using var context = CreateContext();
         var domain = new Domain { Name = "contoso.com", IsMonitored = true, FirstSeenUtc = DateTimeOffset.UtcNow };
@@ -218,7 +218,7 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
         {
             Name = "Client reviewer",
             IsScopable = true,
-            Permissions = [Permission.DomainsView, Permission.SourceSuggestions],
+            Permissions = [Permission.DomainsView],
         };
         context.UserAccesses.Add(new UserAccess
         {
@@ -236,10 +236,6 @@ public sealed class SourceSuggestionServiceTests : IAsyncLifetime
 
         Assert.Equal(SourceSuggestionVerdict.Unknown, result.Verdict);
     }
-
-    [Fact]
-    public void Viewer_DoesNotIncludeSourceSuggestions_ByDefault() =>
-        Assert.DoesNotContain(Permission.SourceSuggestions, AccessBootstrapper.ViewerPermissions);
 
     private static async Task ConfigureProviderAsync(DotMarcDbContext context)
     {
