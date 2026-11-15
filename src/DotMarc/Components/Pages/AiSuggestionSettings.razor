@@ -22,9 +22,9 @@
     <DocsLink Href="https://dotmarc.app/docs/sources#ai-suggestions" Text="How suggestions work" Class="ml-2" />
 </div>
 <MudText Typo="Typo.body1" Class="mb-4">
-    Optional help when someone is reviewing a source. Once this is on, every signed-in user sees Suggest on a
-    domain's Sources tab. API keys and client portal users don't. A suggestion never approves a source or marks
-    it not ours.
+    Optional help when someone is reviewing a source or working an alert. Once this is on, every signed-in user
+    sees Suggest on a domain's Sources tab and Suggest fix on open alerts. API keys and client portal users don't.
+    A suggestion never approves a source, marks it not ours, changes DNS or closes an alert.
 </MudText>
 
 @if (_settings is not null)
@@ -32,12 +32,12 @@
     <MudPaper Class="pa-4 mb-4">
         @if (_isDemo)
         {
-            <MudAlert Severity="Severity.Info" Class="mb-4">The demo doesn't send source details to an AI provider.</MudAlert>
+            <MudAlert Severity="Severity.Info" Class="mb-4">The demo doesn't send source or alert details to an AI provider.</MudAlert>
         }
         <MudGrid>
             <MudItem xs="12">
                 <FieldWithHelp Topic="Suggestions" Help="Off means nobody can ask for a suggestion.">
-                    <MudSwitch T="bool" Label="Suggest verdicts for sources" Value="_settings.Enabled" ValueChanged="EnabledChanged" Disabled="_isDemo" Color="Color.Primary" />
+                    <MudSwitch T="bool" Label="Suggest source verdicts and alert fixes" Value="_settings.Enabled" ValueChanged="EnabledChanged" Disabled="_isDemo" Color="Color.Primary" />
                 </FieldWithHelp>
             </MudItem>
             <MudItem xs="12" md="6">
@@ -59,7 +59,8 @@
         </MudGrid>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">
             Suggest sends one source's aggregate details only: IP, reverse DNS name, owner, country, counts, and SPF/DKIM
-            results. It does not send message content.
+            results. Suggest fix sends one alert as the Alerts page shows it, and the latest DNS check results dotMARC
+            holds for its domain. Neither sends message content.
         </MudText>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Disabled="_isDemo || _busy" OnClick="SaveAsync">Save</MudButton>
     </MudPaper>

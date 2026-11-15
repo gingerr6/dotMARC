@@ -34,6 +34,19 @@ permission, which is part of the built-in Viewer role by default.
 Open DMARC policy weakened and nameservers changed alerts have an **Acknowledge** button for anyone with the
 `AlertsManage` permission. See [Closing policy and nameserver alerts](#closing-policy-and-nameserver-alerts).
 
+### Suggest fix
+
+Once an admin connects a model under **Manage > AI suggestions** (see [AI suggestions](./sources.mdx#ai-suggestions)),
+every open alert has a **Suggest fix** button for every signed-in user. It sends that one alert (its type, severity,
+title and message) and the latest DNS check results dotMARC holds for the alert's domain, such as the DMARC policy
+and the SPF, DKIM and MX check results. It does not send report contents or message content. The reply is a one-sentence
+summary and a few numbered steps, shown under the alert. The model is told not to invent values it wasn't given,
+such as DKIM keys or IP addresses, and to say where to get them instead.
+
+A suggestion changes nothing: it doesn't push DNS, acknowledge the alert or touch its tickets, and it isn't saved.
+Check it before you act on it. Each request is recorded in the [audit log](./audit-log.mdx). API keys and
+[client portal](./client-portal.mdx) users can't ask, and the button is hidden on the demo.
+
 ## Alert settings
 
 **Alert settings** (`/alerts/settings`) configures delivery. It requires the `AlertsManage`

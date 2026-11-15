@@ -174,3 +174,15 @@ html {
     text-overflow: clip;
     max-width: 36rem;
 }
+
+/* An AI fix suggestion under an alert: long DNS values must wrap, not widen the table. */
+.dotmarc-alert-fix,
+.dotmarc-alert-fix .mud-typography {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.dotmarc-alert-fix-steps {
+    margin: 0.25rem 0 0 1.25rem;
+    padding: 0;
+}

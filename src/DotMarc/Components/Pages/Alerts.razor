@@ -4,6 +4,9 @@
 @using DotMarc.Components.Shared
 @using DotMarc.Notifications
 @using DotMarc.Psa
+@using DotMarc.Senders
+@using DotMarc.Demo
+@using Microsoft.Extensions.Options
 @using System.Globalization
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
@@ -15,6 +18,10 @@
 @inject IEnumerable<IPsaProvider> PsaProviders
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject ISecretStore SecretStore
+@inject IAlertFixClient AlertFixClient
+@inject IOptions<DemoOptions> DemoOptions
+@inject ILogger<Alerts> Logger
 
 <PageTitle>dotMARC - Alerts</PageTitle>
 <div class="d-flex align-center mb-4">
@@ -107,6 +114,12 @@ else
                 }
             </MudTd>
             <MudTd>
+                @if (!context.IsResolved && SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest))
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AutoFixHigh"
+                               Disabled="@(_suggestingId == context.Id)" OnClick="@(() => SuggestFixAsync(context))"
+                               title="Ask the AI provider how to fix this. Nothing is changed.">@(_suggestingId == context.Id ? "Asking…" : "Suggest fix")</MudButton>
+                }
                 @if (!context.IsResolved && AlertAcknowledgement.IsAcknowledgeable(context.AlertType))
                 {
                     <AuthorizeView Policy="AlertsManage" Context="authorization">
@@ -115,6 +128,30 @@ else
                 }
             </MudTd>
         </RowTemplate>
+        <ChildRowContent>
+            @if (_fixes.TryGetValue(context.Id, out var fix))
+            {
+                <td colspan="8" class="pa-2">
+                    <MudAlert Severity="Severity.Normal" Icon="@Icons.Material.Filled.AutoFixHigh" ShowCloseIcon="true" CloseIconClicked="@(() => _fixes.Remove(context.Id))"
+                              Class="dotmarc-alert-fix">
+                        <MudText Typo="Typo.subtitle2">Suggested fix for @context.DomainName</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-1">@fix.Summary</MudText>
+                        @if (fix.Steps.Count > 0)
+                        {
+                            <ol class="dotmarc-alert-fix-steps">
+                                @foreach (var step in fix.Steps)
+                                {
+                                    <li><MudText Typo="Typo.body2">@step</MudText></li>
+                                }
+                            </ol>
+                        }
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
+                            An AI suggestion from the alert and the domain's latest DNS checks. Check it before changing anything. Nothing was changed.
+                        </MudText>
+                    </MudAlert>
+                </td>
+            }
+        </ChildRowContent>
     </MudTable>
 }
 
@@ -129,6 +166,11 @@ else
     private bool? _resolvedFilter;
     private string? _messageFilter;
     private bool _showFilters;
+
+    private bool _aiConfigured;
+    private bool _maySuggest;
+    private int? _suggestingId;
+    private readonly Dictionary<int, AlertFixResult> _fixes = [];
 
     private static string FormatCreated(AlertEvent alert) => DotMarc.Reporting.UkTime.DateTime(alert.CreatedUtc);
 
@@ -168,6 +210,8 @@ else
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var scope = DotMarc.Api.ApiScope.From(authState.User);
         await using var db = await DbFactory.CreateDbContextAsync();
+        _maySuggest = !DotMarc.Portal.ClientPortalGate.IsPortalUser(authState.User);
+        _aiConfigured = !DemoOptions.Value.Enabled && (await SourceSuggestionSettingsService.GetAsync(db)).IsReady();
         _alerts = await scope.Alerts(db.AlertEvents.AsNoTracking(), db.Domains.AsNoTracking())
             .Include(e => e.Tickets)
             .OrderByDescending(e => e.CreatedUtc)
@@ -222,6 +266,51 @@ else
         }
 
         await LoadAsync();
+    }
+
+    /// <summary>Asks the configured model how to fix this alert. The steps show under the row and are not saved; the
+    /// alert, its tickets and the domain's DNS are left as they are.</summary>
+    private async Task SuggestFixAsync(AlertEvent shown)
+    {
+        if (!SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest) || _suggestingId is not null)
+        {
+            return;
+        }
+
+        _suggestingId = shown.Id;
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var scope = DotMarc.Api.ApiScope.From(authState.User);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            // Read again through the person's scope: only an alert they can see is sent, as it stands now.
+            var alert = await scope.Alerts(db.AlertEvents.AsNoTracking(), db.Domains.AsNoTracking()).SingleOrDefaultAsync(e => e.Id == shown.Id);
+            if (alert is null)
+            {
+                Snackbar.Add("That alert is no longer there. Nothing was changed.", Severity.Info);
+                return;
+            }
+
+            var domain = await scope.Domains(db.Domains.AsNoTracking()).FirstOrDefaultAsync(d => d.Name == alert.DomainName);
+            var result = await AlertFixSuggestionService.SuggestAsync(db, SecretStore, AlertFixClient, await AuditActorAccessor.GetAsync(), alert, domain);
+            if (result.Error is null)
+            {
+                _fixes[alert.Id] = result;
+            }
+            else
+            {
+                Snackbar.Add(result.Error, Severity.Warning);
+            }
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(exception, "AI fix suggestion for alert {AlertId} failed.", shown.Id);
+            Snackbar.Add("Couldn't get a suggestion. Nothing was changed.", Severity.Warning);
+        }
+        finally
+        {
+            _suggestingId = null;
+        }
     }
 
     private static Color GetSeverityColor(string severity) => severity switch
