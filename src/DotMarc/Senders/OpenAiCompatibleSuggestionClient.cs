@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DotMarc.Notifications;
 using Microsoft.Extensions.Logging;
 
 namespace DotMarc.Senders;
@@ -17,7 +18,7 @@ public interface ISourceSuggestionClient
 /// <summary>Posts one source to <c>{endpoint}/chat/completions</c> and reads a JSON verdict back. Timeouts and HTTP
 /// failures become a result the page can show; they are not thrown, and the response body is never shown to the
 /// person (it can be large, and a misconfigured proxy might echo a header).</summary>
-public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<OpenAiCompatibleSuggestionClient> logger) : ISourceSuggestionClient
+public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<OpenAiCompatibleSuggestionClient> logger) : ISourceSuggestionClient, IAlertFixClient
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -47,6 +48,19 @@ public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<Op
 
     public async Task<SourceSuggestionResult> SuggestAsync(string endpoint, string model, string apiKey, SourceSuggestionFacts facts, CancellationToken cancellationToken)
     {
+        var (content, error) = await CompleteAsync(endpoint, model, apiKey, Instructions, JsonSerializer.Serialize(facts, Json), cancellationToken).ConfigureAwait(false);
+        return error is not null ? SourceSuggestionResult.Failed(error) : Parse(content);
+    }
+
+    public async Task<AlertFixResult> SuggestFixAsync(string endpoint, string model, string apiKey, AlertFixFacts facts, CancellationToken cancellationToken)
+    {
+        var (content, error) = await CompleteAsync(endpoint, model, apiKey, AlertFixInstructions.Text, JsonSerializer.Serialize(facts, Json), cancellationToken).ConfigureAwait(false);
+        return error is not null ? AlertFixResult.Failed(error) : AlertFixReply.Parse(content);
+    }
+
+    /// <summary>One chat completion: the reply's text, or an error the page can show.</summary>
+    private async Task<(string? Content, string? Error)> CompleteAsync(string endpoint, string model, string apiKey, string system, string user, CancellationToken cancellationToken)
+    {
         HttpResponseMessage response;
         try
         {
@@ -54,45 +68,44 @@ public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<Op
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             request.Content = JsonContent.Create(new ChatRequest(model, 0,
             [
-                new ChatMessage("system", Instructions),
-                new ChatMessage("user", JsonSerializer.Serialize(facts, Json)),
+                new ChatMessage("system", system),
+                new ChatMessage("user", user),
             ]), options: Json);
             response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return SourceSuggestionResult.Failed("The suggestion timed out. Nothing was changed.");
+            return (null, "The suggestion timed out. Nothing was changed.");
         }
         catch (HttpRequestException exception)
         {
-            logger.LogWarning(exception, "Source suggestion request failed before a response.");
-            return SourceSuggestionResult.Failed("Couldn't reach the AI provider. Nothing was changed.");
+            logger.LogWarning(exception, "AI suggestion request failed before a response.");
+            return (null, "Couldn't reach the AI provider. Nothing was changed.");
         }
 
         using (response)
         {
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("Source suggestion provider returned HTTP {StatusCode}.", (int)response.StatusCode);
+                logger.LogWarning("AI suggestion provider returned HTTP {StatusCode}.", (int)response.StatusCode);
                 var message = (int)response.StatusCode switch
                 {
                     401 or 403 => "The AI provider refused the API key. Nothing was changed.",
                     429 => "The AI provider is busy. Try again in a moment. Nothing was changed.",
                     _ => "The AI provider returned an error. Nothing was changed.",
                 };
-                return SourceSuggestionResult.Failed(message);
+                return (null, message);
             }
 
             try
             {
                 var payload = await response.Content.ReadFromJsonAsync<ChatResponse>(Json, cancellationToken).ConfigureAwait(false);
-                var content = payload?.Choices?.FirstOrDefault()?.Message?.Content;
-                return Parse(content);
+                return (payload?.Choices?.FirstOrDefault()?.Message?.Content, null);
             }
             catch (JsonException exception)
             {
-                logger.LogWarning(exception, "Source suggestion reply was not JSON.");
-                return SourceSuggestionResult.Failed("The AI provider's reply couldn't be read. Nothing was changed.");
+                logger.LogWarning(exception, "AI suggestion reply was not JSON.");
+                return (null, "The AI provider's reply couldn't be read. Nothing was changed.");
             }
         }
     }
@@ -174,7 +187,7 @@ public sealed class OpenAiCompatibleSuggestionClient(HttpClient http, ILogger<Op
         _ => null,
     };
 
-    private static string? ExtractJson(string content)
+    internal static string? ExtractJson(string content)
     {
         var trimmed = content.Trim();
         if (trimmed.StartsWith("```", StringComparison.Ordinal))

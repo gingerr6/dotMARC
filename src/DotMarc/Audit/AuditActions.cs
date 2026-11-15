@@ -80,6 +80,7 @@ public static class AuditActions
     public const string PageViewed = "page.viewed";
     public const string SourceSuggestionSettingsSaved = "settings.source_suggestions.saved";
     public const string SourceSuggestionRequested = "source.suggestion_requested";
+    public const string AlertFixSuggestionRequested = "alert.fix_suggestion_requested";
 
     /// <summary>Every action with a short label, for the Action filter on the Audit log page.</summary>
     public static IReadOnlyList<(string Action, string Label)> All { get; } =
@@ -161,5 +162,6 @@ public static class AuditActions
         (PageViewed, "Page viewed"),
         (SourceSuggestionSettingsSaved, "AI suggestion settings saved"),
         (SourceSuggestionRequested, "AI source suggestion requested"),
+        (AlertFixSuggestionRequested, "AI alert fix suggestion requested"),
     ];
 }

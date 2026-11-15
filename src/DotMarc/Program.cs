@@ -186,6 +186,11 @@ builder.Services.AddHttpClient<DotMarc.Senders.ISourceSuggestionClient, DotMarc.
 {
     client.Timeout = TimeSpan.FromSeconds(20);
 });
+// The same provider and client; a fix is a few steps rather than one sentence, so it gets longer to answer.
+builder.Services.AddHttpClient<IAlertFixClient, DotMarc.Senders.OpenAiCompatibleSuggestionClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(45);
+});
 builder.Services.AddSingleton<IAlertWebhookClient, AlertWebhookClient>();
 
 // KeyVault:VaultUri is only set by infra/main.bicep when enableKeyVaultWrite is true (see
