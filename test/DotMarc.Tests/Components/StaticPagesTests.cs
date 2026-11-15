@@ -1,5 +1,10 @@
 using DotMarc.Tests.Internal;
+using DotMarc.Data;
+using DotMarc.Portal;
+using DotMarc.Notifications;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace DotMarc.Tests.Components;
@@ -46,6 +51,7 @@ public sealed class StaticPagesTests : IAsyncLifetime
     [InlineData("/demo")]
     [InlineData("/AccessDenied")]
     [InlineData("/signed-out")]
+    [InlineData("/SignInProblem?reason=admin-consent&code=AADSTS65001")]
     public async Task APageForSignedOutVisitors_DoesntStartACircuit(string path)
     {
         using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -76,5 +82,117 @@ public sealed class StaticPagesTests : IAsyncLifetime
 
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("You&#x27;ve signed out", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Alerts_LinkToExistingDomains_ButNotSystemOrRemovedSubjects(bool resolved)
+    {
+        using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await client.PostAsync("/demo/sign-in/admin", content: null);
+
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<DotMarcDbContext>>();
+        await using var context = await dbFactory.CreateDbContextAsync();
+        context.AlertEvents.RemoveRange(await context.AlertEvents.ToListAsync());
+        context.AlertEvents.AddRange(
+            Alert("aurora-retail.example", AlertTypes.MissedReport),
+            Alert("removed.example", AlertTypes.MissedReport),
+            Alert("PSA: NinjaOne", AlertTypes.PsaConnectionLost));
+        await context.SaveChangesAsync();
+
+        var html = await client.GetStringAsync("/alerts");
+
+        Assert.Contains("href=\"/domains/aurora-retail.example\"", html);
+        Assert.DoesNotContain("href=\"/domains/removed.example\"", html);
+        Assert.DoesNotContain("href=\"/domains/PSA", html);
+        Assert.Contains("removed.example", html);
+        Assert.Contains("PSA: NinjaOne", html);
+
+        var domainPage = await client.GetAsync("/domains/aurora-retail.example");
+        Assert.True(domainPage.IsSuccessStatusCode);
+        Assert.Contains("aurora-retail.example", await domainPage.Content.ReadAsStringAsync());
+
+        AlertEvent Alert(string domain, string type) => new()
+        {
+            DomainName = domain,
+            AlertType = type,
+            Severity = "Warning",
+            Title = "Test alert",
+            Message = "Test alert navigation",
+            IsResolved = resolved,
+            ResolvedUtc = resolved ? DateTimeOffset.UtcNow : null,
+        };
+    }
+
+    [Theory]
+    [InlineData("admin", "/dashboard")]
+    [InlineData("client", "/portal")]
+    public async Task SponsorLink_InBothLayouts_FollowsTheSavedSetting(string persona, string path)
+    {
+        const string sponsorUrl = "https://github.com/sponsors/homotechsual";
+        using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await client.PostAsync($"/demo/sign-in/{persona}", content: null);
+
+        var html = await client.GetStringAsync(path);
+        Assert.Contains(sponsorUrl, html);
+        Assert.Contains("Sponsor the project", html);
+
+        var dbFactory = _factory.Services.GetRequiredService<IDbContextFactory<DotMarcDbContext>>();
+        await using var context = await dbFactory.CreateDbContextAsync();
+        var settings = await BrandingSettingsService.GetAsync(context);
+        settings.ShowSponsorLink = false;
+        await BrandingSettingsService.SaveAsync(context, TestActors.Admin, settings);
+
+        Assert.DoesNotContain(sponsorUrl, await client.GetStringAsync(path));
+
+        settings.ShowSponsorLink = true;
+        await BrandingSettingsService.SaveAsync(context, TestActors.Admin, settings);
+
+        Assert.Contains(sponsorUrl, await client.GetStringAsync(path));
+    }
+
+    [Fact]
+    public async Task SponsorToggle_IsOnTheAdminPage_WithTheSupportReminder()
+    {
+        using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await client.PostAsync("/demo/sign-in/admin", content: null);
+
+        var html = await client.GetStringAsync("/branding/settings");
+
+        Assert.Contains("Show sponsor link", html);
+        Assert.Contains("Please support the project if", html);
+        Assert.Contains("https://github.com/sponsors/homotechsual", html);
+
+        await client.PostAsync("/demo/sign-in/viewer", content: null);
+        var response = await client.GetAsync("/branding/settings");
+        Assert.False(response.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task TheSignInProblemPage_ExplainsMissingAdminConsent_WithAConsentLinkForThisApp()
+    {
+        await using var factory = _factory!.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("EntraId:TenantId", "contoso-tenant");
+            builder.UseSetting("EntraId:ClientId", "client-1");
+        });
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var html = await client.GetStringAsync("/SignInProblem?reason=admin-consent&code=AADSTS65001");
+
+        Assert.Contains("administrator", html);
+        Assert.Contains("https://login.microsoftonline.com/contoso-tenant/adminconsent?client_id=client-1", html);
+        Assert.Contains("AADSTS65001", html);
+    }
+
+    [Fact]
+    public async Task TheSignInProblemPage_ShowsOnlyACodeThatLooksLikeOne()
+    {
+        using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var html = await client.GetStringAsync("/SignInProblem?reason=other&code=%3Cb%3Ecall%20us%3C%2Fb%3E");
+
+        Assert.DoesNotContain("call us", html);
     }
 }

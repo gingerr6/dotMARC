@@ -74,13 +74,17 @@
             "type": "boolean"
           },
           "domain": {
-            "nullable": true,
             "oneOf": [
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true
+              },
               {
                 "$ref": "#/components/schemas/ApiNamedRef"
               }
-            ],
-            "type": "object"
+            ]
           },
           "id": {
             "format": "int32",
@@ -244,13 +248,17 @@
             "type": "string"
           },
           "target": {
-            "nullable": true,
             "oneOf": [
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true
+              },
               {
                 "$ref": "#/components/schemas/ApiAuditTarget"
               }
-            ],
-            "type": "object"
+            ]
           }
         },
         "required": [
@@ -1292,13 +1300,17 @@
             "type": "string"
           },
           "nextPeriod": {
-            "nullable": true,
             "oneOf": [
+              {
+                "enum": [
+                  null
+                ],
+                "nullable": true
+              },
               {
                 "$ref": "#/components/schemas/ApiReportPeriod"
               }
-            ],
-            "type": "object"
+            ]
           },
           "recipients": {
             "items": {
@@ -1847,7 +1859,7 @@
   "info": {
     "description": "Read domains, DNS health, DMARC report summaries, groups, tags and alerts, and add, import and organise domains. Authenticate with an API key from dotMARC's Access page: `Authorization: Bearer dmk_...`. Each operation needs the permission named in its description, and a key limited to certain groups only sees their domains. Each key may make 120 requests a minute.",
     "title": "dotMARC API",
-    "version": "0.9.3"
+    "version": "0.10.3"
   },
   "openapi": "3.0.4",
   "paths": {
@@ -2244,6 +2256,8 @@
                   "settings.halo.saved",
                   "settings.connectwise.saved",
                   "settings.autotask.saved",
+                  "settings.superops.saved",
+                  "superops.integration_tested",
                   "settings.ninjaone.saved",
                   "ninjaone.connected",
                   "ninjaone.disconnected",
@@ -4875,13 +4889,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "nullable": true,
                 "oneOf": [
+                  {
+                    "enum": [
+                      null
+                    ],
+                    "nullable": true
+                  },
                   {
                     "$ref": "#/components/schemas/ApiSendReportRequest"
                   }
-                ],
-                "type": "object"
+                ]
               }
             }
           }

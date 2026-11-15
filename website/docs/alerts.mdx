@@ -31,6 +31,10 @@ elapses since the open alert was created, so a genuinely down domain doesn't pag
 domain, type, severity, created/resolved timestamps, and message. It requires the `AlertsView`
 permission, which is part of the built-in Viewer role by default.
 
+Click an alert's domain name to open that domain's detail page. Open and resolved alerts both link to the domain.
+Alerts for a removed domain or an application-wide issue (such as a PSA connection) have no domain link.
+The domain page still requires the `DomainsView` permission and access to that domain.
+
 Open DMARC policy weakened and nameservers changed alerts have an **Acknowledge** button for anyone with the
 `AlertsManage` permission. See [Closing policy and nameserver alerts](#closing-policy-and-nameserver-alerts).
 
@@ -112,7 +116,7 @@ A weaker DMARC policy or new nameservers may be deliberate, so these alerts comp
 these closes the alert and accepts the current policy or nameservers as the new normal:
 
 * **Acknowledge** on the Alerts page (needs `AlertsManage`). It's recorded in the [audit log](./audit-log.mdx).
-* **Closing its PSA ticket** in HaloPSA, NinjaOne, ConnectWise or Autotask.
+* **Closing its PSA ticket** in HaloPSA, NinjaOne, ConnectWise, Autotask or SuperOps.
 * **Closing automatically** after the number of days in **Close policy and nameserver alerts after (days)**, if set.
 
 ## Delivery channels
@@ -133,12 +137,17 @@ alert title.
 ### Slack
 
 Sent as a `POST` to a Slack incoming webhook, using Slack's Block Kit layout: a "dotMARC alert" header, the alert
-title, the domain and alert type side by side, then the message. To get a webhook URL:
+title, the domain and alert type side by side, then the message.
+
+<details>
+<summary>How to get a Slack webhook URL</summary>
 
 1. At [api.slack.com/apps](https://api.slack.com/apps), create an app (from scratch) in your workspace.
 2. Under **Incoming Webhooks**, turn them on, then **Add New Webhook to Workspace** and pick the channel.
 3. Copy the URL (it starts `https://hooks.slack.com/services/`) into **Slack webhook URL**, switch Slack on, and use
    **Send test** to check it.
+
+</details>
 
 ### Generic webhook
 

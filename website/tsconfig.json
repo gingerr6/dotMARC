@@ -2,6 +2,10 @@
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
     "baseUrl": ".",
+    "paths": {
+      "@site/*": ["./*"],
+      "@theme/Waypoint/*": ["./packages/docusaurus-theme-waypoint/theme/Waypoint/*"]
+    },
     "ignoreDeprecations": "6.0"
   }
 }

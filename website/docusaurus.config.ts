@@ -160,11 +160,17 @@ const config: Config = {
     ],
   ],
   themes: [
+    // Reads a guide one step at a time. A local copy for now, so it can be published once its settings settle.
+    './packages/docusaurus-theme-waypoint',
     'docusaurus-theme-openapi-docs',
     // Code blocks marked `reference` load a file from GitHub, so the docs show scripts as they are in the repo.
     'docusaurus-theme-github-codeblock',
   ],
   themeConfig: {
+    waypoint: {
+      frontMatterKey: 'stepMode',
+      storageNamespace: 'dotmarc-docs',
+    },
     codeblock: {
       showGithubLink: true,
       githubLinkLabel: 'View on GitHub',
@@ -188,6 +194,11 @@ const config: Config = {
         {to: '/releases-updates', label: 'Releases and Updates', position: 'left'},
         {to: 'https://demo.dotmarc.app/', label: 'Demo', position: 'left'},
         {to: '/feedback', label: 'Feedback & Feature Requests', position: 'left'},
+        {
+          href: 'https://github.com/sponsors/homotechsual',
+          label: 'Sponsor',
+          position: 'right',
+        },
         {
           to: 'https://github.com/homotechsual/dotMARC',
           label: 'GitHub',
@@ -214,6 +225,7 @@ const config: Config = {
             {label: 'Releases and Updates', to: '/releases-updates'},
             {label: 'Demo', to: 'https://demo.dotmarc.app/'},
             {label: 'GitHub', href: 'https://github.com/homotechsual/dotMARC'},
+            {label: 'Sponsor the project', href: 'https://github.com/sponsors/homotechsual'},
             {label: 'License', to: '/license'},
           ],
         },

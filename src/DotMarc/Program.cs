@@ -128,7 +128,15 @@ if (!demoOptions.Enabled)
     {
         client.BaseAddress = new Uri("https://graph.microsoft.com/v1.0/");
     });
+
+    // The TLS reports client throws when no TLS reports mailbox is set up, so it's only resolved when one is.
+    builder.Services.AddScoped(services => new MailboxAccessCheck(
+        services.GetRequiredService<IGraphMailboxClient>(),
+        () => services.GetService<ITlsrptGraphMailboxClient>(),
+        services.GetRequiredService<Microsoft.Extensions.Options.IOptions<GraphOptions>>()));
 }
+
+builder.Services.AddSingleton<DotMarc.Ingestion.PollNowSignal>();
 
 builder.Services.AddHttpClient<IDmarcDnsChecker, DmarcDnsChecker>(client =>
 {
@@ -219,6 +227,7 @@ builder.Services.AddSingleton<DotMarc.Psa.NinjaOne.NinjaOneStateProtector>();
 builder.Services.AddHttpClient<DotMarc.Psa.NinjaOne.NinjaOneConnector>();
 builder.Services.AddSingleton<DotMarc.Psa.Autotask.AutotaskZoneCache>();
 builder.Services.AddHttpClient<DotMarc.Psa.Autotask.IAutotaskClient, DotMarc.Psa.Autotask.AutotaskClient>();
+builder.Services.AddHttpClient<DotMarc.Psa.SuperOps.ISuperOpsClient, DotMarc.Psa.SuperOps.SuperOpsClient>();
 // The demo instance gets a pretend PSA so visitors can see tickets raised and closed; a real install talks to the real ones.
 if (demoOptions.Enabled)
 {
@@ -226,6 +235,7 @@ if (demoOptions.Enabled)
     builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider>(services => new DotMarc.Demo.DemoPsaProvider(DotMarc.Psa.PsaKind.NinjaOne, services.GetRequiredService<TimeProvider>()));
     builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider>(services => new DotMarc.Demo.DemoPsaProvider(DotMarc.Psa.PsaKind.ConnectWise, services.GetRequiredService<TimeProvider>()));
     builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider>(services => new DotMarc.Demo.DemoPsaProvider(DotMarc.Psa.PsaKind.Autotask, services.GetRequiredService<TimeProvider>()));
+    builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider>(services => new DotMarc.Demo.DemoPsaProvider(DotMarc.Psa.PsaKind.SuperOps, services.GetRequiredService<TimeProvider>()));
 }
 else
 {
@@ -233,6 +243,7 @@ else
     builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider, DotMarc.Psa.NinjaOne.NinjaOneProvider>();
     builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider, DotMarc.Psa.ConnectWise.ConnectWiseProvider>();
     builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider, DotMarc.Psa.Autotask.AutotaskProvider>();
+    builder.Services.AddSingleton<DotMarc.Psa.IPsaProvider, DotMarc.Psa.SuperOps.SuperOpsProvider>();
 }
 builder.Services.AddScoped<DotMarc.Psa.PsaDirectory>();
 
@@ -469,6 +480,24 @@ else
                     await signInAuditor.RecordAsync(principal, tokenValidatedContext.HttpContext.RequestAborted);
                 }
             };
+
+            // A sign-in Entra sends back as failed, most often because the tenant hasn't approved dotMARC yet, goes to a
+            // page that says why instead of the generic error page.
+            var previousOnRemoteFailure = options.Events.OnRemoteFailure;
+            options.Events.OnRemoteFailure = async remoteFailureContext =>
+            {
+                await previousOnRemoteFailure(remoteFailureContext);
+                if (remoteFailureContext.Result is not null)
+                {
+                    return;
+                }
+
+                var failure = DotMarc.Security.SignInFailure.Classify(remoteFailureContext.Failure?.Message);
+                remoteFailureContext.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>()
+                    .LogWarning(remoteFailureContext.Failure, "Entra sign-in failed ({SignInFailureKind}, {SignInFailureCode})", failure.Kind, failure.Code);
+                remoteFailureContext.Response.Redirect(failure.ProblemPagePath);
+                remoteFailureContext.HandleResponse();
+            };
         });
 }
 
@@ -534,6 +563,7 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationH
 builder.Services.AddScoped<DotMarc.Portal.PortalData>();
 builder.Services.AddScoped<DotMarc.Portal.PortalBrandLoader>();
 builder.Services.AddScoped<DotMarc.Reporting.DashboardFilterMemory>();
+builder.Services.AddScoped<DotMarc.Portal.SponsorLinkState>();
 builder.Services.AddScoped<DotMarc.Reporting.ClientReports.ClientReportBuilder>();
 builder.Services.AddScoped<DotMarc.Reporting.ClientReports.ClientReportDispatcher>();
 builder.Services.AddScoped<DotMarc.Reporting.ClientReports.ClientReportRunner>();
@@ -798,7 +828,7 @@ app.MapGet("/audit/export", async (HttpContext httpContext, IDbContextFactory<Do
 }).RequireAuthorization("UnlimitedAuditView");
 
 app.MapGet("/dns-push/{provider}/start", async (
-    string provider, int domainId, string target, string? payload, HttpContext httpContext,
+    string provider, int domainId, string target, string? payload, string? pushId, HttpContext httpContext,
     IEnumerable<IDnsPushProvider> pushProviders, IEnumerable<IDnsChangeBuilder> changeBuilders, DnsPushStateProtector stateProtector,
     IAuthorizationService authorizationService, IDbContextFactory<DotMarcDbContext> dbContextFactory) =>
 {
@@ -839,7 +869,8 @@ app.MapGet("/dns-push/{provider}/start", async (
     }
 
     var (codeVerifier, codeChallenge) = PkceGenerator.Generate();
-    var state = stateProtector.Protect(domainId, target, codeVerifier, DateTimeOffset.UtcNow, payload);
+    // The page's own id for this push, handed back with the result. Only a GUID is kept: it's echoed into the result page.
+    var state = stateProtector.Protect(domainId, target, codeVerifier, DateTimeOffset.UtcNow, payload, Guid.TryParse(pushId, out var parsedPushId) ? parsedPushId.ToString() : null);
     var redirectUri = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/dns-push/{provider}/callback";
 
     return Results.Redirect(await pushProvider.BuildAuthorizationUrlAsync(state, codeChallenge, redirectUri));
@@ -855,7 +886,7 @@ app.MapGet("/dns-push/{provider}/callback", async (
     var decodedState = state is null ? null : stateProtector.Unprotect(state, DateTimeOffset.UtcNow);
     if (pushProvider is null || decodedState is null)
     {
-        return DnsPushPopupResult.Close("invalid");
+        return DnsPushPopupResult.Close("invalid", decodedState?.PushId);
     }
 
     // The signed state proves the /start redirect was legitimate, but says nothing about whether
@@ -865,12 +896,12 @@ app.MapGet("/dns-push/{provider}/callback", async (
     var changeBuilder = changeBuilders.Find(decodedState.PushTarget);
     if (changeBuilder is null)
     {
-        return DnsPushPopupResult.Close("invalid");
+        return DnsPushPopupResult.Close("invalid", decodedState?.PushId);
     }
     var authResult = await authorizationService.AuthorizeAsync(httpContext.User, changeBuilder.RequiredPolicy);
     if (!authResult.Succeeded)
     {
-        return DnsPushPopupResult.Close("invalid");
+        return DnsPushPopupResult.Close("invalid", decodedState?.PushId);
     }
 
     await using var context = await dbContextFactory.CreateDbContextAsync();
@@ -878,12 +909,12 @@ app.MapGet("/dns-push/{provider}/callback", async (
         .Include(d => d.DkimRecords).SingleOrDefaultAsync(d => d.Id == decodedState.DomainId);
     if (domain is null)
     {
-        return DnsPushPopupResult.Close("invalid");
+        return DnsPushPopupResult.Close("invalid", decodedState?.PushId);
     }
 
     if (error is not null || code is null)
     {
-        return DnsPushPopupResult.Close("cancelled");
+        return DnsPushPopupResult.Close("cancelled", decodedState.PushId);
     }
 
     // Every push target except dmarc-auth writes into domain.Name's own zone; dmarc-auth writes
@@ -905,12 +936,12 @@ app.MapGet("/dns-push/{provider}/callback", async (
             // means the lookup succeeded but no configured account owns that zone) - report it
             // as a generic error instead of implying a permissions/configuration problem that
             // doesn't exist.
-            return DnsPushPopupResult.Close("error");
+            return DnsPushPopupResult.Close("error", decodedState.PushId);
         }
         var domainProviderKey = domainZoneDetection.Provider.ToProviderKey();
         if (!string.Equals(domainProviderKey, provider, StringComparison.OrdinalIgnoreCase))
         {
-            return DnsPushPopupResult.Close("zone-not-found");
+            return DnsPushPopupResult.Close("zone-not-found", decodedState.PushId);
         }
         domainZone = domainZoneDetection.ZoneName;
     }
@@ -918,7 +949,7 @@ app.MapGet("/dns-push/{provider}/callback", async (
     var plan = await changeBuilder.BuildAsync(new DnsPushRequest(domain, provider, domainZone, decodedState.Payload), CancellationToken.None);
     if (plan.Refusal is not null)
     {
-        return DnsPushPopupResult.Close(plan.Refusal);
+        return DnsPushPopupResult.Close(plan.Refusal, decodedState.PushId);
     }
 
     var changes = plan.Changes;
@@ -952,7 +983,7 @@ app.MapGet("/dns-push/{provider}/callback", async (
             decodedState.DomainId, decodedState.PushTarget, result.Outcome, result.DetailMessage);
     }
 
-    return DnsPushPopupResult.Close(resultFlag);
+    return DnsPushPopupResult.Close(resultFlag, decodedState.PushId);
 });
 
 // Connecting NinjaOne: an admin starts here from the NinjaOne tab, signs in at NinjaOne, and comes back to the

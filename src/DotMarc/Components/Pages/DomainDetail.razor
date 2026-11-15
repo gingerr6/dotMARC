@@ -89,7 +89,17 @@ else
                 <MudItem xs="4"><MudText>Sources: <b>@_sourceCount</b></MudText></MudItem>
             </MudGrid>
             <MudText Typo="Typo.subtitle2" Class="mt-2">Messages a day, by what receivers did with them (30 days to yesterday)</MudText>
-            <MudChart ChartType="ChartType.Line" ChartSeries="@_series" ChartLabels="@_xAxisLabels" ChartOptions="@_chartOptions" Width="100%" Height="260px" />
+            @if (_hasTrend)
+            {
+                <MudChart ChartType="ChartType.Line" ChartSeries="@_series" ChartLabels="@_xAxisLabels" ChartOptions="@_chartOptions" Width="100%" Height="260px" />
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="my-4">
+                    No DMARC reports received for this domain in the last 30 days. If they should be arriving, check mailbox
+                    access on the <MudLink Href="/dashboard">dashboard</MudLink>.
+                </MudAlert>
+            }
             @if (_reasonBreakdown is { Total: > 0 } breakdown)
             {
                 <MudPaper Class="pa-4 mt-4" Elevation="1">
@@ -900,6 +910,7 @@ else
     private List<ChartSeries<double>> _series = [];
     private string[] _xAxisLabels = [];
     private LineChartOptions _chartOptions = new();
+    private bool _hasTrend;
     private ReasonBreakdown? _reasonBreakdown;
     private double[] _reasonData = [];
     private string[] _reasonLabels = ["Benign override", "Local policy", "Other", "SPF failure (inferred)", "DKIM failure (inferred)", "SPF & DKIM failure (inferred)", "No reason given"];
@@ -1197,31 +1208,12 @@ else
             _ = DetectMailboxZonePushInBackgroundAsync();
         }
 
-        // Bucket by day-received (of the report, not the record) rather than the record itself,
-        // since ReportRecord has no timestamp of its own - Report.ReceivedUtc is what's available.
-        var dailyBuckets = _domain.Reports
-            .SelectMany(r => r.Records.Select(rec => new { Date = DateOnly.FromDateTime(r.ReceivedUtc.UtcDateTime), rec.Disposition, rec.MessageCount }))
-            .GroupBy(x => x.Date)
-            .ToDictionary(g => g.Key, g => new
-            {
-                None = g.Where(x => x.Disposition == DispositionResult.None).Sum(x => x.MessageCount),
-                Quarantine = g.Where(x => x.Disposition == DispositionResult.Quarantine).Sum(x => x.MessageCount),
-                Reject = g.Where(x => x.Disposition == DispositionResult.Reject).Sum(x => x.MessageCount)
-            });
-
         // The 30 days up to yesterday: today's reports mostly arrive tomorrow, so a point for today would always dip,
         // looking as if mail had stopped.
-        var days = Enumerable.Range(0, 30)
-            .Select(i => DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-30 + i)))
-            .ToList();
-        // A date every five days (and today), so 30 labels don't run into each other.
-        _xAxisLabels = days.Select((d, i) => i % 5 == 0 || i == days.Count - 1 ? d.ToString("d MMM") : "").ToArray();
-        _series =
-        [
-            new ChartSeries<double> { Name = "Delivered", Data = days.Select(d => (double)(dailyBuckets.TryGetValue(d, out var b) ? b.None : 0)).ToArray() },
-            new ChartSeries<double> { Name = "Quarantined", Data = days.Select(d => (double)(dailyBuckets.TryGetValue(d, out var b) ? b.Quarantine : 0)).ToArray() },
-            new ChartSeries<double> { Name = "Rejected", Data = days.Select(d => (double)(dailyBuckets.TryGetValue(d, out var b) ? b.Reject : 0)).ToArray() }
-        ];
+        var trend = DispositionTrend.Build(_domain.Reports, DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1));
+        _xAxisLabels = trend.Labels.ToArray();
+        _series = trend.Series.ToList();
+        _hasTrend = trend.HasData;
 
         // A y-axis scale that fits the busiest day in four or five steps, instead of one fixed step that can leave
         // nothing but 0 on the axis.
@@ -2274,9 +2266,30 @@ else
         await OpenDnsPushPopupAsync(pushProvider.ProviderKey, _domain.Id, "dkim");
     }
 
+    private Snackbar? _dnsPushWaiting;
+
+    /// <summary>The popup looks closed but may only have been cut off from this page by the provider's sign-in page
+    /// (Cloudflare does this), so the result is still on its way. Says so, with a way out if it really was closed.</summary>
+    [JSInvokable]
+    public void OnDnsPushWaiting()
+    {
+        _dnsPushWaiting = Snackbar.Add("Finish signing in to your DNS provider in the window that opened. dotMARC is waiting for the result.", Severity.Info, config =>
+        {
+            config.RequireInteraction = true;
+            config.Action = "Cancel";
+            config.OnClick = async _ => await JSRuntime.InvokeVoidAsync("dotMarcCancelDnsPush");
+        });
+    }
+
     [JSInvokable]
     public void OnDnsPushResult(string outcome)
     {
+        if (_dnsPushWaiting is not null)
+        {
+            Snackbar.Remove(_dnsPushWaiting);
+            _dnsPushWaiting = null;
+        }
+
         switch (outcome)
         {
             case "pushed":

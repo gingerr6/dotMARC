@@ -78,6 +78,7 @@ public sealed class PollingService : BackgroundService
     private readonly IAlertingService? _alertingService;
     private readonly ILogger<PollingService> _logger;
     private readonly IServiceScopeFactory? _scopeFactory;
+    private readonly PollNowSignal? _pollNow;
     private readonly GraphOptions? _options;
 
     /// <summary>Constructor used by tests: operates directly against an already-open
@@ -103,9 +104,10 @@ public sealed class PollingService : BackgroundService
     /// parameters would all be resolvable too, and the container would throw on activation
     /// rather than pick one.</summary>
     [ActivatorUtilitiesConstructor]
-    public PollingService(IServiceScopeFactory scopeFactory, IOptions<GraphOptions> options, IAlertingService alertingService, ILogger<PollingService> logger)
+    public PollingService(IServiceScopeFactory scopeFactory, IOptions<GraphOptions> options, IAlertingService alertingService, PollNowSignal pollNow, ILogger<PollingService> logger)
     {
         _scopeFactory = scopeFactory;
+        _pollNow = pollNow;
         _options = options.Value;
         _alertingService = alertingService;
         _logger = logger;
@@ -123,6 +125,8 @@ public sealed class PollingService : BackgroundService
                     using var scope = _scopeFactory.CreateScope();
                     var context = scope.ServiceProvider.GetRequiredService<DotMarcDbContext>();
 
+                    // Requests made before this poll are answered by it, whether it works or not.
+                    var pollNowRequests = _pollNow?.TakeRequests() ?? [];
                     try
                     {
                         var graphClient = scope.ServiceProvider.GetRequiredService<IGraphMailboxClient>();
@@ -131,6 +135,10 @@ public sealed class PollingService : BackgroundService
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Mailbox poll cycle failed; will retry next interval.");
+                    }
+                    finally
+                    {
+                        PollNowSignal.Complete(pollNowRequests);
                     }
 
                     try
@@ -344,7 +352,14 @@ public sealed class PollingService : BackgroundService
                 _logger.LogWarning(ex, "Poll cycle failed; will retry next interval.");
             }
 
-            await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+            if (_pollNow is null)
+            {
+                await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _pollNow.WaitAsync(interval, stoppingToken).ConfigureAwait(false);
+            }
         }
     }
 
