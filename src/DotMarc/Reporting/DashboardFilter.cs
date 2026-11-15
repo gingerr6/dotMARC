@@ -61,9 +61,14 @@ public static class DashboardFilter
 
 /// <summary>The Group and Tag the dashboard dropdowns show, and whether the domain list was loaded for that pair.
 /// Choosing a Group (including restoring one when the page comes back) marks the list as stale. The page must not
-/// keep showing it: that is the list of every domain, with the Group's name in the dropdown.</summary>
+/// keep showing it: that is the list of every domain, with the Group's name in the dropdown. Only the list is hidden
+/// while it loads: the dropdowns stay on screen, because removing one while its clear button is still running made
+/// MudBlazor focus an input that was gone, which ended the whole circuit.</summary>
 public sealed class DashboardFilterSession
 {
+    private int _loadVersion;
+    private bool _loading;
+
     public int? GroupId { get; private set; }
     public int? TagId { get; private set; }
 
@@ -82,7 +87,41 @@ public sealed class DashboardFilterSession
         ListMatchesSelection = false;
     }
 
-    public void MarkLoaded() => ListMatchesSelection = true;
+    /// <summary>Whether showing this Group and Tag needs a load. Not when the list already matches it, and not when a
+    /// load for it is already running: the page coming back to the same address must not start a second one, which
+    /// threw the first one's result away and left the page waiting on a load nobody was showing.</summary>
+    public bool NeedsLoad(int? groupId, int? tagId) =>
+        groupId != GroupId || tagId != TagId || (!ListMatchesSelection && !_loading);
+
+    /// <summary>Starts a load and returns its number. Only the newest load may publish its list.</summary>
+    public int BeginLoad()
+    {
+        _loading = true;
+        return ++_loadVersion;
+    }
+
+    public bool IsLatest(int version) => version == _loadVersion;
+
+    /// <summary>The newest load has put the list for the current selection on screen.</summary>
+    public void MarkLoaded(int version)
+    {
+        if (version != _loadVersion)
+        {
+            return;
+        }
+
+        _loading = false;
+        ListMatchesSelection = true;
+    }
+
+    /// <summary>The newest load stopped without a list (it failed, or the selection moved under it).</summary>
+    public void EndLoad(int version)
+    {
+        if (version == _loadVersion)
+        {
+            _loading = false;
+        }
+    }
 }
 
 /// <summary>The dashboard filter for this Blazor circuit. Moving to another page and back, including the home page
