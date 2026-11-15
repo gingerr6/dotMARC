@@ -170,6 +170,119 @@ namespace DotMarc.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DotMarc.Backups.BackupSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccessKeyId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Bucket")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("EndpointUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("LastBackupKey")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<long?>("LastBackupSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("LastFailureEmailUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastRunMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool?>("LastRunSucceeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LastRunUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastSuccessUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("NotifyOnSuccess")
+                        .HasColumnType("boolean");
+
+                    b.PrimitiveCollection<List<string>>("NotifyRecipients")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<bool>("PassphraseConfigured")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Region")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("RetentionDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("RunHourUtc")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("SecretAccessKeyConfigured")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Enabled = false,
+                            NotifyOnSuccess = true,
+                            NotifyRecipients = new List<string>(),
+                            PassphraseConfigured = false,
+                            Prefix = "dotmarc-backups",
+                            RetentionDays = 30,
+                            RunHourUtc = 3,
+                            SecretAccessKeyConfigured = false
+                        });
+                });
+
+            modelBuilder.Entity("DotMarc.Bimi.BimiAsset", b =>
+                {
+                    b.Property<int>("DomainId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CertificatePem")
+                        .HasColumnType("text");
+
+                    b.Property<string>("LogoSvg")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("UpdatedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("DomainId");
+
+                    b.ToTable("BimiAssets");
+                });
+
             modelBuilder.Entity("DotMarc.Data.ApiKey", b =>
                 {
                     b.Property<int>("Id")
@@ -235,6 +348,63 @@ namespace DotMarc.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTimeOffset?>("BimiCertificateExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BimiCheckDetail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("BimiCheckStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("BimiCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BimiLogoUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTimeOffset?>("BlocklistCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BlocklistDetail")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("BlocklistStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("CertificateCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CertificateDetail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("CertificateExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CertificateStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("DanglingCnameCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DanglingCnameDetail")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("DanglingCnameStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<string>("DkimCheckDetail")
                         .HasColumnType("text");
 
@@ -292,6 +462,25 @@ namespace DotMarc.Migrations
                     b.Property<string>("DnsZone")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("DomainExpiresUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DomainExpiryCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DomainExpiryDetail")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("DomainExpiryStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("DomainRegistrar")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTimeOffset>("FirstSeenUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -300,6 +489,18 @@ namespace DotMarc.Migrations
 
                     b.Property<DateTimeOffset?>("LastReportReceivedUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LookalikeCheckedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LookalikeDetail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("LookalikeStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("MtaStsCheckDetail")
                         .HasColumnType("text");
@@ -449,6 +650,9 @@ namespace DotMarc.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("ClientManagesDns")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -459,6 +663,24 @@ namespace DotMarc.Migrations
                         .IsUnique();
 
                     b.ToTable("Groups");
+                });
+
+            modelBuilder.Entity("DotMarc.Data.IpHostName", b =>
+                {
+                    b.Property<string>("Ip")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)");
+
+                    b.Property<string>("HostName")
+                        .HasMaxLength(253)
+                        .HasColumnType("character varying(253)");
+
+                    b.Property<DateTimeOffset>("LookedUpUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Ip");
+
+                    b.ToTable("IpHostNames");
                 });
 
             modelBuilder.Entity("DotMarc.Data.IpInfo", b =>
@@ -509,6 +731,47 @@ namespace DotMarc.Migrations
                     b.ToTable("IpRanges");
                 });
 
+            modelBuilder.Entity("DotMarc.Data.LookalikeDomain", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Dismissed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("DomainId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("FirstSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("HasMx")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<DateTimeOffset>("LastSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(253)
+                        .HasColumnType("character varying(253)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DomainId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("LookalikeDomains");
+                });
+
             modelBuilder.Entity("DotMarc.Data.ParseFailure", b =>
                 {
                     b.Property<int>("Id")
@@ -520,6 +783,9 @@ namespace DotMarc.Migrations
                     b.Property<int>("AttemptCount")
                         .HasColumnType("integer");
 
+                    b.Property<DateTimeOffset?>("GaveUpUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("GraphMessageId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -530,6 +796,10 @@ namespace DotMarc.Migrations
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.HasKey("Id");
 
@@ -824,6 +1094,42 @@ namespace DotMarc.Migrations
                         .IsUnique();
 
                     b.ToTable("Roles");
+                });
+
+            modelBuilder.Entity("DotMarc.Data.SenderApproval", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("DecidedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTimeOffset>("DecidedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DomainId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SenderKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DomainId", "SenderKey")
+                        .IsUnique();
+
+                    b.ToTable("SenderApprovals");
                 });
 
             modelBuilder.Entity("DotMarc.Data.Tag", b =>
@@ -1315,8 +1621,23 @@ namespace DotMarc.Migrations
                     b.Property<int>("AcknowledgeableAutoCloseDays")
                         .HasColumnType("integer");
 
+                    b.Property<string>("BlocklistAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CertificateAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<int>("CooldownMinutes")
                         .HasColumnType("integer");
+
+                    b.Property<string>("DanglingCnameAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("DkimAlertMode")
                         .IsRequired()
@@ -1336,6 +1657,11 @@ namespace DotMarc.Migrations
                     b.Property<bool>("DmarcPolicyWeakenedEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("DomainExpiryAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
 
@@ -1344,6 +1670,11 @@ namespace DotMarc.Migrations
 
                     b.Property<string>("GenericWebhookUrl")
                         .HasColumnType("text");
+
+                    b.Property<string>("LookalikeAlertMode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<int>("MissingReportThresholdDays")
                         .HasColumnType("integer");
@@ -1401,13 +1732,18 @@ namespace DotMarc.Migrations
                         {
                             Id = 1,
                             AcknowledgeableAutoCloseDays = 0,
+                            BlocklistAlertMode = "WhenItBreaks",
+                            CertificateAlertMode = "WhenItBreaks",
                             CooldownMinutes = 180,
+                            DanglingCnameAlertMode = "WhenItBreaks",
                             DkimAlertMode = "WhenItBreaks",
                             DmarcAlertMode = "WhenItBreaks",
                             DmarcAuthorizationAlertMode = "WhenItBreaks",
                             DmarcPolicyWeakenedEnabled = true,
+                            DomainExpiryAlertMode = "WhenItBreaks",
                             Enabled = true,
                             GenericWebhookEnabled = false,
+                            LookalikeAlertMode = "WhenItBreaks",
                             MissingReportThresholdDays = 2,
                             MonitorIntervalSeconds = 300,
                             MtaStsAlertMode = "WhenItBreaks",
@@ -1993,6 +2329,42 @@ namespace DotMarc.Migrations
                         });
                 });
 
+            modelBuilder.Entity("DotMarc.Updates.ServerUpdater", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("LastResult")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("LastResultUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastSeenUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("RequestedUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ServerUpdater", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -2072,6 +2444,15 @@ namespace DotMarc.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("DotMarc.Bimi.BimiAsset", b =>
+                {
+                    b.HasOne("DotMarc.Data.Domain", null)
+                        .WithOne()
+                        .HasForeignKey("DotMarc.Bimi.BimiAsset", "DomainId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DotMarc.Data.ApiKey", b =>
                 {
                     b.HasOne("DotMarc.Data.Role", "Role")
@@ -2095,6 +2476,15 @@ namespace DotMarc.Migrations
                 {
                     b.HasOne("DotMarc.Data.Domain", null)
                         .WithMany("DkimRecords")
+                        .HasForeignKey("DomainId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DotMarc.Data.LookalikeDomain", b =>
+                {
+                    b.HasOne("DotMarc.Data.Domain", null)
+                        .WithMany()
                         .HasForeignKey("DomainId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -2151,6 +2541,15 @@ namespace DotMarc.Migrations
                         .IsRequired();
 
                     b.Navigation("ReportRecord");
+                });
+
+            modelBuilder.Entity("DotMarc.Data.SenderApproval", b =>
+                {
+                    b.HasOne("DotMarc.Data.Domain", null)
+                        .WithMany("SenderApprovals")
+                        .HasForeignKey("DomainId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DotMarc.Data.TlsrptFailureDetail", b =>
@@ -2278,6 +2677,8 @@ namespace DotMarc.Migrations
                     b.Navigation("PsaCompanyLinks");
 
                     b.Navigation("Reports");
+
+                    b.Navigation("SenderApprovals");
 
                     b.Navigation("TlsrptReports");
                 });
