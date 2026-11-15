@@ -6,6 +6,8 @@ description: Let dotMARC push DNS records straight to Cloudflare, Azure DNS, or 
 import Checklist from '@site/src/components/Checklist';
 import ThemedImage from '@theme/ThemedImage';
 import useBaseUrl from '@docusaurus/useBaseUrl';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 # DNS Provider Push
 
@@ -49,11 +51,16 @@ The editor counts the DNS lookups the record needs, following each include. Rece
 so a record over 10 can't be pushed. If the live record is already over 10, any edit that lowers the count can be,
 so you can work your way back under.
 
+<details>
+<summary>What the push changes in DNS</summary>
+
 The domain's apex usually holds other TXT records too, such as site verifications. The push changes only the SPF
 record and leaves the others alone. If someone changes SPF in the DNS provider after you open the editor, the push
 stops and asks you to reopen it.
 
 The ending for new records is set under **Manage → DNS push settings → DNS records** (`~all` by default).
+
+</details>
 
 ## DKIM records
 
@@ -68,10 +75,15 @@ a CNAME target or a TXT value with the key. Where to find them:
 | Proton Mail | Settings > Domain names, the domain's DKIM step. |
 | Fastmail | Filled in for you. |
 
+<details>
+<summary>How selectors are pre-filled</summary>
+
 Selectors that already have a record in DNS are filled in from it, whatever the mail platform. For a Microsoft 365
 domain with nothing published yet, each selector starts with the part of its target that follows from the domain
 (for `contoso.example`, `selector1-contoso-example._domainkey.`). The rest, your tenant's `onmicrosoft.com` name and a letter Microsoft assigns,
 can only come from Microsoft 365, and dotMARC won't save a target that stops at `._domainkey`.
+
+</details>
 
 Paste records as the console shows them: quotes and line breaks are tidied away. Once a selector has a record, the DKIM
 check also checks DNS matches it, and says so if a CNAME is in place but the mail platform hasn't published the key
@@ -100,14 +112,20 @@ Cloudflare will let you continue. It's easy to sit there wondering why **Next** 
 because nothing visually prompts you to do this.
 :::
 
-On the next step (labeled **DNS & Zones** in Cloudflare's permission picker), tick **Edit** for
-both **DNS** and **Zone**. The Zone one is easy to skip since it isn't DNS-specific, but dotMARC
-needs it to resolve a domain name to its Cloudflare zone ID before it can push anything - DNS
-access alone can edit records inside a zone once it knows the ID, but can't look that ID up.
+On the next step (labeled **DNS & Zones** in Cloudflare's permission picker), select **Read** and
+**Edit** for **DNS**, and **Read** for **Zone**. You do not need **Zone > Edit**:
+
+- **DNS > Edit** lets dotMARC create, update, and delete records when you push DNS changes.
+- **DNS > Read** is also required so dotMARC can find existing records before merging or replacing
+  them.
+- **Zone > Read** lets dotMARC look up a domain's Cloudflare zone ID before it can access that
+  zone's records.
+
+The read permissions do not replace DNS edit access; all three permissions are needed.
 
 After you click **Continue** on that step, a **second** step appears listing the permissions you
 just picked with a **Required** toggle next to each - this doesn't show up until you continue past
-the first step, so don't go looking for it there. Leave both marked **Required** (not optional).
+the first step, so don't go looking for it there. Leave all three marked **Required** (not optional).
 Finish creating the client, then note its **Client ID** and **Client secret** - you'll enter both
 into dotMARC directly (see above), there's nothing to set as an environment variable or deployment
 parameter for this.
@@ -116,15 +134,15 @@ parameter for this.
   "Created the OAuth client with Response Type = Code",
   "Set Token Authentication Method to client_secret_post",
   "Added the /dns-push/cloudflare/callback redirect URL, pressing Enter to add it",
-  "Ticked DNS > Edit and Zone > Edit under DNS & Zones",
-  "Continued to the second permissions step and left both marked Required",
+  "Selected DNS > Read and Edit, and Zone > Read under DNS & Zones",
+  "Continued to the second permissions step and left all three marked Required",
   "Entered the Client ID/secret into dotMARC's DNS push settings",
 ]} />
 
 ## Azure DNS
 
 Register a *third*, separate Entra app registration (do not reuse the mailbox or dashboard app from
-[Getting Started](./getting-started.mdx)). Go to **App registrations** → **New registration**, set
+[your deployment's Entra setup](./getting-started.mdx#choose-how-to-run-it)). Go to **App registrations** → **New registration**, set
 **Supported account types** to the multitenant option (accounts in any organizational directory) -
 this flow lets each customer authorize a push into *their own* tenant, which is a different tenant
 than the one this app registration lives in, so it must not be restricted to a single tenant. Then
@@ -133,25 +151,76 @@ than the one this app registration lives in, so it must not be restricted to a s
 delegated **Azure Service Management** → `user_impersonation` permission.
 
 :::tip[Set it up with a script]
-`create-azure-dns-app.sh` does all of the above and prints the client ID and secret to enter in dotMARC. Run it in
-Azure Cloud Shell (Bash), or anywhere with bash and a signed-in Azure CLI, giving it your dotMARC host:
+The `create-azure-dns-app` script does all of the above and prints the client ID and secret to enter in dotMARC. It
+makes changes in your tenant, so **download it and read it before you run it**. You can run it in Azure Cloud Shell, or
+anywhere with a signed-in Azure CLI:
+
+<Tabs groupId="shell" queryString="shell">
+<TabItem value="powershell" label="PowerShell" default>
+
+Download the script, then open it and check what it does:
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/homotechsual/dotMARC/main/scripts/dns-push/create-azure-dns-app.ps1 -OutFile create-azure-dns-app.ps1
+```
+
+When you are happy with it, unblock it and run it with your dotMARC host:
+
+```powershell
+Unblock-File ./create-azure-dns-app.ps1
+./create-azure-dns-app.ps1 dotmarc.contoso.example
+```
+
+`Unblock-File` removes the "downloaded from the internet" mark that Windows puts on files saved from a browser, which
+PowerShell's default `RemoteSigned` policy would otherwise refuse to run. Only run it once you have read the script. If
+PowerShell still says running scripts is disabled, allow it for this window only with
+`Set-ExecutionPolicy -Scope Process RemoteSigned`.
+
+`-Name` changes the app's name, and `-SecretYears` how long the secret lasts (2 years by default).
+
+</TabItem>
+<TabItem value="bash" label="Bash">
+
+Download the script, then open it and check what it does:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/homotechsual/dotMARC/main/scripts/dns-push/create-azure-dns-app.sh
+```
+
+When you are happy with it, run it with your dotMARC host:
+
+```bash
 bash create-azure-dns-app.sh dotmarc.contoso.example
 ```
 
+`--name` changes the app's name, and `--secret-years` how long the secret lasts (2 years by default).
+
+</TabItem>
+</Tabs>
+
 Running it again reuses the app rather than creating another, adding the redirect URI if it's missing and issuing a
-new secret alongside the old one. `--name` changes the app's name, and `--secret-years` how long the secret lasts
-(2 years by default).
+new secret alongside the old one.
 :::
 
 <details>
 <summary>The script</summary>
 
+<Tabs groupId="shell" queryString="shell">
+<TabItem value="powershell" label="PowerShell" default>
+
+```powershell reference title="create-azure-dns-app.ps1"
+https://github.com/homotechsual/dotMARC/blob/main/scripts/dns-push/create-azure-dns-app.ps1
+```
+
+</TabItem>
+<TabItem value="bash" label="Bash">
+
 ```bash reference title="create-azure-dns-app.sh"
 https://github.com/homotechsual/dotMARC/blob/main/scripts/dns-push/create-azure-dns-app.sh
 ```
+
+</TabItem>
+</Tabs>
 
 </details>
 
@@ -180,22 +249,70 @@ one-time review in Google Cloud Console that can take several days to turn aroun
 lead time before relying on this provider for a customer outside your own test-user allowlist.
 
 :::tip[Get started with a script]
-`prepare-google-cloud-dns.sh` enables both APIs in your project, then prints the redirect URI, the two scopes and a
-direct console link for each remaining step. gcloud can't create this kind of OAuth client, so the consent screen and
-client are still made in the console. Run it in Google Cloud Shell, or anywhere with bash and a signed-in gcloud CLI:
+The `prepare-google-cloud-dns` script enables both APIs in your project, then prints the redirect URI, the two scopes
+and a direct console link for each remaining step. gcloud can't create this kind of OAuth client, so the consent screen
+and client are still made in the console. It enables APIs in your project, so **download it and read it before you run
+it**. You can run it in Google Cloud Shell, or anywhere with a signed-in gcloud CLI:
+
+<Tabs groupId="shell" queryString="shell">
+<TabItem value="powershell" label="PowerShell" default>
+
+Download the script, then open it and check what it does:
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/homotechsual/dotMARC/main/scripts/dns-push/prepare-google-cloud-dns.ps1 -OutFile prepare-google-cloud-dns.ps1
+```
+
+When you are happy with it, unblock it and run it with your dotMARC host and project:
+
+```powershell
+Unblock-File ./prepare-google-cloud-dns.ps1
+./prepare-google-cloud-dns.ps1 dotmarc.contoso.example your-project-id
+```
+
+`Unblock-File` removes the "downloaded from the internet" mark that Windows puts on files saved from a browser, which
+PowerShell's default `RemoteSigned` policy would otherwise refuse to run. Only run it once you have read the script. If
+PowerShell still says running scripts is disabled, allow it for this window only with
+`Set-ExecutionPolicy -Scope Process RemoteSigned`.
+
+</TabItem>
+<TabItem value="bash" label="Bash">
+
+Download the script, then open it and check what it does:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/homotechsual/dotMARC/main/scripts/dns-push/prepare-google-cloud-dns.sh
+```
+
+When you are happy with it, run it with your dotMARC host and project:
+
+```bash
 bash prepare-google-cloud-dns.sh dotmarc.contoso.example your-project-id
 ```
+
+</TabItem>
+</Tabs>
 :::
 
 <details>
 <summary>The script</summary>
 
+<Tabs groupId="shell" queryString="shell">
+<TabItem value="powershell" label="PowerShell" default>
+
+```powershell reference title="prepare-google-cloud-dns.ps1"
+https://github.com/homotechsual/dotMARC/blob/main/scripts/dns-push/prepare-google-cloud-dns.ps1
+```
+
+</TabItem>
+<TabItem value="bash" label="Bash">
+
 ```bash reference title="prepare-google-cloud-dns.sh"
 https://github.com/homotechsual/dotMARC/blob/main/scripts/dns-push/prepare-google-cloud-dns.sh
 ```
+
+</TabItem>
+</Tabs>
 
 </details>
 

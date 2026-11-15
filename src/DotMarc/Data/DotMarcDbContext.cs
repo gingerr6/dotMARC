@@ -49,6 +49,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<HaloPsaSettings> HaloPsaSettings => Set<HaloPsaSettings>();
     public DbSet<DotMarc.Psa.ConnectWise.ConnectWiseSettings> ConnectWiseSettings => Set<DotMarc.Psa.ConnectWise.ConnectWiseSettings>();
     public DbSet<DotMarc.Psa.Autotask.AutotaskSettings> AutotaskSettings => Set<DotMarc.Psa.Autotask.AutotaskSettings>();
+    public DbSet<DotMarc.Psa.SuperOps.SuperOpsSettings> SuperOpsSettings => Set<DotMarc.Psa.SuperOps.SuperOpsSettings>();
     public DbSet<DotMarc.Psa.NinjaOne.NinjaOneSettings> NinjaOneSettings => Set<DotMarc.Psa.NinjaOne.NinjaOneSettings>();
     public DbSet<EncryptedSecret> EncryptedSecrets => Set<EncryptedSecret>();
     public DbSet<CloudflareDnsSettings> CloudflareDnsSettings => Set<CloudflareDnsSettings>();
@@ -467,6 +468,7 @@ public sealed class DotMarcDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<DotMarc.Psa.ConnectWise.ConnectWiseSettings>().HasData(new DotMarc.Psa.ConnectWise.ConnectWiseSettings { Id = 1 });
         modelBuilder.Entity<DotMarc.Psa.Autotask.AutotaskSettings>().HasData(new DotMarc.Psa.Autotask.AutotaskSettings { Id = 1 });
         modelBuilder.Entity<DotMarc.Psa.NinjaOne.NinjaOneSettings>().HasData(new DotMarc.Psa.NinjaOne.NinjaOneSettings { Id = 1, NewStatusId = DotMarc.Psa.NinjaOne.NinjaOneOptions.NewStatusId, NewStatusName = "New" });
+        modelBuilder.Entity<DotMarc.Psa.SuperOps.SuperOpsSettings>().HasData(new DotMarc.Psa.SuperOps.SuperOpsSettings { Id = 1 });
         modelBuilder.Entity<DotMarc.Backups.BackupSettings>(entity =>
         {
             entity.Property(settings => settings.Bucket).HasMaxLength(255);

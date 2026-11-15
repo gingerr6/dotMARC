@@ -1839,6 +1839,9 @@ namespace DotMarc.Migrations
                         .HasMaxLength(7)
                         .HasColumnType("character varying(7)");
 
+                    b.Property<bool>("ShowSponsorLink")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("SupportEmail")
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)");
@@ -1861,7 +1864,8 @@ namespace DotMarc.Migrations
                             Id = 1,
                             PrimaryColour = "#E3594F",
                             ProductName = "dotMARC",
-                            SecondaryColour = "#263141"
+                            SecondaryColour = "#263141",
+                            ShowSponsorLink = true
                         });
                 });
 
@@ -2200,6 +2204,62 @@ namespace DotMarc.Migrations
                     b.ToTable("PsaCompanyLinks", t =>
                         {
                             t.HasCheckConstraint("CK_PsaCompanyLinks_OneOwner", "(\"GroupId\" IS NULL) <> (\"DomainId\" IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("DotMarc.Psa.SuperOps.SuperOpsSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("ApiTokenConfigured")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Category")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ClosedStatus")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NewStatus")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Priority")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RequestType")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Subdomain")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Urgency")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SuperOpsSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            ApiTokenConfigured = false,
+                            ClosedStatus = "Resolved",
+                            Enabled = false,
+                            NewStatus = "Open",
+                            Region = "us",
+                            RequestType = "Incident"
                         });
                 });
 

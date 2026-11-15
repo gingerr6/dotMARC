@@ -8,35 +8,36 @@ for the full design.
 
 dotMARC needs **two separate** Entra app registrations: do not reuse one for both purposes:
 
+To create both registrations and their client secrets with Azure CLI, sign in to the intended tenant
+and run [`scripts/entra/create-dotmarc-apps.ps1`](scripts/entra/create-dotmarc-apps.ps1) in PowerShell
+or [`scripts/entra/create-dotmarc-apps.sh`](scripts/entra/create-dotmarc-apps.sh) in Bash. Pass
+`-DashboardRedirectUri` (PowerShell) or `--dashboard-redirect-uri` (Bash) with
+`https://<your-host>/signin-oidc` when the host is known, or add the redirect URI after deploying to
+Azure Container Apps. Add `-IncludeMailSend` or `--include-mail-send` if you plan to send client
+reports through Microsoft Graph. Add `-Rbac` (PowerShell) or `--rbac` (Bash) to set the mailbox app up for
+Exchange RBAC for Applications, which Microsoft recommends in place of Application Access Policies: the
+mailbox app then gets no Graph mail permission in Entra, because you grant access in Exchange Online,
+limited to one mailbox. The script never grants admin consent to the mailbox app. Copy the secrets it
+prints, as they cannot be retrieved later.
+
 ### 1. Mailbox access (app-only)
 
 1. **App registrations** → **New registration**, name it e.g. `dotmarc-mailbox`.
-2. **API permissions** → add Microsoft Graph **Application** permission `Mail.ReadWrite`, then grant
-   admin consent. dotMARC marks each report email as read once it has stored the report, which
-   `Mail.Read` doesn't allow.
-3. **Certificates & secrets** → create a client secret.
-4. Restrict this app's mailbox access via an Exchange **Application Access Policy**. Exchange
-   requires the policy scope to be a **security principal** (for example a mail-enabled security
-   group), not the mailbox itself. Create a dedicated group for the DMARC reports mailbox, add
-   that mailbox to the group, and then scope the policy to the group:
-
-   ```powershell
-   Connect-ExchangeOnline -Organization <your-tenant>
-
-   $group = New-DistributionGroup -Name "dotMARC DMARC Reports Scope" -Type Security -Alias dotmarc-dmarc-reports
-   Add-DistributionGroupMember -Identity $group.Identity -Member "dmarc-reports@contoso.com"
-
-   New-ApplicationAccessPolicy -AppId <client-id> -PolicyScopeGroupId $group.ObjectId -AccessRight RestrictAccess -Description "dotMARC: restrict to DMARC reports mailbox only"
-   ```
-
-   If you already have the mail-enabled security group, use its `ObjectId` instead of the mailbox
-   address. Do not pass the mailbox address directly to `-PolicyScopeGroupId`.
+2. **Certificates & secrets** → create a client secret.
+3. Give the app access to the DMARC reports mailbox **in Exchange Online**, limited to that one mailbox,
+   using **RBAC for Applications**. Do not add the Graph `Mail.ReadWrite` permission and grant it admin
+   consent in Entra: that applies to every mailbox in your tenant. The full steps (scope group, management
+   scope, service principal, `Application Mail.ReadWrite` role assignment, and how to test it) are in the
+   [deployment guides](https://dotmarc.app/docs/deploy-with-docker#mailbox-app-registration-app-only). These
+   commands come from the **ExchangeOnlineManagement** PowerShell module. If you already use an Application
+   Access Policy it keeps working, and the guide covers how to move off it.
 
 ### 2. Dashboard sign-in (delegated)
 
 1. **App registrations** → **New registration**, name it e.g. `dotmarc-dashboard`.
 2. **Authentication** → add a **Web** platform redirect URI:
    `https://<your-deployment-host>/signin-oidc`.
+   Under **Implicit grant and hybrid flows**, enable **ID tokens**.
 3. **Certificates & secrets** → create a client secret. Microsoft.Identity.Web wires this app up
    via the standard confidential-client authorization-code flow, so the token exchange after
    sign-in needs this secret even though the app itself is only used for interactive sign-in.
@@ -132,90 +133,26 @@ per-deployment configuration.
 
 ## Deploy to Azure
 
-For an existing deployment, see [Deploy to Azure: Update or redeploy dotMARC](https://dotmarc.app/docs/deploy-to-azure#5-update-or-redeploy-dotmarc)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fdotmarc.app%2Fazuredeploy.json)
+
+The button opens Azure's deployment form for a Container App, a PostgreSQL Flexible Server and a Key
+Vault. The full walkthrough lives in the docs, in order, with every form field explained next to the
+button: **[Deploy to Azure](https://dotmarc.app/docs/deploy-to-azure)**. In short:
+
+1. Create the two Entra app registrations (see [One-time setup](#one-time-setup-two-entra-app-registrations) above).
+2. Choose the right subscription and a new resource group, then deploy with the button (or `infra/main.bicep`).
+3. Find the deployed resources (the docs give a script that does not depend on the deployment name).
+4. Register `<app URL>/signin-oidc` as the dashboard app's redirect URI.
+5. Grant yourself **Key Vault Secrets Officer**, write the three Key Vault secrets, re-apply all three Container App secret references with `az containerapp secret set`, and restart the revision.
+6. Confirm the revision is Healthy and Running.
+
+This is not an unattended installation: the app will not start until steps 4 and 5 are done. The
+button uses [dotmarc.app/azuredeploy.json](https://dotmarc.app/azuredeploy.json), generated from
+`infra/main.bicep` during every website build, so there is no separate JSON template to maintain.
+
+For an existing deployment, see [Deploy to Azure: Update or redeploy dotMARC](https://dotmarc.app/docs/deploy-to-azure#7-update-or-redeploy-dotmarc)
 for checking the active image, updating immutable release tags, forcing a new revision when using
 `:latest`, verifying readiness, and rolling back.
-
-`infra/main.bicep` provisions everything needed to run dotMARC on Azure:
-
-* A **Container Apps environment** (backed by a Log Analytics workspace) and a **Container App**
-  running the published dotMARC image, with a system-assigned managed identity, sticky sessions
-  (required for Blazor Server), and a single replica.
-* An **Azure Database for PostgreSQL Flexible Server** (`Standard_B1ms`, PostgreSQL 18) with a
-  `dotmarc` database and a firewall rule allowing Azure services.
-* A **Key Vault** (RBAC-authorized), with the Container App's managed identity granted the
-  `Key Vault Secrets User` role.
-
-Before deploying, complete the **two Entra app registrations** described in
-[One-time setup: two Entra app registrations](#one-time-setup-two-entra-app-registrations) above:
-the Bicep template takes the same non-secret client IDs/tenant IDs as deployment parameters, and
-the client secrets are set into Key Vault after deployment (see below).
-
-### 1. Fill in the parameters
-
-Copy `infra/main.parameters.json` and replace the `REPLACE_ME` placeholders, as checked in, the
-file contains placeholder values only and is **not meant to be deployed as-is**. At minimum, set
-`postgresAdminPassword`, `graphClientId`, `graphTenantId`, `graphMailboxAddress`,
-`entraIdTenantId`, and `entraIdClientId`. For `containerImage`, use the GHCR image published by
-CI/CD `ghcr.io/homotechsual/dotmarc:latest`, or a specific version tag from a release rather
-than building your own.
-
-Alternatively, leave the file untouched and pass overrides inline with `--parameters key=value` on
-the command below.
-
-### 2. Deploy
-
-```powershell
-$RG = 'your-dotmarc-resourcegroup'
-az group create --name $RG --location uksouth
-az deployment group create `
-  --resource-group $RG `
-  --template-file infra/main.bicep `
-  --parameters infra/main.parameters.json
-```
-
-### 3. Register the deployed hostname as an OIDC redirect URI
-
-The Container App's hostname isn't known until after deployment (Container Apps assigns its FQDN
-from the environment's own DNS suffix), so the redirect URI registered in the
-[dashboard sign-in app registration](#2-dashboard-sign-in-delegated) during one-time setup can't
-be filled in ahead of time. Read the deployed URL from the template's `containerAppUrl` output:
-
-```powershell
-az deployment group show --resource-group $RG --name main --query properties.outputs.containerAppUrl.value -o tsv
-```
-
-Then, in the `dotmarc-dashboard` app registration's **Authentication** blade, add a **Web**
-platform redirect URI of `<that URL>/signin-oidc` (alongside or replacing the placeholder one
-added during one-time setup). Sign-in will fail with AADSTS50011 until this is done.
-
-### 4. Populate the Key Vault secrets
-
-The template deliberately provisions three Key Vault secrets `Graph-ClientSecret`,
-`EntraId-ClientSecret`, and `ConnectionStrings-DotMarc` empty, rather than accepting secret
-material as deployment parameters (which would put it on the command line or in a parameters
-file). Until these are set, the app can't sign in or reach Postgres. Populate them directly:
-
-```powershell
-$RG = 'dotmarc-rg'
-$KV = az deployment group show --resource-group $RG --name main --query properties.outputs.keyVaultName.value -o tsv
-$PG_FQDN = az deployment group show --resource-group $RG --name main --query properties.outputs.postgresServerFqdn.value -o tsv
-
-az keyvault secret set --vault-name $KV --name Graph-ClientSecret --value "<graph app client secret>"
-az keyvault secret set --vault-name $KV --name EntraId-ClientSecret --value "<entra id app client secret>"
-az keyvault secret set --vault-name $KV --name ConnectionStrings-DotMarc `
-  --value "Host=$PG_FQDN;Database=dotmarc;Username=<postgresAdminUsername>;Password=<postgresAdminPassword>;Ssl Mode=Require"
-
-$APP = az deployment group show --resource-group $RG --name main --query properties.outputs.containerAppName.value -o tsv
-$REVISION = az containerapp show --resource-group $RG --name $APP --query properties.latestRevisionName -o tsv
-az containerapp revision restart --resource-group $RG --name $APP --revision $REVISION
-```
-
-Substitute the two Entra app registration client secrets created in the one-time setup steps
-above, and the `postgresAdminUsername`/`postgresAdminPassword` values used in step 1. The
-container app's secrets reference these by versionless Key Vault URL, so
-`az containerapp revision restart` forces it to re-fetch them immediately rather than waiting for
-their normal refresh cycle.
 
 ## Demo instance
 

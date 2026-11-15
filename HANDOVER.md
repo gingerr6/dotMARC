@@ -24,7 +24,8 @@ _Last updated: Sunday 15 November 2026 (London time)_
 | [#47](https://github.com/gingerr6/dotMARC/pull/47) | Fixes the dashboard group filter being lost when you navigate back to it. The filter is now kept in the page address. | fb146a34 |
 | [#48](https://github.com/gingerr6/dotMARC/pull/48) | Removes the personal AI switch from the Sources tab and removes the role permission. Suggest now shows for every signed-in user once a provider is set up. | 54493fb |
 | [#49](https://github.com/gingerr6/dotMARC/pull/49) | Fixes the group filter regression from #47. Clearing the Group crashed the Blazor circuit (the dropdown was removed mid-click), and MudBlazor's clear left an invisible open list that swallowed the next click. The dropdowns now stay on screen while loading, `SearchableSelect` closes its list after a clear, and the address is updated with `history.replaceState` instead of a second navigation. | c605f5b |
-| [#50](https://github.com/gingerr6/dotMARC/pull/50) | Adds **Suggest fix** on the Alerts page: asks the connected AI provider how to fix one open alert and shows a summary and steps under the row. | (see PR) |
+| [#50](https://github.com/gingerr6/dotMARC/pull/50) | Adds **Suggest fix** on the Alerts page: asks the connected AI provider how to fix one open alert and shows a summary and steps under the row. | 50eb078 |
+| Upstream merge | Merges upstream up to **v0.10.3** (53 commits): SuperOps PSA, mailbox access checks and Poll now on the dashboard, Entra/Graph consent explanations, RBAC for Applications docs, domain links on Alerts, the sponsor link setting, and package updates (MudBlazor 9.13, MailKit 5, EF Core 10.0.15). | (see PR) |
 
 ## 4. Open / in progress
 - Nothing in progress. The group filter regression from #47 is fixed in #49.
@@ -63,3 +64,8 @@ _Last updated: Sunday 15 November 2026 (London time)_
 - James usually dictates, so expect misheard words. "Deakin" means DKIM, and "Box Bush" is a client domain.
 - Fix problems directly through PRs on the fork rather than handing James code.
 - There is no bot login to the live instance, so changes are checked through CI and James's feedback.
+- **Keeping up with upstream:** add `upstream` = `https://github.com/homotechsual/dotMARC.git`, then merge `upstream/main` into a branch off the fork's `main` (a merge, not a rebase: the fork's history is shared). Last synced at upstream v0.10.3 (`6ef1815`, 14 Nov 2026). Points that needed care last time:
+  - The domain page chart: the fork keeps upstream's `DispositionTrend` but passes yesterday as the last day, and labels dates `d MMM` (UK).
+  - Upstream's migrations can be dated before the fork's newest ones. EF still applies them going forward, but rolling back uses each migration's `.Designer.cs` model, and upstream's lack the fork's tables. Rebuild those Designer models from the fork's preceding migration plus the upstream change (done for `AddSponsorLinkVisibility` and `AddSuperOpsSettings`), then check with `dotnet ef migrations has-pending-model-changes`, `PsaDataMigrationTests`, and `dotnet ef database update 0` then back to latest on a scratch database.
+  - Re-run a browser check of the dashboard group filter after any MudBlazor update: `SearchableSelect` works around MudBlazor's autocomplete clear behaviour.
+  - Regenerate `website/data/openapi/dotmarc-api.json` (`DOTMARC_UPDATE_OPENAPI=1`) when the API or audit actions change, or the OpenAPI test fails.

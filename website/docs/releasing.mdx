@@ -58,7 +58,8 @@ first; the log lists what it would change.
 | `notify_voters` | Default off. Whether moving an idea to complete emails its voters. Leave it off if the changelog entry is going to notify them anyway. |
 | `author_id` | Only needed if the board has more than one Canny admin, so the script cannot pick the author itself. |
 
-What the sync does, and deliberately does not do:
+<details>
+<summary>What the sync does, and deliberately does not do</summary>
 
 - It matches ideas to existing posts by **title** (trimmed, case-insensitive). A match is never
   duplicated.
@@ -80,14 +81,18 @@ What the sync does, and deliberately does not do:
   complete idea whose version isn't released yet is created as `in progress`, not `complete`.
 - It is safe to re-run: a second run with no JSON changes makes no writes.
 
+</details>
+
 ## Changelog publishing and idea linking
 
 The `canny-changelog` job in `release.yml` runs once the images and GitHub release have succeeded. It
 only runs for a real tag push, never for a manual re-run of the workflow. It first runs the roadmap
 sync (the release now exists, so ideas finished in this version are marked `complete` and their line
 becomes "Released in"), then `website/scripts/publish-canny-changelog.mjs`. A failure in the sync step
-is reported but does not stop the changelog entry. For the tagged version the changelog script does
-the following:
+is reported but does not stop the changelog entry.
+
+<details>
+<summary>What the changelog script does for the tagged version</summary>
 
 1. **Finds the release post** in `website/blog/` by its `slug` (`v0.7.0` becomes `v0-7-0`), so the
    post must exist at the tagged commit. `release.mjs tag` guarantees that.
@@ -103,6 +108,8 @@ the following:
 5. **Creates the entry** as published, dated with the release post's filename date, with the
    matching ideas passed as `postIDs`. Notifications default on (`NOTIFY=false` turns them off).
 
+</details>
+
 Linking is a bonus, not a gate. If the idea lookup fails, the entry is published without links and
 a warning is logged. The job only fails outright if the post cannot be found or parsed, the existing
 entries cannot be listed, or Canny rejects the entry.
@@ -114,13 +121,22 @@ entries cannot be listed, or Canny rejects the entry.
    and not complete until the release exists, and the release job then marks them complete and links
    them. Anything that slipped should be moved to a later version (change its `version` in the JSON
    and run the sync), or it will simply be skipped and logged.
-2. **Prepare.** `node scripts/release.mjs prepare 0.7.0` bumps `Directory.Build.props` and creates
+2. **Bring the packages up to date.** Every release ships on the latest packages. Run
+   `node scripts/release.mjs deps` (`tag` runs it too and refuses to continue if it fails). It fails on any
+   vulnerable package and on any direct package reference that is behind its latest version, new major versions
+   included, and lists transitive packages that are behind. Bump the direct references, pin a transitive package
+   with its own `PackageReference` when its parent hasn't caught up (for example a security fix), then run the full
+   test suite. A direct package that can't take its latest major yet, because that major needs a newer target
+   framework, goes in `scripts/package-holds.json` with the reason: it is reported on every run without failing,
+   and fails again if it falls behind inside the held major. `--allow-outdated` skips the check for a hotfix and
+   should be rare.
+3. **Prepare.** `node scripts/release.mjs prepare 0.7.0` bumps `Directory.Build.props` and creates
    the release post. The post gets a `date` with the time as well as the day, because the Releases and
    Updates page sorts by date alone: two releases on the same day would otherwise list in the wrong order.
-3. **Write the post**, then `node scripts/release.mjs tag 0.7.0`, which refuses to run with
-   unrelated working tree changes, a missing or placeholder post, or an existing tag.
-4. **Push.** `git push origin main v0.7.0`. Everything from here is automatic.
-5. **Check the run.** In the `canny-changelog` job log, look for one `Linking "..."` line per shipped
+4. **Write the post**, then `node scripts/release.mjs tag 0.7.0`, which refuses to run with
+   unrelated working tree changes, a missing or placeholder post, an existing tag, or outdated or vulnerable packages.
+5. **Push.** `git push origin main v0.7.0`. Everything from here is automatic.
+6. **Check the run.** In the `canny-changelog` job log, look for one `Linking "..."` line per shipped
    idea and a final `Published entry ... linkedIdeas=N` line. A `Not linking "..."` line means an
    idea was tagged for this version but was not complete at the time.
 
@@ -153,6 +169,9 @@ complete ideas tagged with that version.
 
 ## Known limitations
 
+<details>
+<summary>Show the known limitations</summary>
+
 - **Renaming an idea in Canny breaks the match.** The sync finds ideas by title, so if you rename
   one on the board, update its `title` in `canny-roadmap.json` too, or the next sync creates a
   duplicate.
@@ -167,3 +186,5 @@ complete ideas tagged with that version.
   checks GitHub for the release, so an idea can't read "Released in" or "Complete" ahead of it.
 - **Roadmap columns and public visibility of tags are Canny settings**, not something these scripts
   can change.
+
+</details>
