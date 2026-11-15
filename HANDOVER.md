@@ -1,6 +1,6 @@
 # dotMARC – Handover
 
-_Last updated: Sunday 15 November 2026, 05:40 (London time)_
+_Last updated: Sunday 15 November 2026 (London time)_
 
 ## 1. What it is
 - **dotMARC** is a self-hosted .NET (Blazor/MudBlazor) app that analyses DMARC aggregate reports. Upstream: [homotechsual/dotMARC](https://github.com/homotechsual/dotMARC).
@@ -23,14 +23,10 @@ _Last updated: Sunday 15 November 2026, 05:40 (London time)_
 | [#46](https://github.com/gingerr6/dotMARC/pull/46) | Adds a role permission for AI suggestions and stops cutting off the reason text (it's now capped at 1,000 characters and wraps). The prompt now explains other domains it mentions, such as the SPF bounce domain. | 5d61b3fa |
 | [#47](https://github.com/gingerr6/dotMARC/pull/47) | Fixes the dashboard group filter being lost when you navigate back to it. The filter is now kept in the page address. | fb146a34 |
 | [#48](https://github.com/gingerr6/dotMARC/pull/48) | Removes the personal AI switch from the Sources tab and removes the role permission. Suggest now shows for every signed-in user once a provider is set up. | 54493fb |
+| [#49](https://github.com/gingerr6/dotMARC/pull/49) | Fixes the group filter regression from #47. Clearing the Group crashed the Blazor circuit (the dropdown was removed mid-click), and MudBlazor's clear left an invisible open list that swallowed the next click. The dropdowns now stay on screen while loading, `SearchableSelect` closes its list after a clear, and the address is updated with `history.replaceState` instead of a second navigation. | (see PR) |
 
 ## 4. Open / in progress
-- **Group filter regression from #47.** It has two symptoms, both of which go away after a page refresh:
-  1. After you clear the group filter, you can't pick a group again.
-  2. After you clear the filters and come back to the dashboard, the domain names can't be clicked.
-  - **Likely cause:** when you return after clearing, the page starts a second navigation while the dashboard is still loading, and that stops clicks from getting through.
-  - **Status: STOPPED by James (15 Nov 2026, 05:40 London time). Not fixed.** The [coding agent](https://cursor.com/agents/bc-42530b38-6641-56fd-b61b-043ff61a37a0) was cancelled before it opened a PR. No changes reached the branch, and nothing was merged.
-  - **To pick it up:** start a new agent on the fork. Stop the second navigation that happens when you return to the dashboard after clearing, fix reselecting a group after clearing, and add tests for these steps: select a group, clear it, select again, and clear, leave and come back, then click a domain. Keep what #47 fixed: the filter in the page address, and the filter staying in place on back-navigation and refresh.
+- Nothing in progress. The group filter regression from #47 is fixed in #49.
 
 ## 5. How the main features work
 ### Sender classification
@@ -57,7 +53,8 @@ _Last updated: Sunday 15 November 2026, 05:40 (London time)_
 - `src/DotMarc/Senders/` holds the classification and suggestion code: `SourceSuggestionService`, `SourceSuggestionSettingsService`, `OpenAiCompatibleSuggestionClient`, `SourceSuggestionFacts`, `UserPreferenceService` and the known-senders list.
 - `src/DotMarc/Components/Pages/AiSuggestionSettings.razor` is the AI settings page at `/ai/settings`.
 - `src/DotMarc/Components/Pages/DomainDetail.razor` is the domain page, including the Sources tab and the Suggest button.
-- The dashboard's group filter is kept in the page address's query string (since #47).
+- The dashboard's group filter is kept in the page address's query string (since #47). It is written with `history.replaceState` (`dotmarcReplaceAddress` in `App.razor`), not a Blazor navigation (since #49). `DashboardFilterSession` in `src/DotMarc/Reporting/DashboardFilter.cs` tracks which filter is shown and which load is current.
+- Don't hide a MudBlazor input while its own event is still running (for example, replacing it with a spinner during a reload): its follow-up JS focus call throws and ends the circuit.
 
 ## 7. Working notes
 - James usually dictates, so expect misheard words. "Deakin" means DKIM, and "Box Bush" is a client domain.
