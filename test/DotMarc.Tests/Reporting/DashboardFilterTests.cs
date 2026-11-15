@@ -91,7 +91,7 @@ public class DashboardFilterTests
     {
         var visit = new DashboardFilterSession();
         visit.Select(null, null);
-        visit.MarkLoaded();
+        visit.MarkLoaded(visit.BeginLoad());
         Assert.True(visit.ListMatchesSelection);
 
         visit.Select(BcdrId, null);
@@ -106,7 +106,7 @@ public class DashboardFilterTests
         var memory = new DashboardFilterMemory();
         var firstVisit = new DashboardFilterSession();
         firstVisit.Select(BcdrId, PriorityTagId);
-        firstVisit.MarkLoaded();
+        firstVisit.MarkLoaded(firstVisit.BeginLoad());
         memory.Remember(firstVisit.GroupId, firstVisit.TagId);
 
         // The page instance is gone. The circuit (and the home page's redirect back to /dashboard, which has no
@@ -121,6 +121,90 @@ public class DashboardFilterTests
         Assert.False(returned.ListMatchesSelection);
         Assert.Equal(["bcdr-1.test", "bcdr-2.test"], Names(Shown(returned.GroupId, returned.TagId)));
         Assert.NotEqual(Domains.Length, Shown(returned.GroupId, returned.TagId).Count);
+    }
+
+    [Fact]
+    public void SelectClearSelectClear_EachChangeLoadsAndEachLoadShowsItsOwnSelection()
+    {
+        var visit = Loaded(new DashboardFilterSession(), null, null);
+
+        foreach (var (groupId, label) in new (int?, string)[] { (BcdrId, "select BCDR"), (null, "clear"), (AcmeId, "select Acme again"), (null, "clear again") })
+        {
+            Assert.True(visit.NeedsLoad(groupId, null), label);
+            visit.Select(groupId, null);
+            Assert.False(visit.ListMatchesSelection, label);
+            visit.MarkLoaded(visit.BeginLoad());
+            Assert.True(visit.ListMatchesSelection, label);
+            Assert.Equal(groupId, visit.GroupId);
+        }
+
+        Assert.Equal(Domains.Length, Shown(visit.GroupId, visit.TagId).Count);
+    }
+
+    [Fact]
+    public void ReselectingTheShownGroup_DoesNotLoadAgain()
+    {
+        var visit = Loaded(new DashboardFilterSession(), BcdrId, null);
+
+        Assert.False(visit.NeedsLoad(BcdrId, null));
+    }
+
+    [Fact]
+    public void ClearLeaveAndComeBack_LoadsOnceAndShowsEveryDomain()
+    {
+        var memory = new DashboardFilterMemory();
+        var firstVisit = Loaded(new DashboardFilterSession(), BcdrId, null);
+        firstVisit.Select(null, null);
+        firstVisit.MarkLoaded(firstVisit.BeginLoad());
+        memory.Remember(firstVisit.GroupId, firstVisit.TagId);
+
+        // Back on /dashboard from a domain: a new page, the same circuit.
+        var returned = new DashboardFilterSession();
+        var (groupId, tagId) = DashboardFilter.Resolve(null, null, memory.GroupId, memory.TagId, Groups.Select(group => group.Id), Tags.Select(tag => tag.Id));
+        Assert.True(returned.NeedsLoad(groupId, tagId));
+        returned.Select(groupId, tagId);
+        var load = returned.BeginLoad();
+
+        // The page used to write the address with a Blazor navigation, which visited it again while this load was
+        // running and started a second one. A visit for the same filter while it loads must not.
+        Assert.False(returned.NeedsLoad(groupId, tagId));
+
+        returned.MarkLoaded(load);
+        Assert.True(returned.ListMatchesSelection);
+        Assert.Null(returned.GroupId);
+        Assert.Equal(Domains.Length, Shown(returned.GroupId, returned.TagId).Count);
+        Assert.False(returned.NeedsLoad(null, null));
+    }
+
+    [Fact]
+    public void ALoadOvertakenByANewerOne_DoesNotMarkTheListAsShown()
+    {
+        var visit = Loaded(new DashboardFilterSession(), null, null);
+        visit.Select(BcdrId, null);
+        var older = visit.BeginLoad();
+        visit.Select(AcmeId, null);
+        var newer = visit.BeginLoad();
+
+        Assert.False(visit.IsLatest(older));
+        visit.MarkLoaded(older);
+        Assert.False(visit.ListMatchesSelection);
+
+        visit.MarkLoaded(newer);
+        Assert.True(visit.ListMatchesSelection);
+        Assert.Equal(AcmeId, visit.GroupId);
+    }
+
+    [Fact]
+    public void ALoadThatStopsWithoutAList_LetsTheNextVisitLoadAgain()
+    {
+        var visit = new DashboardFilterSession();
+        visit.Select(BcdrId, null);
+        var load = visit.BeginLoad();
+        Assert.False(visit.NeedsLoad(BcdrId, null));
+
+        visit.EndLoad(load);
+
+        Assert.True(visit.NeedsLoad(BcdrId, null));
     }
 
     [Fact]
@@ -160,6 +244,13 @@ public class DashboardFilterTests
         Assert.Equal("/dashboard", DashboardFilter.Address(null, null));
         Assert.Equal("/dashboard?group=4", DashboardFilter.Address(BcdrId, null));
         Assert.Equal("/dashboard?group=4&tag=8", DashboardFilter.Address(BcdrId, PriorityTagId));
+    }
+
+    private static DashboardFilterSession Loaded(DashboardFilterSession visit, int? groupId, int? tagId)
+    {
+        visit.Select(groupId, tagId);
+        visit.MarkLoaded(visit.BeginLoad());
+        return visit;
     }
 
     private static List<DomainMembership> Shown(int? groupId, int? tagId) =>

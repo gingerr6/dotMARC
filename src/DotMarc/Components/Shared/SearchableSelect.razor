@@ -3,10 +3,11 @@
 @* A dropdown you can type into to narrow a long list, for lists that grow with your data (Halo clients, groups,
    tags). Short fixed lists stay plain MudSelects. Strict is off so reopening it with a value chosen shows every
    option, not only the one that matches the chosen value's text. *@
-<MudAutocomplete T="TValue" Value="Value" ValueChanged="ValueChanged" SearchFunc="SearchAsync" ToStringFunc="ToText"
+<MudAutocomplete @ref="_autocomplete" T="TValue" Value="Value" ValueChanged="ValueChanged" SearchFunc="SearchAsync" ToStringFunc="ToText"
                  Label="@Label" Placeholder="@Placeholder" HelperText="@HelperText" Variant="Variant" Margin="Margin" Class="@Class"
                  Clearable="Clearable" Disabled="Disabled" Strict="false" ResetValueOnEmptyText="true" MaxItems="null"
-                 RelativeWidth="DropdownWidth.Adaptive" />
+                 RelativeWidth="DropdownWidth.Adaptive"
+                 OnClearButtonClick="CloseAfterClearAsync" />
 
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<SelectOption<TValue>> Options { get; set; } = [];
@@ -22,11 +23,23 @@
     [Parameter] public bool Disabled { get; set; }
 
     private Dictionary<object, string> _textByValue = [];
+    private MudAutocomplete<TValue>? _autocomplete;
 
     protected override void OnParametersSet() =>
         _textByValue = Options.Where(option => option.Value is not null).DistinctBy(option => option.Value).ToDictionary(option => (object)option.Value!, option => option.Text);
 
     private string ToText(TValue? value) => value is not null && _textByValue.TryGetValue(value, out var text) ? text : "";
+
+    // MudBlazor's clear button marks the list as open but empties it. Nothing shows, yet its page-wide click catcher
+    // stays up: clicking the box again did not open the list (it was already "open"), and the next click anywhere,
+    // such as on a domain, only closed it. Closing it properly lets the next click on the box open the full list.
+    private async Task CloseAfterClearAsync(MouseEventArgs _)
+    {
+        if (_autocomplete is { Open: true })
+        {
+            await _autocomplete.CloseMenuAsync();
+        }
+    }
 
     private Task<IEnumerable<TValue>> SearchAsync(string search, CancellationToken cancellationToken)
     {
