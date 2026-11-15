@@ -2279,7 +2279,8 @@
                   "signin.refused",
                   "page.viewed",
                   "settings.source_suggestions.saved",
-                  "source.suggestion_requested"
+                  "source.suggestion_requested",
+                  "alert.fix_suggestion_requested"
                 ],
                 "type": "string"
               },
