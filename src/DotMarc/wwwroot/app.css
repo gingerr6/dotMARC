@@ -186,3 +186,41 @@ html {
     margin: 0.25rem 0 0 1.25rem;
     padding: 0;
 }
+
+/* Domain page tables (Sources, TLS reports): headings on one line, and a Source column wide enough to read. */
+.dotmarc-compact-table th {
+    white-space: nowrap;
+}
+
+.dotmarc-source-cell {
+    min-width: 240px;
+    max-width: 360px;
+    overflow-wrap: break-word;
+}
+
+/* An opened TLS report: each policy version, then its failures. */
+.dotmarc-tlsrpt-detail {
+    padding: 8px 16px 12px 16px !important;
+    background: var(--mud-palette-background-gray);
+}
+
+.dotmarc-tlsrpt-policy + .dotmarc-tlsrpt-policy {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+.dotmarc-tlsrpt-failure {
+    margin: 6px 0 0 12px;
+    overflow-wrap: anywhere;
+}
+
+.dotmarc-raw-json {
+    max-height: 360px;
+    overflow: auto;
+    font-size: 12px;
+    padding: 8px;
+    border-radius: 4px;
+    background: var(--mud-palette-surface);
+    white-space: pre;
+}
