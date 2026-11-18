@@ -603,7 +603,7 @@ else
             }
             else
             {
-                <MudTable Items="_tlsrptReports" Hover="true" T="TlsrptReport" CustomHeader="true" Filter="TlsrptReportMatchesFilters">
+                <MudTable Items="_tlsrptReports" Hover="true" T="TlsrptReport" CustomHeader="true" Filter="TlsrptReportMatchesFilters" Dense="true" Class="dotmarc-compact-table">
                     <ToolBarContent>
                         <MudSpacer />
                         <MudButton Variant="@(_showTlsrptFilters ? Variant.Filled : Variant.Outlined)" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterList"
@@ -612,11 +612,11 @@ else
                     <HeaderContent>
                         <tr>
                             <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.ReportingOrg)"><Hint Text="The organisation that sent the report, such as Google or Microsoft.">From</Hint></MudTableSortLabel></MudTh>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.DateRangeBeginUtc)"><Hint Text="The period the report covers, usually one day.">Date range</Hint></MudTableSortLabel></MudTh>
-                            <MudTh><Hint Text="What the sender checked against: sts (the domain's MTA-STS policy) or no-policy-found (it hadn't the policy yet, so it used plain encryption).">Policy</Hint></MudTh>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.SuccessfulSessionCount))"><Hint Text="Connections to the domain's mail servers that were encrypted and passed the policy.">Successful sessions</Hint></MudTableSortLabel></MudTh>
-                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.FailedSessionCount))"><Hint Text="Connections that failed: a certificate, encryption or policy problem. Once MTA-STS enforces, these are refused.">Failed sessions</Hint></MudTableSortLabel></MudTh>
-                            <MudTh><Hint Text="Why the failed connections failed, as the sender reported it.">Failure details</Hint></MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.DateRangeBeginUtc)"><Hint Text="The day the report covers, or the period when it's longer than a day.">Date</Hint></MudTableSortLabel></MudTh>
+                            <MudTh><Hint Text="What the sender checked against: MTA-STS (the domain's policy), DANE, or No policy (it hadn't the policy yet, so it used plain encryption). Two entries mean the sender picked up a new version of the policy that day; open Details to see each.">Policy</Hint></MudTh>
+                            <MudTh Style="text-align:right"><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.SuccessfulSessionCount))"><Hint Text="Connections to the domain's mail servers that were encrypted and passed the policy.">Passed</Hint></MudTableSortLabel></MudTh>
+                            <MudTh><MudTableSortLabel SortBy="new Func<TlsrptReport, object>(r => r.Policies.Sum(policy => policy.FailedSessionCount))"><Hint Text="Connections that failed: a certificate, encryption or policy problem, with the sender's reason beneath. Once MTA-STS enforces, these are refused.">Failed</Hint></MudTableSortLabel></MudTh>
+                            <MudTh></MudTh>
                         </tr>
                         @if (_showTlsrptFilters)
                         {
@@ -630,25 +630,95 @@ else
                                     <MudSelectItem T="bool?" Value="true">Some failed</MudSelectItem>
                                     <MudSelectItem T="bool?" Value="false">None failed</MudSelectItem>
                                 </MudSelect>
+                                <MudTextField T="string" @bind-Value="_tlsrptFailureDetailFilter" Placeholder="Reason" Immediate="true" Margin="Margin.Dense" />
                             </MudTh>
-                            <MudTh><MudTextField T="string" @bind-Value="_tlsrptFailureDetailFilter" Placeholder="Search" Immediate="true" Margin="Margin.Dense" /></MudTh>
+                            <MudTh></MudTh>
                         </tr>
                         }
                     </HeaderContent>
                     <RowTemplate>
+                        @{ var failedSessions = context.Policies.Sum(policy => policy.FailedSessionCount); }
                         <MudTd>@context.ReportingOrg</MudTd>
-                        <MudTd>@FormatDateRange(context.DateRangeBeginUtc, context.DateRangeEndUtc)</MudTd>
-                        <MudTd>@TlsrptPolicySummary(context)</MudTd>
-                        <MudTd>@context.Policies.Sum(policy => policy.SuccessfulSessionCount)</MudTd>
-                        <MudTd>@context.Policies.Sum(policy => policy.FailedSessionCount)</MudTd>
-                        <MudTd>@TlsrptFailureSummary(context)</MudTd>
+                        <MudTd Class="text-nowrap">@TlsrptReportDetail.DateRange(context.DateRangeBeginUtc, context.DateRangeEndUtc)</MudTd>
+                        <MudTd>
+                            @TlsrptPolicySummary(context)
+                            @if (context.Policies.Count > 1)
+                            {
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.Policies.Count versions of the policy that day</MudText>
+                            }
+                        </MudTd>
+                        <MudTd Style="text-align:right">@context.Policies.Sum(policy => policy.SuccessfulSessionCount).ToString("N0")</MudTd>
+                        <MudTd>
+                            @if (failedSessions > 0)
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0">@failedSessions.ToString("N0") failed</MudChip>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@TlsrptFailureSummary(context)</MudText>
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">0</span>
+                            }
+                        </MudTd>
+                        <MudTd Style="text-align:right">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" EndIcon="@(_openTlsrptReports.Contains(context.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                       OnClick="@(() => ToggleTlsrptReport(context.Id))" aria-expanded="@(_openTlsrptReports.Contains(context.Id) ? "true" : "false")">Details</MudButton>
+                        </MudTd>
                     </RowTemplate>
+                    <ChildRowContent>
+                        @if (_openTlsrptReports.Contains(context.Id))
+                        {
+                            var detail = TlsrptReportDetail.From(context);
+                            <td colspan="6" class="dotmarc-tlsrpt-detail">
+                                @foreach (var policy in detail.Policies)
+                                {
+                                    <div class="dotmarc-tlsrpt-policy">
+                                        <div class="d-flex flex-wrap align-baseline" style="gap:0 12px;">
+                                            <MudText Typo="Typo.subtitle2">@TlsrptReportDetail.PolicyTypeLabel(policy.PolicyType) policy for @policy.PolicyDomain</MudText>
+                                            <MudText Typo="Typo.body2">@policy.SuccessfulSessions.ToString("N0") passed · @policy.FailedSessions.ToString("N0") failed</MudText>
+                                        </div>
+                                        @if (policy.Settings is { } settings)
+                                        {
+                                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@settings</MudText>
+                                        }
+                                        @if (policy.MxHosts.Count > 0)
+                                        {
+                                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Allowed mail servers in the sender's copy: @string.Join(", ", policy.MxHosts)</MudText>
+                                        }
+                                        @foreach (var failure in policy.Failures)
+                                        {
+                                            <div class="dotmarc-tlsrpt-failure">
+                                                <MudText Typo="Typo.body2"><b>@failure.ResultType</b> × @failure.Count @(failure.Where is { } where ? where : "")</MudText>
+                                                @if (TlsrptResultTypes.Explain(failure.ResultType) is { } meaning)
+                                                {
+                                                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@meaning</MudText>
+                                                }
+                                                @if (failure.FailureReasonCode is { } reasonCode)
+                                                {
+                                                    <MudText Typo="Typo.caption" Class="d-block">Reason code: @reasonCode</MudText>
+                                                }
+                                                @if (failure.AdditionalInformation is { } information)
+                                                {
+                                                    <MudText Typo="Typo.caption" Class="d-block">Sender's note: @information</MudText>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Code" Class="mt-1"
+                                           OnClick="@(() => ToggleTlsrptRaw(context.Id))">@(_rawTlsrptReports.Contains(context.Id) ? "Hide raw report" : "View raw report")</MudButton>
+                                @if (_rawTlsrptReports.Contains(context.Id))
+                                {
+                                    <pre class="dotmarc-raw-json">@TlsrptReportDetail.Pretty(context.RawJson)</pre>
+                                }
+                            </td>
+                        }
+                    </ChildRowContent>
                 </MudTable>
             }
         </MudTabPanel>
 
         <MudTabPanel Text="Sources">
-            <MudTable Items="_sources" Hover="true" T="SourceRow" CustomHeader="true" Filter="SourceMatchesFilters">
+            <MudTable Items="_sources" Hover="true" T="SourceRow" CustomHeader="true" Filter="SourceMatchesFilters" Dense="true" Class="dotmarc-compact-table">
                 <ToolBarContent>
                     @{ var unreviewed = _sources.Select(s => s.Identity).DistinctBy(identity => identity.Key).Count(identity => SourceReview.CountsAsUnreviewed(identity, ApprovalStatus(identity))); }
                     @if (_senderApprovals.Count == 0)
@@ -667,7 +737,7 @@ else
                     <tr>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.HostName ?? s.SourceIp)"><Hint Text="The server that sent mail as this domain: its name where it has one, otherwise its IP address, then who the address is registered to and its country. Recognised services such as Microsoft 365 are named.">Source</Hint></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => ApprovalLabel(s))"><Hint Text="Approved: the domain's own mail. Not ours: spoofing, or forwarding you've checked. Forwarder: a known forwarding service, nothing to do. Likely spoof: a small unrecognised source that failed both checks and looks like a home connection or has no name; it doesn't count as waiting for review. Unreviewed: nobody has looked yet. A decision you save replaces the others.">Approval</Hint></MudTableSortLabel></MudTh>
-                        <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)"><Hint Text="Messages from this source in the last 30 days, as receivers reported them.">Volume</Hint></MudTableSortLabel></MudTh>
+                        <MudTh Style="text-align:right"><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.Volume)"><Hint Text="Messages from this source in the last 30 days, as receivers reported them.">Volume</Hint></MudTableSortLabel></MudTh>
                         <MudTh><Hint Text="Messages a day from this source over the last 7 days.">7d trend</Hint></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.FirstSeenUtc ?? DateTimeOffset.MinValue)"><Hint Text="When this source first appeared in a report for this domain.">First seen</Hint></MudTableSortLabel></MudTh>
                         <MudTh><MudTableSortLabel SortBy="new Func<SourceRow, object>(s => s.SpfResult)"><Hint Text="Whether SPF passed: the sending server is listed in the domain's SPF record. Forwarding always breaks SPF, so a fail here isn't always a problem.">SPF</Hint></MudTableSortLabel></MudTh>
@@ -724,16 +794,18 @@ else
                     }
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd Style="max-width:300px; overflow-wrap:anywhere;">
+                    @* A real minimum width, and host names that break only at their dots: "anywhere" let the table squeeze this
+                       column to a sliver and split names mid-word. *@
+                    <MudTd Class="dotmarc-source-cell">
                         @* The name first, since it says who sent the mail; the IP stays beneath it, as SPF needs it. *@
                         @if (context.Identity.IsService)
                         {
                             <div><b>@context.Identity.Label</b></div>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@(context.HostName ?? context.Organization) · @context.SourceIp</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@BreakAtDots(context.HostName ?? context.Organization) · @context.SourceIp</MudText>
                         }
                         else if (context.HostName is { } hostName)
                         {
-                            <div>@hostName</div>
+                            <div>@BreakAtDots(hostName)</div>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.SourceIp</MudText>
                         }
                         else
@@ -756,14 +828,15 @@ else
                     </MudTd>
                     <MudTd>
                         @{ var identity = context.Identity; var status = ApprovalStatus(context); }
-                        <div class="d-flex align-center flex-wrap" style="gap:4px;">
+                        <div class="d-flex align-center text-nowrap" style="gap:2px;">
                             <MudTooltip Text="@ApprovalTooltip(context)" Arrow="true">
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                          Color="@(status switch { SenderApprovalStatus.Approved => Color.Success, SenderApprovalStatus.NotOurs => Color.Error, _ => identity.IsForwarder ? Color.Info : identity.IsLikelySpoof ? Color.Warning : Color.Default })">@ApprovalLabel(context)</MudChip>
                             </MudTooltip>
                             @if (SourceSuggestionSettings.ShowSuggest(_aiConfigured, _maySuggest))
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_suggestingKey == identity.Key)" OnClick="@(() => SuggestAsync(context))">Suggest</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_suggestingKey == identity.Key)" OnClick="@(() => SuggestAsync(context))"
+                                           title="Ask the AI provider what this source is. Nothing is changed.">Suggest</MudButton>
                             }
                             <AuthorizeView Policy="DomainsEdit" Context="senderAuthState">
                                 <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AriaLabel="@($"Review {identity.Label}")">
@@ -782,7 +855,7 @@ else
                             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block dotmarc-suggestion-reason">Suggestion: @SourceSuggestionText.Label(verdict). @suggestion.Reason</MudText>
                         }
                     </MudTd>
-                    <MudTd>@context.Volume</MudTd>
+                    <MudTd Style="text-align:right">@context.Volume.ToString("N0")</MudTd>
                     <MudTd>
                         @if (context.DailyVolumes.Length > 0)
                         {
@@ -797,7 +870,7 @@ else
                             </MudTooltip>
                         }
                     </MudTd>
-                    <MudTd>
+                    <MudTd Class="text-nowrap">
                         @if (context.IsNewSource)
                         {
                             <MudTooltip Text="@($"First seen {(context.FirstSeenUtc is { } seen ? DotMarc.Reporting.UkTime.Date(seen) : "")}")" Arrow="true">
@@ -951,10 +1024,35 @@ else
     private static bool ContainsIgnoreCase(string? text, string? search) =>
         string.IsNullOrWhiteSpace(search) || (text ?? "").Contains(search, StringComparison.OrdinalIgnoreCase);
 
-    private static string FormatDateRange(DateTimeOffset beginUtc, DateTimeOffset endUtc) => $"{DotMarc.Reporting.UkTime.Date(beginUtc)} – {DotMarc.Reporting.UkTime.Date(endUtc)}";
+    /// <summary>A host name that may wrap after each dot, and nowhere else, so a long name like
+    /// mail-ukwestazlp170100001.outbound.protection.outlook.com breaks between its labels instead of mid-word.</summary>
+    private static MarkupString BreakAtDots(string? name) =>
+        new(string.Join(".<wbr>", (name ?? "").Split('.').Select(part => System.Net.WebUtility.HtmlEncode(part))));
+
+    private static string FormatDateRange(DateTimeOffset beginUtc, DateTimeOffset endUtc) => TlsrptReportDetail.DateRange(beginUtc, endUtc);
+
+    // Which TLS report rows are open, and which of those show the raw JSON.
+    private readonly HashSet<int> _openTlsrptReports = [];
+    private readonly HashSet<int> _rawTlsrptReports = [];
+
+    private void ToggleTlsrptReport(int id)
+    {
+        if (!_openTlsrptReports.Remove(id))
+        {
+            _openTlsrptReports.Add(id);
+        }
+    }
+
+    private void ToggleTlsrptRaw(int id)
+    {
+        if (!_rawTlsrptReports.Remove(id))
+        {
+            _rawTlsrptReports.Add(id);
+        }
+    }
 
     private static string TlsrptPolicySummary(TlsrptReport report) =>
-        string.Join(", ", report.Policies.Select(policy => $"{policy.PolicyType}: {policy.PolicyDomain}"));
+        string.Join(", ", report.Policies.Select(policy => $"{TlsrptReportDetail.PolicyTypeLabel(policy.PolicyType)}: {policy.PolicyDomain}").Distinct());
 
     private static string TlsrptFailureSummary(TlsrptReport report) =>
         string.Join(", ", report.Policies.SelectMany(policy => policy.FailureDetails).Select(detail => $"{detail.ResultType} ({detail.FailedSessionCount})"));
