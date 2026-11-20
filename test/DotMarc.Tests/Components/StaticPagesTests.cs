@@ -125,6 +125,26 @@ public sealed class StaticPagesTests : IAsyncLifetime
         };
     }
 
+    /// <summary>An unbalanced brace in a page's Razor is printed as text instead of failing the build: the dashboard
+    /// showed a lone "}" under its last panel. What a person can read on these pages has no braces of its own.</summary>
+    [Theory]
+    [InlineData("/dashboard")]
+    [InlineData("/alerts")]
+    public async Task APage_ShowsNoStrayBraces(string path)
+    {
+        using var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        await client.PostAsync("/demo/sign-in/admin", content: null);
+
+        var html = await client.GetStringAsync(path);
+
+        var body = html[html.IndexOf("<body", StringComparison.OrdinalIgnoreCase)..];
+        var visible = System.Text.RegularExpressions.Regex.Replace(body, "<(script|style)[^>]*>.*?</\\1>", " ",
+            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        visible = System.Text.RegularExpressions.Regex.Replace(visible, "<!--.*?-->|<[^>]+>", " ", System.Text.RegularExpressions.RegexOptions.Singleline);
+        Assert.DoesNotContain("{", visible);
+        Assert.DoesNotContain("}", visible);
+    }
+
     [Theory]
     [InlineData("admin", "/dashboard")]
     [InlineData("client", "/portal")]
